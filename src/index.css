@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .dashboard-card {
+    @apply bg-warm-card dark:bg-dark-card border border-warm-border dark:border-dark-border shadow-[0_1px_3px_rgba(0,0,0,0.05)] p-[20px] rounded-[10px];
+  }
+
+  .ledger-table-box {
+    
+    
+    overflow-x: auto;
+    position: relative;
+  }
+  
+  .ledger-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .ledger-table th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .ledger-table tr.period-total-row td {
+    position: sticky;
+    top: 32px;
+    z-index: 9;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #3f3f46;
+  }
+}
