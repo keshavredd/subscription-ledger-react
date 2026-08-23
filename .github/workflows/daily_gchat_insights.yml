@@ -1,0 +1,40 @@
+name: Daily ET Prime Subscription Insights
+
+on:
+  schedule:
+    # Runs daily at 03:00 UTC (8:30 AM IST)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      custom_date:
+        description: 'Target Date for Report (YYYY-MM-DD, leave empty for Yesterday)'
+        required: false
+        default: ''
+
+jobs:
+  send-insights:
+    name: Generate & Post GChat Insights
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Daily GChat Digest Script
+        env:
+          GCHAT_WEBHOOK_URL: ${{ secrets.GCHAT_WEBHOOK_URL }}
+        run: |
+          if [ -n "${{ github.event.inputs.custom_date }}" ]; then
+            node scripts/daily_gchat_digest.js --date=${{ github.event.inputs.custom_date }}
+          else
+            node scripts/daily_gchat_digest.js
+          fi
