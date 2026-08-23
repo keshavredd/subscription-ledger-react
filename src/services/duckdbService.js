@@ -81,7 +81,22 @@ export async function queryDuckDBSQL(sqlQuery) {
     const result = await conn.query(sqlQuery);
     
     // Convert Apache Arrow Table to standard JavaScript objects
-    const rows = result.toArray().map(row => row.toJSON());
+    const rawRows = result.toArray().map(row => row.toJSON());
+    
+    // Convert BigInts & Arrow types to standard JS primitive types
+    const rows = rawRows.map(row => {
+      const clean = {};
+      for (const key in row) {
+        const val = row[key];
+        if (typeof val === 'bigint') {
+          clean[key] = Number(val);
+        } else {
+          clean[key] = val;
+        }
+      }
+      return clean;
+    });
+
     return rows;
   } catch (err) {
     console.error(`[DuckDB SQL Error] Query: "${sqlQuery}"`, err);

@@ -17,6 +17,48 @@ const Plot = createPlotlyComponent(Plotly);
 const DEFAULT_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=598826199";
 const FUNNEL_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1049115614";
 const REALTIME_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1333104452";
+const ARPU_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=arpu_data";
+
+function formatArpuPlatform(platStr) {
+  if (!platStr) return 'Web';
+  const clean = String(platStr).toLowerCase().trim();
+  if (clean.includes('market') && clean.includes('android')) return 'Market Android';
+  if (clean.includes('market') && clean.includes('ios')) return 'Market iOS';
+  if (clean.includes('android')) return 'Main Android';
+  if (clean.includes('ios')) return 'Main iOS';
+  if (clean.includes('wap') || clean.includes('mweb')) return 'WAP';
+  if (clean.includes('web') || clean.includes('desktop')) return 'Web';
+  return platStr;
+}
+
+function formatArpuDate(rawDateStr) {
+  if (!rawDateStr) return '';
+  const str = String(rawDateStr).trim();
+  if (str.length === 8 && !str.includes('-') && !str.includes('/')) {
+    return `${str.substring(0,4)}-${str.substring(4,6)}-${str.substring(6,8)}`;
+  }
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    if (parts.length === 3) {
+      const month = parts[0].padStart(2, '0');
+      const day = parts[1].padStart(2, '0');
+      let year = parts[2].trim();
+      if (year.length === 2) year = `20${year}`;
+      return `${year}-${month}-${day}`;
+    }
+  }
+  if (str.includes('-')) {
+    const parts = str.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return str;
+      const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+      const month = parts[0].padStart(2, '0');
+      const day = parts[1].padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return str;
+}
 
 const FUNNEL_STAGES = [
   { key: 'DAU', label: 'DAU' },
@@ -3102,6 +3144,106 @@ function RenewalsAndRecurring({ isDark }) {
 }
 
 
+function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, isDark }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const displayName = currentUser.displayName || currentUser.email.split('@')[0];
+  const photoUrl = currentUser.photoURL;
+  const initial = displayName.charAt(0).toUpperCase();
+
+  return (
+    <div className="relative" ref={menuRef}>
+      {/* Human Avatar Icon Button Trigger */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-center h-9 w-9 rounded-full bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border hover:border-amber-accent dark:hover:border-amber-accent text-warm-text dark:text-dark-text shadow-sm transition-all cursor-pointer relative group"
+        title={`${displayName} (${currentUser.email})`}
+      >
+        {photoUrl ? (
+          <img src={photoUrl} alt={displayName} className="h-8 w-8 rounded-full object-cover" />
+        ) : (
+          <div className="flex items-center justify-center h-8 w-8 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-300 font-black text-sm">
+            <User className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+          </div>
+        )}
+        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-dark-card"></span>
+      </button>
+
+      {/* Profile Dropdown Popover */}
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-zinc-900 border border-warm-border dark:border-zinc-700 rounded-2xl shadow-xl z-50 p-3 animate-in fade-in zoom-in-95 duration-150">
+          
+          {/* User Info Header Card */}
+          <div className="flex items-center gap-3 p-2.5 mb-2 bg-warm-tableBg dark:bg-zinc-800/60 rounded-xl">
+            {photoUrl ? (
+              <img src={photoUrl} alt={displayName} className="h-10 w-10 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 font-extrabold text-base shrink-0">
+                {initial}
+              </div>
+            )}
+            <div className="overflow-hidden min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-xs text-warm-text dark:text-dark-text truncate" title={displayName}>
+                  {displayName}
+                </span>
+                {isAdmin && (
+                  <span className="px-1.5 py-0.2 text-[8px] font-black rounded bg-amber-500/20 text-amber-800 dark:text-amber-300 shrink-0">
+                    ADMIN
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-warm-muted dark:text-dark-muted truncate mt-0.5" title={currentUser.email}>
+                {currentUser.email}
+              </p>
+            </div>
+          </div>
+
+          <div className="my-1.5 border-t border-warm-border/60 dark:border-zinc-800"></div>
+
+          {/* Admin Panel Option (If Admin) */}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                if (onSelectAdminPanel) onSelectAdminPanel();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-amber-900 dark:text-amber-300 hover:bg-amber-500/10 transition-colors text-xs font-bold cursor-pointer text-left mb-1"
+            >
+              <ShieldCheck className="h-4 w-4 text-amber-500 shrink-0" />
+              <span>Admin Panel</span>
+            </button>
+          )}
+
+          {/* Logout Option */}
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              onLogout();
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors text-xs font-bold cursor-pointer text-left"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [activeTab, setActiveTab] = useState('Realtime');
@@ -3132,6 +3274,12 @@ export default function App() {
 
   useEffect(() => {
     preloadAllDashboardData();
+    // Auto-poll live Google Sheets data every 5 minutes
+    const interval = setInterval(() => {
+      console.log("🔄 [Auto-Poll] Synchronizing live Google Sheets data...");
+      preloadAllDashboardData();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -3153,10 +3301,7 @@ export default function App() {
   }
 
   const isAdmin = isAdminEmail(currentUser.email);
-  const navTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'Conversational Analytics'];
-  if (isAdmin) {
-    navTabs.push('Admin Panel');
-  }
+  const navTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU', 'Conversational Analytics'];
 
   return (
     <div className={`min-h-screen ${isDark ? 'dark bg-[#0F172A] text-[#f8fafc]' : 'bg-[#F8FAFC] text-[#0F172A]'}`}>
@@ -3193,28 +3338,14 @@ export default function App() {
           {/* Header Right Tools & User Profile */}
           <div className="flex items-center gap-3 justify-end h-[38px]">
             
-            {/* Logged in User Profile Pill */}
-            <div className="flex items-center gap-2 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg px-3 py-1.5 shadow-xs text-xs font-semibold">
-              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-              <span className="truncate max-w-[150px] font-bold text-warm-text dark:text-dark-text" title={currentUser.email}>
-                {currentUser.displayName || currentUser.email.split('@')[0]}
-              </span>
-              {isAdmin && (
-                <span className="px-1.5 py-0.2 text-[9px] font-black rounded bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                  ADMIN
-                </span>
-              )}
-            </div>
-
-            {/* Logout Button */}
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-bold transition-all cursor-pointer"
-              title="Sign out of your session"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
+            {/* Compact Human Avatar Profile Dropdown */}
+            <UserProfileMenu
+              currentUser={currentUser}
+              isAdmin={isAdmin}
+              onLogout={handleLogout}
+              onSelectAdminPanel={() => setActiveTab('Admin Panel')}
+              isDark={isDark}
+            />
 
             {/* Theme Toggle */}
             <button 
@@ -3245,6 +3376,9 @@ export default function App() {
           <div className={activeTab === 'Renewals & Recurring' ? 'block' : 'hidden'}>
             <RenewalsAndRecurring isDark={isDark} />
           </div>
+          <div className={activeTab === 'ARPU' ? 'block' : 'hidden'}>
+            <ArpuReport isDark={isDark} />
+          </div>
           <div className={activeTab === 'Conversational Analytics' ? 'block' : 'hidden'}>
             <ConversationalAnalytics isDark={isDark} currentUser={currentUser} />
           </div>
@@ -3260,7 +3394,7 @@ export default function App() {
 }
 
 
-function ConversationalAnalytics({ isDark }) {
+function ConversationalAnalytics({ isDark, currentUser }) {
   const [subscriptionData, setSubscriptionData] = useState([]);
   const [funnelData, setFunnelData] = useState([]);
   const [renewalsData, setRenewalsData] = useState([]);
@@ -3268,74 +3402,97 @@ function ConversationalAnalytics({ isDark }) {
   useEffect(() => {
     async function fetchSubData() {
       try {
-        let response = await fetch(DEFAULT_GSHEET_URL);
-        let csvText = await response.text();
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            const parsed = results.data.map(row => {
-              const dateStr = row.Date || row.date;
-              if (!dateStr) return null;
-              const platRaw = (row.Platform || '').toLowerCase().trim();
-              return {
-                dateStr,
-                platform: PLATFORM_MAP[platRaw] || row.Platform,
-                revenue: parseFloat(row.Revenue || row.rev || 0),
-                conversions: parseInt(row.Conversions || row.conversions || 0, 10) || 0
-              };
-            }).filter(Boolean);
-            setSubscriptionData(parsed);
-          }
-        });
+        const results = await fetchDatasetCached('subscription', DEFAULT_GSHEET_URL);
+        const parsed = (results.data || []).map(row => {
+          const dateStr = row.txn_date || row.Date || row.date;
+          if (!dateStr) return null;
+          const platRaw = String(row.platform || row.Platform || '').toLowerCase().trim();
+          return {
+            dateStr,
+            platform: normalizePlatformName(platRaw) || row.platform || row.Platform,
+            revenue: parseFloat(row.revenue_above_rs_6_txn || row.Revenue || row.rev || 0),
+            conversions: parseInt(row.conversion || row.Conversions || row.conversions || 0, 10) || 0
+          };
+        }).filter(Boolean);
+        setSubscriptionData(parsed);
       } catch (err) {
-        console.error("Failed to fetch sub data in ConversationalAnalytics", err);
+        console.warn("ConversationalAnalytics subscription data load fallback", err);
       }
     }
 
     async function fetchRenewalsData() {
       try {
-        const url = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=renewal_raw";
-        let res = await fetch(url);
-        let csvText = await res.text();
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            const processed = results.data.map(row => {
-              const cleanRow = {};
-              Object.keys(row).forEach(k => cleanRow[k.trim()] = row[k]);
-              
-              const dParts = String(cleanRow['renew_date'] || '').split('/');
-              let dateStr = '';
-              if (dParts.length === 3) {
-                const y = dParts[2];
-                const m = dParts[0].padStart(2, '0');
-                const d = dParts[1].padStart(2, '0');
-                dateStr = `${y}-${m}-${d}`;
-              }
-
-              const platformCode = String(cleanRow['platform'] || '').trim();
-              const platformDisplay = normalizePlatformName(platformCode);
-
-              return {
-                renew_month: String(cleanRow['renew_month'] || '').trim(),
-                renew_date: dateStr,
-                platform: platformDisplay,
-                plan_category: String(cleanRow['plan_category'] || 'UNKNOWN').trim().toUpperCase(),
-                renewal_due: parseInt(cleanRow['renewal_due'], 10) || 0,
-                renewed: parseInt(cleanRow['renewed'], 10) || 0
-              };
-            }).filter(r => r.renew_month || r.renew_date);
-            setRenewalsData(processed);
+        const results = await fetchDatasetCached('renewals', DATASET_URLS.renewals);
+        const processed = (results.data || []).map(row => {
+          const cleanRow = {};
+          Object.keys(row).forEach(k => cleanRow[k.trim()] = row[k]);
+          
+          const dParts = String(cleanRow['renew_date'] || '').split('/');
+          let dateStr = '';
+          if (dParts.length === 3) {
+            const y = dParts[2];
+            const m = dParts[0].padStart(2, '0');
+            const d = dParts[1].padStart(2, '0');
+            dateStr = `${y}-${m}-${d}`;
           }
-        });
+
+          const platformCode = String(cleanRow['platform'] || '').trim();
+          const platformDisplay = normalizePlatformName(platformCode);
+
+          return {
+            renew_month: String(cleanRow['renew_month'] || '').trim(),
+            renew_date: dateStr,
+            platform: platformDisplay,
+            plan_category: String(cleanRow['plan_category'] || 'UNKNOWN').trim().toUpperCase(),
+            renewal_due: parseInt(cleanRow['renewal_due'], 10) || 0,
+            renewed: parseInt(cleanRow['renewed'], 10) || 0
+          };
+        }).filter(r => r.renew_month || r.renew_date);
+        setRenewalsData(processed);
       } catch (err) {
-        console.error("Failed to fetch renewals data in ConversationalAnalytics", err);
+        console.warn("ConversationalAnalytics renewals data load fallback", err);
+      }
+    }
+
+    async function fetchFunnelData() {
+      try {
+        const results = await fetchDatasetCached('funnel', FUNNEL_GSHEET_URL);
+        const parsed = (results.data || []).map(row => {
+          const dateStr = String(row.event_date || '').trim();
+          let formattedDateStr = '';
+          if (dateStr.length === 8 && !dateStr.includes('-') && !dateStr.includes('/')) {
+            formattedDateStr = `${dateStr.substring(0,4)}-${dateStr.substring(4,6)}-${dateStr.substring(6,8)}`;
+          } else if (dateStr.includes('-')) {
+            formattedDateStr = dateStr;
+          } else if (dateStr.includes('/')) {
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+              formattedDateStr = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+            }
+          }
+          if (!formattedDateStr) return null;
+          
+          return {
+            dateObj: new Date(formattedDateStr),
+            dateStr: formattedDateStr,
+            viewType: row.view_type || 'Overall',
+            platform: row.ET_Platform || row.platform,
+            DAU: parseInt(row.DAU, 10) || 0,
+            paywalling_hits: parseInt(row.paywalling_hits, 10) || 0,
+            Plan_Page_Load: parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load, 10) || 0,
+            Plan_Selected: parseInt(row.Plan_Selected, 10) || 0,
+            Pay_Initiated: parseInt(row.Pay_Initiated, 10) || 0,
+            Purchased: parseInt(row.Purchased, 10) || 0,
+          };
+        }).filter(row => row && !isNaN(row.dateObj));
+        setFunnelData(parsed);
+      } catch (err) {
+        console.warn("ConversationalAnalytics funnel data load fallback", err);
       }
     }
 
     fetchSubData();
+    fetchFunnelData();
     fetchRenewalsData();
   }, []);
 
@@ -3385,8 +3542,9 @@ function ConversationalAnalytics({ isDark }) {
         renewalsData
       });
 
-      const engineUsed = getStoredApiKey() ? 'Gemini 3.6 Flash' : 'Local React Engine';
-      logChatQuery(currentUser?.email || 'Anonymous User', queryText.trim(), engineUsed);
+      const engineUsed = getStoredApiKey() ? 'Gemini 2.0 Flash' : 'Local React Engine';
+      const userEmail = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? currentUser.email : 'Anonymous User';
+      logChatQuery(userEmail, queryText.trim(), engineUsed);
 
       setMessages(prev => [
         ...prev,
@@ -3402,7 +3560,8 @@ function ConversationalAnalytics({ isDark }) {
       ]);
     } catch (err) {
       console.error("Error running query:", err);
-      logChatQuery(currentUser?.email || 'Anonymous User', queryText.trim(), 'Error Engine');
+      const userEmail = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? currentUser.email : 'Anonymous User';
+      logChatQuery(userEmail, queryText.trim(), 'Error Engine');
       setMessages(prev => [
         ...prev,
         {
@@ -3641,8 +3800,25 @@ function FunnelAnalysis({ isDark }) {
   const [compStartDate, setCompStartDate] = useState("");
   const [compEndDate, setCompEndDate] = useState("");
 
+  // Segment Filters State (Country & Marketing Team)
+  const [selectedCountry, setSelectedCountry] = useState("All");
+  const [selectedMarketingTeam, setSelectedMarketingTeam] = useState("All");
+
   const [expandedRows, setExpandedRows] = useState({});
   const toggleRow = (key) => setExpandedRows(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Dynamic dropdown lists for Country and Marketing Team
+  const availableCountries = useMemo(() => {
+    const list = Array.from(new Set(rawData.map(r => r.country).filter(Boolean))).sort();
+    const sorted = list.filter(c => c.toLowerCase() !== 'overall');
+    return ['All', ...sorted];
+  }, [rawData]);
+
+  const availableMarketingTeams = useMemo(() => {
+    const list = Array.from(new Set(rawData.map(r => r.marketingTeam).filter(Boolean))).sort();
+    const sorted = list.filter(m => m.toLowerCase() !== 'overall');
+    return ['All', ...sorted];
+  }, [rawData]);
 
   // Auto-calculate primary date range
   useEffect(() => {
@@ -3709,21 +3885,33 @@ function FunnelAnalysis({ isDark }) {
       try {
         const results = await fetchDatasetCached('funnel', FUNNEL_GSHEET_URL);
         const parsed = results.data.map(row => {
-          const dateStr = row.event_date;
-          if (!dateStr || dateStr.length !== 8) return null;
-          const formattedDateStr = `${dateStr.substring(0,4)}-${dateStr.substring(4,6)}-${dateStr.substring(6,8)}`;
+          const dateStr = String(row.event_date || '').trim();
+          let formattedDateStr = '';
+          if (dateStr.length === 8 && !dateStr.includes('-') && !dateStr.includes('/')) {
+            formattedDateStr = `${dateStr.substring(0,4)}-${dateStr.substring(4,6)}-${dateStr.substring(6,8)}`;
+          } else if (dateStr.includes('-')) {
+            formattedDateStr = dateStr;
+          } else if (dateStr.includes('/')) {
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+              formattedDateStr = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+            }
+          }
+          if (!formattedDateStr) return null;
           
           return {
             dateObj: new Date(formattedDateStr),
             dateStr: formattedDateStr,
-            viewType: row.view_type,
-            platform: row.ET_Platform,
-            DAU: parseInt(row.DAU) || 0,
-            paywalling_hits: parseInt(row.paywalling_hits) || 0,
-            Plan_Page_Load: parseInt(row.Plan_Page_Loaded) || 0,
-            Plan_Selected: parseInt(row.Plan_Selected) || 0,
-            Pay_Initiated: parseInt(row.Pay_Initiated) || 0,
-            Purchased: parseInt(row.Purchased) || 0,
+            viewType: row.view_type || 'Overall',
+            platform: row.ET_Platform || row.platform,
+            country: String(row.Country || row.country || 'Overall').trim(),
+            marketingTeam: String(row.Marketing_team || row.marketing_team || row.MarketingTeam || 'Overall').trim(),
+            DAU: parseInt(row.DAU, 10) || 0,
+            paywalling_hits: parseInt(row.paywalling_hits, 10) || 0,
+            Plan_Page_Load: parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load, 10) || 0,
+            Plan_Selected: parseInt(row.Plan_Selected, 10) || 0,
+            Pay_Initiated: parseInt(row.Pay_Initiated, 10) || 0,
+            Purchased: parseInt(row.Purchased, 10) || 0,
           };
         }).filter(row => row && !isNaN(row.dateObj));
         setRawData(parsed);
@@ -3736,8 +3924,8 @@ function FunnelAnalysis({ isDark }) {
     fetchData();
   }, []);
 
-  // Process data for a given date range
-  const processFunnelData = useCallback((sDate, eDate) => {
+  // Process data for a given date range and segment filters
+  const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeam = 'All') => {
     const overall = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
     const platforms = {};
     const trends = {};
@@ -3746,7 +3934,15 @@ function FunnelAnalysis({ isDark }) {
       return { overallSum: overall, overallAvg: overall, platformAvg: {}, uniqueDays: 1, dates: [] };
     }
 
-    const filtered = rawData.filter(r => r.dateStr >= sDate && r.dateStr <= eDate);
+    const targetCountry = filterCountry === 'All' ? 'Overall' : filterCountry;
+    const targetMktTeam = filterMktTeam === 'All' ? 'Overall' : filterMktTeam;
+
+    const filtered = rawData.filter(r => {
+      if (r.dateStr < sDate || r.dateStr > eDate) return false;
+      const cMatch = r.country.toLowerCase() === targetCountry.toLowerCase();
+      const mMatch = r.marketingTeam.toLowerCase() === targetMktTeam.toLowerCase();
+      return cMatch && mMatch;
+    });
 
     filtered.forEach(row => {
       if (row.viewType === 'Overall') {
@@ -3819,9 +4015,9 @@ function FunnelAnalysis({ isDark }) {
       };
     });
 
-    const trendDau = dates.map(d => trends[d].DAU);
-    const trendConv = dates.map(d => trends[d].Plan_Page_Load > 0 ? (trends[d].Purchased / trends[d].Plan_Page_Load) * 100 : 0);
-    const trendPaywall = dates.map(d => trends[d].DAU > 0 ? (trends[d].paywalling_hits / trends[d].DAU) * 100 : 0);
+    const trendDau = dates.map(d => trends[d] ? trends[d].DAU : 0);
+    const trendConv = dates.map(d => (trends[d] && trends[d].Plan_Page_Load > 0) ? (trends[d].Purchased / trends[d].Plan_Page_Load) * 100 : 0);
+    const trendPaywall = dates.map(d => (trends[d] && trends[d].DAU > 0) ? (trends[d].paywalling_hits / trends[d].DAU) * 100 : 0);
 
     return { 
       overallSum: overall, 
@@ -3833,13 +4029,13 @@ function FunnelAnalysis({ isDark }) {
     };
   }, [rawData]);
 
-  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate), [processFunnelData, startDate, endDate]);
+  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate, selectedCountry, selectedMarketingTeam), [processFunnelData, startDate, endDate, selectedCountry, selectedMarketingTeam]);
   
   const isCompActive = compPreset !== "None" && compStartDate && compEndDate;
   const compFunnel = useMemo(() => {
     if (!isCompActive) return null;
-    return processFunnelData(compStartDate, compEndDate);
-  }, [processFunnelData, isCompActive, compStartDate, compEndDate]);
+    return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedMarketingTeam);
+  }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedMarketingTeam]);
 
   if (loading) {
     return (
@@ -4020,6 +4216,34 @@ function FunnelAnalysis({ isDark }) {
               <option value="Previous period">Previous period</option>
               <option value="Previous month">Previous month</option>
               <option value="Custom range">Custom range</option>
+            </select>
+          </div>
+
+          {/* Country Filter Selector */}
+          <div className="flex items-center gap-2 border-l border-warm-border dark:border-dark-border pl-4">
+            <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Country:</span>
+            <select 
+              value={selectedCountry} 
+              onChange={(e) => setSelectedCountry(e.target.value)}
+              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+            >
+              {availableCountries.map(c => (
+                <option key={c} value={c}>{c === 'All' ? 'All Countries' : c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Marketing Team Filter Selector */}
+          <div className="flex items-center gap-2 border-l border-warm-border dark:border-dark-border pl-4">
+            <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Marketing Team:</span>
+            <select 
+              value={selectedMarketingTeam} 
+              onChange={(e) => setSelectedMarketingTeam(e.target.value)}
+              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+            >
+              {availableMarketingTeams.map(m => (
+                <option key={m} value={m}>{m === 'All' ? 'All Teams' : m}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -4293,13 +4517,28 @@ function Realtime({ isDark }) {
       setLoading(true);
       try {
         const results = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
-        const data = results.data.map(r => ({
-          dateStr: (r.event_date || '').trim(),
-          hour: parseInt((r.event_hour || '').trim(), 10),
-          platform: (r.ET_Platform || '').trim(),
-          event: (r.event_name || '').trim(),
-          count: parseInt((r.event_count || '').trim(), 10) || 0
-        })).filter(r => r.dateStr && !isNaN(r.hour));
+        const data = results.data.map(r => {
+          const rawDate = r.event_date || r.EVENT_DATE || '';
+          const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
+          const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
+          const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
+          const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
+
+          const dateStr = String(rawDate).trim();
+          const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
+          const platform = String(rawPlatform).trim();
+          const event = String(rawEvent).trim();
+          const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
+
+          return {
+            dateStr,
+            hour,
+            platform,
+            event,
+            count
+          };
+        }).filter(r => r.dateStr && !isNaN(r.hour));
+
         setRawData(data);
         setLoading(false);
       } catch (err) {
@@ -4735,6 +4974,690 @@ function Realtime({ isDark }) {
           </table>
         </div>
       </section>
+    </div>
+  );
+}
+
+function MultiSelectDropdown({ label, options, selectedValues, onChange, isDark }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const isAllSelected = selectedValues.length === 0 || selectedValues.length === options.length;
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      onChange([]);
+    } else {
+      onChange([...options]);
+    }
+  };
+
+  const toggleOption = (opt) => {
+    if (selectedValues.includes(opt)) {
+      const updated = selectedValues.filter(v => v !== opt);
+      onChange(updated);
+    } else {
+      onChange([...selectedValues, opt]);
+    }
+  };
+
+  let displayLabel = "All";
+  if (selectedValues.length > 0 && selectedValues.length < options.length) {
+    if (selectedValues.length <= 2) {
+      displayLabel = selectedValues.join(', ');
+    } else {
+      displayLabel = `${selectedValues.length} Selected`;
+    }
+  }
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <label className="block text-[10px] font-bold text-warm-muted dark:text-dark-muted uppercase mb-1 truncate">{label}</label>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer flex items-center justify-between gap-1 text-left"
+      >
+        <span className="truncate max-w-[110px]">{displayLabel}</span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 mt-1 w-56 max-h-64 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-900 border border-warm-border dark:border-zinc-700 rounded-xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-warm-border/60 dark:border-zinc-800 px-1">
+            <label className="flex items-center gap-2 text-xs font-bold cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                onChange={toggleSelectAll}
+                className="rounded text-amber-500 focus:ring-amber-400 h-3.5 w-3.5 cursor-pointer"
+              />
+              <span>Select All</span>
+            </label>
+            <span className="text-[10px] text-warm-muted dark:text-dark-muted font-semibold">
+              {selectedValues.length === 0 ? options.length : selectedValues.length} / {options.length}
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            {options.map((opt) => {
+              const isChecked = selectedValues.length === 0 || selectedValues.includes(opt);
+              return (
+                <label
+                  key={opt}
+                  className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-amber-500/10 dark:hover:bg-amber-500/20 text-xs font-medium text-warm-text dark:text-dark-text cursor-pointer transition-colors select-none"
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleOption(opt)}
+                    className="rounded text-amber-500 focus:ring-amber-400 h-3.5 w-3.5 cursor-pointer"
+                  />
+                  <span className="truncate">{opt}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ArpuReport({ isDark }) {
+  const [rawData, setRawData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Multi-Select Filter States (Array of strings, empty array [] = All)
+  const [datePreset, setDatePreset] = useState("Last 30 days");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [selectedPlanCategories, setSelectedPlanCategories] = useState([]);
+  const [selectedUserTxnTypes, setSelectedUserTxnTypes] = useState([]);
+  const [selectedMarketingTeams, setSelectedMarketingTeams] = useState([]);
+  const [selectedOffers, setSelectedOffers] = useState([]);
+  const [selectedThemes, setSelectedThemes] = useState([]);
+  const [selectedSaleStatuses, setSelectedSaleStatuses] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 20;
+
+  // Auto-calculate primary date range
+  useEffect(() => {
+    if (datePreset === "Custom range") return;
+    const now = new Date();
+    let start = new Date();
+    let end = new Date();
+    
+    if (datePreset === "Last 30 days") {
+      start.setDate(now.getDate() - 30);
+    } else if (datePreset === "Last 7 days") {
+      start.setDate(now.getDate() - 7);
+    } else if (datePreset === "Yesterday") {
+      start.setDate(now.getDate() - 1);
+      end.setDate(now.getDate() - 1);
+    } else if (datePreset === "This month") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (datePreset === "Last month") {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), 0);
+    } else if (datePreset === "Last 90 days") {
+      start.setDate(now.getDate() - 90);
+    } else if (datePreset === "All time") {
+      start = new Date(2000, 0, 1);
+    }
+    
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+  }, [datePreset]);
+
+  // Fetch ARPU Data
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      setError(null);
+      try {
+        const results = await fetchDatasetCached('arpu', ARPU_GSHEET_URL);
+        const processed = (results.data || []).map(row => {
+          const rawDate = row.txn_date || row.Date || row.date;
+          const dateStr = formatArpuDate(rawDate);
+          if (!dateStr) return null;
+
+          const platformCode = String(row.platform || '').trim();
+          const platformDisplay = formatArpuPlatform(platformCode);
+          const planCategory = String(row.plan_category || 'UNKNOWN').trim().toUpperCase();
+          const userTxnType = String(row.user_txn_type || 'unknown').trim();
+          const marketingTeam = String(row.marketing_team || 'Others').trim();
+          const offer = String(row.Offer || row.offer || 'Standard').trim();
+          const theme = String(row.Theme || row.theme || 'Regular').trim();
+          const saleStatus = String(row['Sale status'] || row.sale_status || row.SaleStatus || 'Active').trim();
+          const conversion = parseInt(row.conversion, 10) || 0;
+          const revenue = parseFloat(row.revenue) || 0.0;
+
+          return {
+            dateStr,
+            platform: platformDisplay,
+            plan_category: planCategory,
+            user_txn_type: userTxnType,
+            marketing_team: marketingTeam,
+            offer,
+            theme,
+            sale_status: saleStatus,
+            conversion,
+            revenue
+          };
+        }).filter(r => r && r.dateStr);
+
+        setRawData(processed);
+        setLoading(false);
+      } catch (err) {
+        console.error("Failed to load ARPU data", err);
+        setError("Failed to load ARPU data: " + (err.message || String(err)));
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  // Unique Filter Options Extractor
+  const platforms = useMemo(() => Array.from(new Set(rawData.map(r => r.platform))).sort(), [rawData]);
+  const planCategories = useMemo(() => Array.from(new Set(rawData.map(r => r.plan_category))).sort(), [rawData]);
+  const userTxnTypes = useMemo(() => Array.from(new Set(rawData.map(r => r.user_txn_type))).sort(), [rawData]);
+  const marketingTeams = useMemo(() => Array.from(new Set(rawData.map(r => r.marketing_team))).sort(), [rawData]);
+  const offers = useMemo(() => Array.from(new Set(rawData.map(r => r.offer))).sort(), [rawData]);
+  const themes = useMemo(() => Array.from(new Set(rawData.map(r => r.theme))).sort(), [rawData]);
+  const saleStatuses = useMemo(() => Array.from(new Set(rawData.map(r => r.sale_status))).sort(), [rawData]);
+
+  // Filtered Rows Calculation with Multi-Select Support
+  const filteredData = useMemo(() => {
+    if (!rawData.length) return [];
+    return rawData.filter(r => {
+      if (startDate && r.dateStr < startDate) return false;
+      if (endDate && r.dateStr > endDate) return false;
+
+      if (selectedPlatforms.length > 0 && selectedPlatforms.length < platforms.length && !selectedPlatforms.includes(r.platform)) return false;
+      if (selectedPlanCategories.length > 0 && selectedPlanCategories.length < planCategories.length && !selectedPlanCategories.includes(r.plan_category)) return false;
+      if (selectedUserTxnTypes.length > 0 && selectedUserTxnTypes.length < userTxnTypes.length && !selectedUserTxnTypes.includes(r.user_txn_type)) return false;
+      if (selectedMarketingTeams.length > 0 && selectedMarketingTeams.length < marketingTeams.length && !selectedMarketingTeams.includes(r.marketing_team)) return false;
+      if (selectedOffers.length > 0 && selectedOffers.length < offers.length && !selectedOffers.includes(r.offer)) return false;
+      if (selectedThemes.length > 0 && selectedThemes.length < themes.length && !selectedThemes.includes(r.theme)) return false;
+      if (selectedSaleStatuses.length > 0 && selectedSaleStatuses.length < saleStatuses.length && !selectedSaleStatuses.includes(r.sale_status)) return false;
+
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const textMatch = 
+          r.platform.toLowerCase().includes(q) ||
+          r.plan_category.toLowerCase().includes(q) ||
+          r.theme.toLowerCase().includes(q) ||
+          r.offer.toLowerCase().includes(q) ||
+          r.user_txn_type.toLowerCase().includes(q);
+        if (!textMatch) return false;
+      }
+
+      return true;
+    });
+  }, [rawData, startDate, endDate, selectedPlatforms, selectedPlanCategories, selectedUserTxnTypes, selectedMarketingTeams, selectedOffers, selectedThemes, selectedSaleStatuses, searchQuery, platforms, planCategories, userTxnTypes, marketingTeams, offers, themes, saleStatuses]);
+
+  // Reset Filters
+  const resetFilters = () => {
+    setSelectedPlatforms([]);
+    setSelectedPlanCategories([]);
+    setSelectedUserTxnTypes([]);
+    setSelectedMarketingTeams([]);
+    setSelectedOffers([]);
+    setSelectedThemes([]);
+    setSelectedSaleStatuses([]);
+    setDatePreset('Last 30 days');
+    setSearchQuery('');
+  };
+
+  // Aggregate Metrics & Charts Data
+  const metrics = useMemo(() => {
+    let totalRevenue = 0;
+    let totalConversions = 0;
+
+    const themeAgg = {};
+    const platformAgg = {};
+    const dateAgg = {};
+
+    filteredData.forEach(r => {
+      totalRevenue += r.revenue;
+      totalConversions += r.conversion;
+
+      // Theme Aggregation
+      if (!themeAgg[r.theme]) themeAgg[r.theme] = { revenue: 0, conversion: 0 };
+      themeAgg[r.theme].revenue += r.revenue;
+      themeAgg[r.theme].conversion += r.conversion;
+
+      // Platform Aggregation
+      if (!platformAgg[r.platform]) platformAgg[r.platform] = { revenue: 0, conversion: 0 };
+      platformAgg[r.platform].revenue += r.revenue;
+      platformAgg[r.platform].conversion += r.conversion;
+
+      // Date Aggregation
+      if (!dateAgg[r.dateStr]) dateAgg[r.dateStr] = { revenue: 0, conversion: 0 };
+      dateAgg[r.dateStr].revenue += r.revenue;
+      dateAgg[r.dateStr].conversion += r.conversion;
+    });
+
+    const overallArpu = totalConversions > 0 ? Math.round(totalRevenue / totalConversions) : 0;
+
+    // Top Theme by ARPU
+    let topTheme = 'N/A';
+    let maxThemeArpu = 0;
+    Object.keys(themeAgg).forEach(t => {
+      const conv = themeAgg[t].conversion;
+      const rev = themeAgg[t].revenue;
+      if (conv > 0) {
+        const arpu = rev / conv;
+        if (arpu > maxThemeArpu) {
+          maxThemeArpu = arpu;
+          topTheme = t;
+        }
+      }
+    });
+
+    // Theme Chart Data
+    const themeLabels = Object.keys(themeAgg).sort((a,b) => (themeAgg[b].revenue / (themeAgg[b].conversion||1)) - (themeAgg[a].revenue / (themeAgg[a].conversion||1)));
+    const themeArpuValues = themeLabels.map(t => themeAgg[t].conversion > 0 ? Math.round(themeAgg[t].revenue / themeAgg[t].conversion) : 0);
+
+    // Platform Chart Data
+    const platformLabels = Object.keys(platformAgg).sort();
+    const platformArpuValues = platformLabels.map(p => platformAgg[p].conversion > 0 ? Math.round(platformAgg[p].revenue / platformAgg[p].conversion) : 0);
+
+    // Date Trend Chart Data
+    const sortedDates = Object.keys(dateAgg).sort();
+    const dateArpuValues = sortedDates.map(d => dateAgg[d].conversion > 0 ? Math.round(dateAgg[d].revenue / dateAgg[d].conversion) : 0);
+
+    return {
+      totalRevenue,
+      totalConversions,
+      overallArpu,
+      topTheme,
+      maxThemeArpu: Math.round(maxThemeArpu),
+      themeChart: { labels: themeLabels, values: themeArpuValues },
+      platformChart: { labels: platformLabels, values: platformArpuValues },
+      dateTrendChart: { dates: sortedDates, values: dateArpuValues }
+    };
+  }, [filteredData]);
+
+  // Table Pagination
+  const totalPages = Math.ceil(filteredData.length / rowsPerPage) || 1;
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredData.slice(start, start + rowsPerPage);
+  }, [filteredData, currentPage]);
+
+  if (loading) {
+    return (
+      <div className="flex h-64 w-full flex-col items-center justify-center text-warm-text dark:text-dark-text">
+        <Loader2 className="h-10 w-10 animate-spin text-amber-accent" />
+        <p className="mt-4 font-semibold tracking-wide">Loading ARPU Analytics Data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-64 w-full flex-col items-center justify-center p-6 text-red-500 text-center">
+        <p className="text-2xl font-bold mb-4">An Error Occurred</p>
+        <p className="max-w-md">{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-in fade-in duration-300">
+      
+      {/* Header Info Banner */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">ARPU Analytics & Campaign Performance</h2>
+          <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">
+            Average Revenue Per User (Revenue / Conversions) across campaign themes, offers & user segments
+          </p>
+        </div>
+        <button
+          onClick={resetFilters}
+          className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 self-end md:self-auto"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          <span>Reset All Filters</span>
+        </button>
+      </div>
+
+      {/* Multi-Select Dropdown Filters Toolbar */}
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-4 shadow-sm mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          
+          {/* Timeframe */}
+          <div>
+            <label className="block text-[10px] font-bold text-warm-muted dark:text-dark-muted uppercase mb-1">Timeframe</label>
+            <select
+              value={datePreset}
+              onChange={(e) => setDatePreset(e.target.value)}
+              className="w-full bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+            >
+              <option value="Yesterday">Yesterday</option>
+              <option value="Last 7 days">Last 7 days</option>
+              <option value="Last 30 days">Last 30 days</option>
+              <option value="This month">This month</option>
+              <option value="Last month">Last month</option>
+              <option value="Last 90 days">Last 90 days</option>
+              <option value="All time">All time</option>
+              <option value="Custom range">Custom range</option>
+            </select>
+          </div>
+
+          <MultiSelectDropdown label="Platform" options={platforms} selectedValues={selectedPlatforms} onChange={setSelectedPlatforms} isDark={isDark} />
+          <MultiSelectDropdown label="Plan Category" options={planCategories} selectedValues={selectedPlanCategories} onChange={setSelectedPlanCategories} isDark={isDark} />
+          <MultiSelectDropdown label="User Txn Type" options={userTxnTypes} selectedValues={selectedUserTxnTypes} onChange={setSelectedUserTxnTypes} isDark={isDark} />
+          <MultiSelectDropdown label="Marketing Team" options={marketingTeams} selectedValues={selectedMarketingTeams} onChange={setSelectedMarketingTeams} isDark={isDark} />
+          <MultiSelectDropdown label="Offer" options={offers} selectedValues={selectedOffers} onChange={setSelectedOffers} isDark={isDark} />
+          <MultiSelectDropdown label="Campaign Theme" options={themes} selectedValues={selectedThemes} onChange={setSelectedThemes} isDark={isDark} />
+          <MultiSelectDropdown label="Sale Status" options={saleStatuses} selectedValues={selectedSaleStatuses} onChange={setSelectedSaleStatuses} isDark={isDark} />
+
+        </div>
+
+        {/* Custom Range Inputs if selected */}
+        {datePreset === "Custom range" && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-warm-border/50 dark:border-zinc-800">
+            <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Custom Date Range:</span>
+            <input type="date" value={startDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+            <span className="text-xs text-warm-muted dark:text-dark-muted">to</span>
+            <input type="date" value={endDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+          </div>
+        )}
+      </div>
+
+      {/* Executive KPI Cards */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        
+        {/* Card 1: OVERALL ARPU */}
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-xs relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl pointer-events-none"></div>
+          <span className="text-[10px] font-black uppercase tracking-wider text-amber-accent block mb-1">Overall ARPU</span>
+          <div className="text-2xl font-black tracking-tight text-warm-text dark:text-dark-text mb-1">
+            ₹{metrics.overallArpu.toLocaleString()}
+          </div>
+          <span className="text-[11px] font-medium text-warm-muted dark:text-dark-muted">
+            Formula: Revenue / Conversion
+          </span>
+        </div>
+
+        {/* Card 2: TOTAL REVENUE */}
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-xs relative overflow-hidden">
+          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-500 block mb-1">Total Revenue</div>
+          <div className="text-2xl font-black tracking-tight text-warm-text dark:text-dark-text mb-1">
+            {metrics.totalRevenue >= 10000000 
+              ? `₹${(metrics.totalRevenue / 10000000).toFixed(2)} Cr` 
+              : metrics.totalRevenue >= 100000 
+                ? `₹${(metrics.totalRevenue / 100000).toFixed(2)} L`
+                : `₹${Math.round(metrics.totalRevenue).toLocaleString()}`}
+          </div>
+          <span className="text-[11px] font-medium text-warm-muted dark:text-dark-muted">
+            Filtered Segment Volume
+          </span>
+        </div>
+
+        {/* Card 3: TOTAL CONVERSIONS */}
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-xs relative overflow-hidden">
+          <div className="text-[10px] font-black uppercase tracking-wider text-blue-500 block mb-1">Total Conversions</div>
+          <div className="text-2xl font-black tracking-tight text-warm-text dark:text-dark-text mb-1">
+            {metrics.totalConversions.toLocaleString()}
+          </div>
+          <span className="text-[11px] font-medium text-warm-muted dark:text-dark-muted">
+            Total Subscriptions Sold
+          </span>
+        </div>
+
+        {/* Card 4: TOP PERFORMING THEME */}
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-xs relative overflow-hidden">
+          <div className="text-[10px] font-black uppercase tracking-wider text-purple-500 block mb-1">Top ARPU Theme</div>
+          <div className="text-lg font-black tracking-tight text-warm-text dark:text-dark-text truncate mb-1" title={metrics.topTheme}>
+            {metrics.topTheme}
+          </div>
+          <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400">
+            ₹{metrics.maxThemeArpu.toLocaleString()} ARPU
+          </span>
+        </div>
+
+      </section>
+
+      {/* Visual Analytics Charts Section */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        
+        {/* Chart 1: ARPU Trend Across Dates */}
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-warm-text dark:text-dark-text mb-1">ARPU Trend Across Dates</h3>
+          <p className="text-[11px] text-warm-muted dark:text-dark-muted mb-4">Daily average revenue per conversion (₹)</p>
+          <div className="h-64 w-full">
+            <Plot
+              data={[{
+                x: metrics.dateTrendChart.dates,
+                y: metrics.dateTrendChart.values,
+                type: 'scatter',
+                mode: 'lines+markers',
+                line: { color: '#F59E0B', width: 3, shape: 'spline' },
+                marker: { color: '#D97706', size: 6 },
+                name: 'ARPU (₹)'
+              }]}
+              layout={{
+                autosize: true,
+                margin: { l: 45, r: 20, t: 10, b: 35 },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                xaxis: { 
+                  color: isDark ? '#94a3b8' : '#64748b', 
+                  showgrid: false, 
+                  tickfont: { size: 10 } 
+                },
+                yaxis: { 
+                  color: isDark ? '#94a3b8' : '#64748b', 
+                  gridcolor: isDark ? '#334155' : '#f1f5f9',
+                  tickprefix: '₹',
+                  tickfont: { size: 10 }
+                },
+                hovermode: 'x'
+              }}
+              useResizeHandler={true}
+              className="w-full h-full"
+              config={{ displayModeBar: false }}
+            />
+          </div>
+        </div>
+
+        {/* Chart 2: ARPU by Campaign Theme */}
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-warm-text dark:text-dark-text mb-1">ARPU by Campaign Theme</h3>
+          <p className="text-[11px] text-warm-muted dark:text-dark-muted mb-4">Average revenue per subscription for each sale theme (₹)</p>
+          <div className="h-64 w-full">
+            <Plot
+              data={[{
+                x: metrics.themeChart.labels,
+                y: metrics.themeChart.values,
+                type: 'bar',
+                marker: {
+                  color: ['#F59E0B', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6']
+                },
+                text: metrics.themeChart.values.map(v => `₹${v.toLocaleString()}`),
+                textposition: 'auto',
+                textfont: { size: 10, color: '#FFFFFF', weight: 'bold' }
+              }]}
+              layout={{
+                autosize: true,
+                margin: { l: 45, r: 20, t: 10, b: 65 },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                xaxis: { 
+                  color: isDark ? '#94a3b8' : '#64748b', 
+                  showgrid: false, 
+                  tickangle: -25,
+                  tickfont: { size: 9 } 
+                },
+                yaxis: { 
+                  color: isDark ? '#94a3b8' : '#64748b', 
+                  gridcolor: isDark ? '#334155' : '#f1f5f9',
+                  tickprefix: '₹',
+                  tickfont: { size: 10 }
+                }
+              }}
+              useResizeHandler={true}
+              className="w-full h-full"
+              config={{ displayModeBar: false }}
+            />
+          </div>
+        </div>
+
+      </section>
+
+      {/* Platform ARPU Comparison Chart */}
+      <section className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-sm mb-6">
+        <h3 className="text-sm font-bold text-warm-text dark:text-dark-text mb-1">Platform ARPU Performance</h3>
+        <p className="text-[11px] text-warm-muted dark:text-dark-muted mb-4">Comparing average revenue generated per user across platforms</p>
+        <div className="h-56 w-full">
+          <Plot
+            data={[{
+              x: metrics.platformChart.labels,
+              y: metrics.platformChart.values,
+              type: 'bar',
+              marker: { color: '#3B82F6' },
+              text: metrics.platformChart.values.map(v => `₹${v.toLocaleString()}`),
+              textposition: 'auto',
+              textfont: { size: 11, color: '#FFFFFF', weight: 'bold' }
+            }]}
+            layout={{
+              autosize: true,
+              margin: { l: 45, r: 20, t: 10, b: 35 },
+              paper_bgcolor: 'transparent',
+              plot_bgcolor: 'transparent',
+              xaxis: { color: isDark ? '#94a3b8' : '#64748b', tickfont: { size: 10 } },
+              yaxis: { color: isDark ? '#94a3b8' : '#64748b', gridcolor: isDark ? '#334155' : '#f1f5f9', tickprefix: '₹' }
+            }}
+            useResizeHandler={true}
+            className="w-full h-full"
+            config={{ displayModeBar: false }}
+          />
+        </div>
+      </section>
+
+      {/* Detailed Granular ARPU Data Table */}
+      <section className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <div>
+            <h3 className="text-base font-bold text-warm-text dark:text-dark-text tracking-tight">Granular ARPU Transactions ({filteredData.length.toLocaleString()} Records)</h3>
+            <p className="text-xs text-warm-muted dark:text-dark-muted font-medium">Detailed breakdown of conversions, revenue, offer, theme, and ARPU per row</p>
+          </div>
+          
+          <input
+            type="text"
+            placeholder="Search by theme, platform, plan..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="px-3.5 py-1.5 text-xs font-medium rounded-xl bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-amber-accent w-full sm:w-64"
+          />
+        </div>
+
+        {/* Table Container */}
+        <div className="overflow-x-auto custom-scrollbar border border-warm-border/60 dark:border-zinc-800 rounded-xl">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-warm-tableBg dark:bg-slate-800 text-warm-muted dark:text-dark-muted uppercase font-bold text-[10px] tracking-wider border-b border-warm-border dark:border-dark-border">
+              <tr>
+                <th className="p-3">Txn Date</th>
+                <th className="p-3">Platform</th>
+                <th className="p-3">Plan Category</th>
+                <th className="p-3">User Txn Type</th>
+                <th className="p-3">Marketing Team</th>
+                <th className="p-3">Offer</th>
+                <th className="p-3">Campaign Theme</th>
+                <th className="p-3">Sale Status</th>
+                <th className="p-3 text-right">Conversions</th>
+                <th className="p-3 text-right">Revenue (₹)</th>
+                <th className="p-3 text-right">ARPU (₹)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-warm-border/40 dark:divide-zinc-800/60 font-medium">
+              {paginatedRows.length === 0 ? (
+                <tr>
+                  <td colSpan="11" className="p-6 text-center text-warm-muted dark:text-dark-muted italic">
+                    No matching ARPU records found for the selected filters.
+                  </td>
+                </tr>
+              ) : (
+                paginatedRows.map((r, idx) => {
+                  const rowArpu = r.conversion > 0 ? Math.round(r.revenue / r.conversion) : 0;
+                  return (
+                    <tr key={idx} className="hover:bg-amber-500/5 transition-colors">
+                      <td className="p-3 font-semibold whitespace-nowrap">{r.dateStr}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 font-bold text-[11px]">
+                          {r.platform}
+                        </span>
+                      </td>
+                      <td className="p-3 font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">{r.plan_category}</td>
+                      <td className="p-3 capitalize whitespace-nowrap">{r.user_txn_type.replace(/_/g, ' ')}</td>
+                      <td className="p-3 whitespace-nowrap">{r.marketing_team}</td>
+                      <td className="p-3 font-semibold text-purple-600 dark:text-purple-400 whitespace-nowrap">{r.offer}</td>
+                      <td className="p-3 font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">{r.theme}</td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-[10px]">
+                          {r.sale_status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">{r.conversion.toLocaleString()}</td>
+                      <td className="p-3 text-right font-bold whitespace-nowrap">₹{Math.round(r.revenue).toLocaleString()}</td>
+                      <td className="p-3 text-right font-black text-amber-accent whitespace-nowrap">
+                        ₹{rowArpu.toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center mt-4 pt-3 border-t border-warm-border/50 dark:border-zinc-800 text-xs">
+            <span className="text-warm-muted dark:text-dark-muted font-medium">
+              Page {currentPage} of {totalPages} ({filteredData.length.toLocaleString()} total rows)
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg border border-warm-border dark:border-dark-border bg-white dark:bg-slate-800 disabled:opacity-40 font-bold cursor-pointer"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg border border-warm-border dark:border-dark-border bg-white dark:bg-slate-800 disabled:opacity-40 font-bold cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
+      </section>
+
     </div>
   );
 }

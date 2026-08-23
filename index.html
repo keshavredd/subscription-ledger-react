@@ -12,16 +12,6 @@
   </head>
   <body class="bg-warm-bg dark:bg-dark-bg text-warm-text dark:text-dark-text font-sans antialiased min-h-screen">
     <div id="root"></div>
-    <script>
-      window.addEventListener('error', function(event) {
-        fetch('http://localhost:9999', { method: 'POST', body: 'ERROR: ' + event.message + '\\n' + event.filename + ':' + event.lineno + ':' + event.colno + '\\n' + (event.error && event.error.stack) });
-        document.body.innerHTML += '<div style="color: red; padding: 20px; z-index: 9999; position: absolute; top: 0; left: 0; background: white;">' + event.message + '<br>' + event.filename + ':' + event.lineno + '</div>';
-      });
-      window.addEventListener('unhandledrejection', function(event) {
-        fetch('http://localhost:9999', { method: 'POST', body: 'UNHANDLED REJECTION: ' + event.reason });
-        document.body.innerHTML += '<div style="color: red; padding: 20px; z-index: 9999; position: absolute; top: 0; left: 0; background: white;">' + event.reason + '</div>';
-      });
-    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

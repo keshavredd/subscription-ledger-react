@@ -97,46 +97,11 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
           <button
             onClick={handleGoogleSignIn}
             disabled={isLoading}
-            className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs bg-black dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg cursor-pointer mb-6 disabled:opacity-50"
+            className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs bg-black dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg cursor-pointer disabled:opacity-50"
           >
             <LogIn className="h-4 w-4 text-amber-accent" />
             <span>{isLoading ? "Signing in..." : "Sign in with Google"}</span>
           </button>
-
-          <div className="relative flex items-center justify-center my-6">
-            <div className="border-t border-warm-border dark:border-zinc-800 w-full"></div>
-            <span className="bg-white dark:bg-dark-card px-3 text-[11px] font-bold text-warm-muted dark:text-dark-muted uppercase tracking-wider absolute">
-              Or Enter Email
-            </span>
-          </div>
-
-          {/* Fallback Email Sign In */}
-          <form onSubmit={handleCustomEmailLogin} className="space-y-3">
-            <div>
-              <label className="block text-[11px] font-bold text-warm-muted dark:text-dark-muted mb-1 uppercase tracking-wider">
-                Work Email Address
-              </label>
-              <div className="relative">
-                <Mail className="h-4 w-4 absolute left-3 top-3 text-warm-muted dark:text-dark-muted" />
-                <input
-                  type="email"
-                  placeholder="your.name@timesinternet.in"
-                  value={customEmailInput}
-                  onChange={(e) => setCustomEmailInput(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-warm-border dark:border-zinc-700 bg-warm-bg/50 dark:bg-zinc-900 text-xs font-medium focus:outline-hidden focus:ring-2 focus:ring-amber-500/50"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-amber-500 hover:bg-amber-600 text-white transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-            >
-              <span>Check Access & Sign In</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </form>
 
         </div>
 

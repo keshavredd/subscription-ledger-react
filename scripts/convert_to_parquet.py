@@ -11,7 +11,8 @@ URLS = {
     "subscription": "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=598826199",
     "funnel": "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1049115614",
     "realtime": "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1333104452",
-    "renewals": "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=renewal_raw"
+    "renewals": "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=renewal_raw",
+    "arpu": "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=arpu_data"
 }
 
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public", "data")
@@ -19,7 +20,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 conn = duckdb.connect(database=':memory:')
 
-print("=== Starting Google Sheets to Parquet Conversion ===")
+print("=== Starting Google Sheets to Parquet Conversion (Preserving All Varchar Schemas) ===")
 
 for key, url in URLS.items():
     print(f"\n[+] Fetching {key} dataset from Google Sheets...")
@@ -34,8 +35,8 @@ for key, url in URLS.items():
         urllib.request.urlretrieve(url, temp_csv)
         csv_size = os.path.getsize(temp_csv) / 1024.0
 
-        # Read CSV into DuckDB in-memory table and export to Parquet with Snappy compression
-        conn.execute(f"CREATE OR REPLACE TABLE {key} AS SELECT * FROM read_csv_auto('{temp_csv_clean}', header=True, ignore_errors=True)")
+        # Read CSV with all_varchar=True to preserve exact string columns and date representations
+        conn.execute(f"CREATE OR REPLACE TABLE {key} AS SELECT * FROM read_csv_auto('{temp_csv_clean}', header=True, all_varchar=True, ignore_errors=True)")
         conn.execute(f"COPY {key} TO '{parquet_file_clean}' (FORMAT PARQUET, COMPRESSION 'SNAPPY')")
 
         parquet_size = os.path.getsize(parquet_file) / 1024.0

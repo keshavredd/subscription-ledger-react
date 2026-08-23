@@ -141,7 +141,7 @@ Guidelines:
 - Include detailed 'table' rows if comparing multiple months or platforms.
 - Keep markdown text insightful, accurate to context data, concise, and executive-ready.`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
   const requestBody = {
     contents: [

@@ -1,4 +1,4 @@
-import { queryGeminiBI, getStoredApiKey } from '../services/geminiService';
+import { queryGeminiBI, getStoredApiKey } from '../services/geminiService.js';
 
 /**
  * Checks if query needs Gemini LLM reasoning (multi-month, complex analytics, open NL)

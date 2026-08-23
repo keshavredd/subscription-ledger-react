@@ -42,7 +42,7 @@ function openDB() {
 }
 
 /**
- * Save binary Parquet ArrayBuffer to IndexedDB
+ * Save binary Parquet ArrayBuffer or parsed dataset to IndexedDB
  */
 export async function setCachedParquet(key, dataBuffer, meta = {}) {
   const db = await openDB();
@@ -55,7 +55,8 @@ export async function setCachedParquet(key, dataBuffer, meta = {}) {
       
       const record = {
         key,
-        buffer: dataBuffer,
+        buffer: dataBuffer || null,
+        data: meta.data || null,
         timestamp: Date.now(),
         meta
       };
@@ -71,9 +72,9 @@ export async function setCachedParquet(key, dataBuffer, meta = {}) {
 }
 
 /**
- * Retrieve binary Parquet ArrayBuffer from IndexedDB
+ * Retrieve binary Parquet ArrayBuffer or parsed dataset from IndexedDB with version checking
  */
-export async function getCachedParquet(key, maxAgeMs = 12 * 60 * 60 * 1000) { // Default 12 hr TTL
+export async function getCachedParquet(key, maxAgeMs = 12 * 60 * 60 * 1000, requiredVersion = null) {
   const db = await openDB();
   if (!db) return null;
 
@@ -90,6 +91,13 @@ export async function getCachedParquet(key, maxAgeMs = 12 * 60 * 60 * 1000) { //
           return;
         }
 
+        // Validate cache version
+        if (requiredVersion && record.meta?.version !== requiredVersion) {
+          console.log(`[IndexedDB] Cache version mismatch for ${key} (expected ${requiredVersion}, got ${record.meta?.version}). Invalidating cache.`);
+          resolve(null);
+          return;
+        }
+
         // Check if cache entry is expired
         const age = Date.now() - (record.timestamp || 0);
         if (age > maxAgeMs) {
@@ -98,7 +106,8 @@ export async function getCachedParquet(key, maxAgeMs = 12 * 60 * 60 * 1000) { //
           return;
         }
 
-        console.log(`[IndexedDB] Loaded cached ${key} from local disk (${Math.round(record.buffer.byteLength / 1024)} KB)`);
+        const sizeKb = record.buffer ? Math.round(record.buffer.byteLength / 1024) : (record.data ? Math.round(JSON.stringify(record.data).length / 1024) : 0);
+        console.log(`⚡ [IndexedDB] Loaded cached ${key} from local disk (${sizeKb} KB)`);
         resolve(record);
       };
 
