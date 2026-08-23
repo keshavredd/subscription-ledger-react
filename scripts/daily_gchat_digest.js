@@ -87,10 +87,18 @@ function formatCurrency(amount) {
 function normalizePlatform(rawPlatform) {
   if (!rawPlatform) return 'Web';
   const str = String(rawPlatform).trim().toLowerCase();
-  if (str.includes('android')) return 'Android';
-  if (str.includes('ios') || str.includes('apple')) return 'iOS';
+
+  if (str.includes('market') && str.includes('android')) return 'Market Android';
+  if (str.includes('market') && str.includes('ios')) return 'Market iOS';
+  if (str.includes('main') && str.includes('android')) return 'Main Android';
+  if (str.includes('main') && str.includes('ios')) return 'Main iOS';
+
+  if (str === 'android' || str.includes('android')) return 'Main Android';
+  if (str === 'ios' || str.includes('ios') || str.includes('apple')) return 'Main iOS';
+
+  if (str.includes('wap') || str.includes('mweb')) return 'WAP';
   if (str.includes('web') || str.includes('desktop') || str.includes('site')) return 'Web';
-  if (str.includes('mweb') || str.includes('mobile')) return 'Mobile Web';
+
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
@@ -405,7 +413,7 @@ ${channelLines || '• No channel data available'}
 ${txnTypeLines || '• No transaction type data available'}
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-📌 *SUMMARY:* Renewal Rate: *${renewalRate}%* (4W Avg: ${benchRenewalRate}%) | Recurring Plans Sold: *${yesterdayStats.recurringSub} (${recurringPct}%)*`;
+📌 Renewal Rate: *${renewalRate}%* (4W Avg: ${benchRenewalRate}%) | Recurring Plans Sold: *${yesterdayStats.recurringSub} (${recurringPct}%)*`;
 
   console.log('\n--- GENERATED GCHAT MESSAGE PAYLOAD ---');
   console.log(messageText);
