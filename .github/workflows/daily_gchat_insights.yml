@@ -2,8 +2,8 @@ name: Daily ET Prime Subscription Insights
 
 on:
   schedule:
-    # Runs daily at 03:00 UTC (8:30 AM IST)
-    - cron: '0 3 * * *'
+    # Runs daily at 03:15 UTC (8:45 AM IST) to avoid top-of-hour GitHub queue congestion
+    - cron: '15 3 * * *'
   workflow_dispatch:
     inputs:
       custom_date:
