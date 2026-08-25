@@ -31,9 +31,9 @@ export function loadGsiScript() {
  * or Google Identity Services if VITE_GOOGLE_CLIENT_ID is provided.
  */
 export async function loginWithGoogleSSO() {
-  const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+  const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD507aw8ZwCLi_3n8feESQIor3s2PDRozQ";
 
-  // 1. Primary: Firebase Google Sign-In Popup (if Firebase API Key is configured in .env)
+  // 1. Primary: Firebase Google Sign-In Popup
   if (firebaseApiKey && !firebaseApiKey.includes('demo_key') && !firebaseApiKey.includes('placeholder')) {
     try {
       const firebaseUser = await loginWithGoogle();

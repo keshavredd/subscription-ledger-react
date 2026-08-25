@@ -7,12 +7,13 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOu
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSy_demo_key_placeholder",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "et-prime-ledger.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "et-prime-ledger",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "et-prime-ledger.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789:web:abcdef"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD507aw8ZwCLi_3n8feESQIor3s2PDRozQ",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "subscription-ledger-849a8.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "subscription-ledger-849a8",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "subscription-ledger-849a8.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "49258537381",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:49258537381:web:b9c2bb15aa09926b66084c",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-5NVZKQ1T2S"
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
