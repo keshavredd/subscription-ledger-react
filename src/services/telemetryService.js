@@ -4,11 +4,13 @@
  */
 
 const ADMIN_EMAILS = [
+  'keshavreddy731@gmail.com',
   'keshaveddy731@gmail.com',
   'keshava.reddy@timesinternet.in'
 ];
 
 const INITIAL_ALLOWED_USERS = [
+  'keshavreddy731@gmail.com',
   'keshaveddy731@gmail.com',
   'keshava.reddy@timesinternet.in',
   'analyst@timesinternet.in',

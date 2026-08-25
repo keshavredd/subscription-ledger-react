@@ -264,7 +264,8 @@ async function run() {
     const nonAutoSub = nonAutoRows.reduce((acc, r) => acc + r.conversion, 0);
     const nonAutoRev = nonAutoRows.reduce((acc, r) => acc + r.revenue, 0);
 
-    const recurringSub = rows.filter(r => r.isAutoRenew).reduce((acc, r) => acc + r.conversion, 0);
+    // Recurring plans sold excluding automatic renewals (user_txn_type = "auto_renewal")
+    const recurringSub = nonAutoRows.filter(r => r.isAutoRenew).reduce((acc, r) => acc + r.conversion, 0);
 
     const platformRev = {};
     const channelRev = {};
@@ -301,6 +302,7 @@ async function run() {
 
   const benchStats = {
     totalSub: benchRawStats.totalSub / numBenchDays,
+    nonAutoSub: benchRawStats.nonAutoSub / numBenchDays,
     totalRev: benchRawStats.totalRev / numBenchDays,
     arpuOverall: benchRawStats.totalSub > 0 ? benchRawStats.totalRev / benchRawStats.totalSub : 0,
     arpuExclAuto: benchRawStats.nonAutoSub > 0 ? benchRawStats.nonAutoRev / benchRawStats.nonAutoSub : 0,
@@ -338,13 +340,40 @@ async function run() {
   const benchRenewed = benchRenewals.reduce((acc, r) => acc + r.renewed, 0);
   const benchRenewalRate = benchDue > 0 ? ((benchRenewed / benchDue) * 100).toFixed(1) : 'N/A';
 
-  // Helper for formatting % difference
-  function formatVar(current, bench) {
-    if (!bench || bench === 0) return '';
-    const diff = ((current - bench) / bench) * 100;
-    const sign = diff >= 0 ? '+' : '';
-    const emoji = diff >= 0 ? '🟢' : '🔴';
-    return ` \`[4W Avg: ${typeof bench === 'number' && bench > 1000 ? formatCurrency(bench) : Math.round(bench)} | ${emoji} ${sign}${diff.toFixed(1)}%]\``;
+  /**
+   * Helper for formatting variance comparison against 4-Week Same-Day Average
+   * @param {number} current Current value
+   * @param {number} bench Benchmark 4-Week Average value
+   * @param {'currency' | 'count' | 'arpu'} type Metric type for formatting benchmark & absolute diff
+   */
+  function formatVar(current, bench, type = 'currency') {
+    if (bench === undefined || bench === null || isNaN(bench) || bench === 0) return '';
+    const diffVal = current - bench;
+    const pctDiff = ((current - bench) / bench) * 100;
+    const sign = pctDiff >= 0 ? '+' : '';
+    const pctText = `${sign}${pctDiff.toFixed(1)}%`;
+
+    let formattedBench = '';
+    let absText = '';
+
+    if (type === 'count') {
+      formattedBench = Math.round(bench).toLocaleString('en-IN');
+      const roundedDiff = Math.round(diffVal);
+      const absSign = roundedDiff >= 0 ? '+' : '';
+      absText = `${absSign}${roundedDiff.toLocaleString('en-IN')}`;
+    } else if (type === 'arpu') {
+      formattedBench = `₹${Math.round(bench).toLocaleString('en-IN')}`;
+      const roundedDiff = Math.round(diffVal);
+      const absSign = roundedDiff >= 0 ? '+' : '-';
+      absText = `${absSign}₹${Math.abs(roundedDiff).toLocaleString('en-IN')}`;
+    } else {
+      // currency
+      formattedBench = formatCurrency(bench);
+      const absSign = diffVal >= 0 ? '+' : '-';
+      absText = `${absSign}${formatCurrency(Math.abs(diffVal))}`;
+    }
+
+    return ` \`[4W Avg: ${formattedBench} | ${pctText} (${absText})]\``;
   }
 
   // Format Date for Card Title
@@ -360,7 +389,7 @@ async function run() {
     .map(([platform, rev]) => {
       const share = yesterdayStats.totalRev > 0 ? ((rev / yesterdayStats.totalRev) * 100).toFixed(1) : '0';
       const benchRev = benchStats.platformRev[platform] || 0;
-      const varText = formatVar(rev, benchRev);
+      const varText = formatVar(rev, benchRev, 'currency');
       return `• *${platform}:* ${formatCurrency(rev)} (${share}%)${varText}`;
     })
     .join('\n');
@@ -370,7 +399,9 @@ async function run() {
     .sort((a, b) => b[1] - a[1])
     .map(([channel, rev]) => {
       const share = yesterdayStats.totalRev > 0 ? ((rev / yesterdayStats.totalRev) * 100).toFixed(1) : '0';
-      return `• *${channel}:* ${formatCurrency(rev)} (${share}%)`;
+      const benchRev = benchStats.channelRev[channel] || 0;
+      const varText = formatVar(rev, benchRev, 'currency');
+      return `• *${channel}:* ${formatCurrency(rev)} (${share}%)${varText}`;
     })
     .join('\n');
 
@@ -379,13 +410,15 @@ async function run() {
     .sort((a, b) => b[1] - a[1])
     .map(([type, rev]) => {
       const share = yesterdayStats.totalRev > 0 ? ((rev / yesterdayStats.totalRev) * 100).toFixed(1) : '0';
-      return `• *${type}:* ${formatCurrency(rev)} (${share}%)`;
+      const benchRev = benchStats.txnTypeRev[type] || 0;
+      const varText = formatVar(rev, benchRev, 'currency');
+      return `• *${type}:* ${formatCurrency(rev)} (${share}%)${varText}`;
     })
     .join('\n');
 
-  // Build Recurring Plans Text
-  const recurringPct = yesterdayStats.totalSub > 0 
-    ? ((yesterdayStats.recurringSub / yesterdayStats.totalSub) * 100).toFixed(1) 
+  // Build Recurring Plans Text (Excl. auto_renewal)
+  const recurringPct = yesterdayStats.nonAutoSub > 0 
+    ? ((yesterdayStats.recurringSub / yesterdayStats.nonAutoSub) * 100).toFixed(1) 
     : '0';
 
   // Construct Google Chat Card Payload
@@ -395,10 +428,11 @@ async function run() {
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 💰 *HIGH-LEVEL METRICS & ARPU*
-• *Total Subscriptions:* *${yesterdayStats.totalSub.toLocaleString('en-IN')}*${formatVar(yesterdayStats.totalSub, benchStats.totalSub)}
-• *Total Revenue:* *${formatCurrency(yesterdayStats.totalRev)}*${formatVar(yesterdayStats.totalRev, benchStats.totalRev)}
-• *Overall ARPU:* *₹${Math.round(yesterdayStats.arpuOverall).toLocaleString('en-IN')}*${formatVar(yesterdayStats.arpuOverall, benchStats.arpuOverall)}
-• *ARPU (Excl. Auto-Renewal):* *₹${Math.round(yesterdayStats.arpuExclAuto).toLocaleString('en-IN')}*${formatVar(yesterdayStats.arpuExclAuto, benchStats.arpuExclAuto)}
+• *Total Subscriptions:* *${yesterdayStats.totalSub.toLocaleString('en-IN')}*${formatVar(yesterdayStats.totalSub, benchStats.totalSub, 'count')}
+• *Subscriptions (Excl. Auto-Renewal):* *${yesterdayStats.nonAutoSub.toLocaleString('en-IN')}*${formatVar(yesterdayStats.nonAutoSub, benchStats.nonAutoSub, 'count')}
+• *Total Revenue:* *${formatCurrency(yesterdayStats.totalRev)}*${formatVar(yesterdayStats.totalRev, benchStats.totalRev, 'currency')}
+• *Overall ARPU:* *₹${Math.round(yesterdayStats.arpuOverall).toLocaleString('en-IN')}*${formatVar(yesterdayStats.arpuOverall, benchStats.arpuOverall, 'arpu')}
+• *ARPU (Excl. Auto-Renewal):* *₹${Math.round(yesterdayStats.arpuExclAuto).toLocaleString('en-IN')}*${formatVar(yesterdayStats.arpuExclAuto, benchStats.arpuExclAuto, 'arpu')}
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 📱 *PLATFORM REVENUE BREAKDOWN*

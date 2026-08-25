@@ -3800,9 +3800,22 @@ function FunnelAnalysis({ isDark }) {
   const [compStartDate, setCompStartDate] = useState("");
   const [compEndDate, setCompEndDate] = useState("");
 
-  // Segment Filters State (Country & Marketing Team)
+  // Segment Filters State (Country, Marketing Team & Day of Week)
   const [selectedCountry, setSelectedCountry] = useState("All");
   const [selectedMarketingTeam, setSelectedMarketingTeam] = useState("All");
+
+  const DAYS_LIST = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState([...DAYS_LIST]);
+  const [isDayOfWeekDropdownOpen, setIsDayOfWeekDropdownOpen] = useState(false);
+
+  const toggleDayOfWeek = (day) => {
+    if (selectedDaysOfWeek.includes(day)) {
+      if (selectedDaysOfWeek.length === 1) return;
+      setSelectedDaysOfWeek(prev => prev.filter(d => d !== day));
+    } else {
+      setSelectedDaysOfWeek(prev => [...prev, day]);
+    }
+  };
 
   const [expandedRows, setExpandedRows] = useState({});
   const toggleRow = (key) => setExpandedRows(prev => ({ ...prev, [key]: !prev[key] }));
@@ -3924,50 +3937,46 @@ function FunnelAnalysis({ isDark }) {
     fetchData();
   }, []);
 
-  // Process data for a given date range and segment filters
-  const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeam = 'All') => {
+  const [trendlineViewMode, setTrendlineViewMode] = useState("Daily"); // "Daily" | "Weekly"
+  const [weeklyDauMode, setWeeklyDauMode] = useState("Daily Average"); // "Daily Average" | "Weekly Sum"
+
+  // Process data for a given date range, segment filters, and day of week list
+  const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeam = 'All', daysOfWeekFilter = []) => {
     const overall = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
     const platforms = {};
+    const marketingTeams = {};
     const trends = {};
 
     if (!sDate || !eDate || rawData.length === 0) {
-      return { overallSum: overall, overallAvg: overall, platformAvg: {}, uniqueDays: 1, dates: [] };
+      return { overallSum: overall, overallAvg: overall, platformAvg: {}, marketingTeamAvg: {}, uniqueDays: 1, dates: [] };
     }
 
     const targetCountry = filterCountry === 'All' ? 'Overall' : filterCountry;
     const targetMktTeam = filterMktTeam === 'All' ? 'Overall' : filterMktTeam;
+    const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     const filtered = rawData.filter(r => {
       if (r.dateStr < sDate || r.dateStr > eDate) return false;
-      const cMatch = r.country.toLowerCase() === targetCountry.toLowerCase();
-      const mMatch = r.marketingTeam.toLowerCase() === targetMktTeam.toLowerCase();
-      return cMatch && mMatch;
+      const cMatch = filterCountry === 'All' || r.country.toLowerCase() === targetCountry.toLowerCase();
+      const mMatch = filterMktTeam === 'All' || r.marketingTeam.toLowerCase() === targetMktTeam.toLowerCase();
+      
+      let dayMatch = true;
+      if (daysOfWeekFilter && daysOfWeekFilter.length > 0 && daysOfWeekFilter.length < 7) {
+        const dayName = DAYS[r.dateObj.getDay()];
+        dayMatch = daysOfWeekFilter.includes(dayName);
+      }
+      return cMatch && mMatch && dayMatch;
     });
 
+    // Group filtered rows by dateStr for accurate max DAU / Paywall Hits calculation per day
+    const dailyGroups = {};
     filtered.forEach(row => {
-      if (row.viewType === 'Overall') {
-        overall.DAU += row.DAU;
-        overall.paywalling_hits += row.paywalling_hits;
-        overall.Plan_Page_Load += row.Plan_Page_Load;
-        overall.Plan_Selected += row.Plan_Selected;
-        overall.Pay_Initiated += row.Pay_Initiated;
-        overall.Purchased += row.Purchased;
-        
-        if (!overall.daily[row.dateStr]) overall.daily[row.dateStr] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0 };
-        overall.daily[row.dateStr].DAU += row.DAU;
-        overall.daily[row.dateStr].paywalling_hits += row.paywalling_hits;
-        overall.daily[row.dateStr].Plan_Page_Load += row.Plan_Page_Load;
-        overall.daily[row.dateStr].Plan_Selected += row.Plan_Selected;
-        overall.daily[row.dateStr].Pay_Initiated += row.Pay_Initiated;
-        overall.daily[row.dateStr].Purchased += row.Purchased;
-        
-        if (!trends[row.dateStr]) trends[row.dateStr] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Purchased: 0 };
-        trends[row.dateStr].DAU += row.DAU;
-        trends[row.dateStr].paywalling_hits += row.paywalling_hits;
-        trends[row.dateStr].Plan_Page_Load += row.Plan_Page_Load;
-        trends[row.dateStr].Purchased += row.Purchased;
-      } else if (row.viewType === 'By Platform') {
-        const plat = row.platform;
+      if (!dailyGroups[row.dateStr]) dailyGroups[row.dateStr] = [];
+      dailyGroups[row.dateStr].push(row);
+
+      // Populate platform aggregations
+      if (row.viewType === 'By Platform' || row.platform) {
+        const plat = row.platform || 'Other';
         if (!platforms[plat]) platforms[plat] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
         platforms[plat].DAU += row.DAU;
         platforms[plat].paywalling_hits += row.paywalling_hits;
@@ -3984,12 +3993,85 @@ function FunnelAnalysis({ isDark }) {
         platforms[plat].daily[row.dateStr].Pay_Initiated += row.Pay_Initiated;
         platforms[plat].daily[row.dateStr].Purchased += row.Purchased;
       }
+
+      // Populate marketing team aggregations
+      const mTeam = row.marketingTeam;
+      if (mTeam && mTeam.toLowerCase() !== 'overall') {
+        if (!marketingTeams[mTeam]) marketingTeams[mTeam] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
+        marketingTeams[mTeam].DAU += row.DAU;
+        marketingTeams[mTeam].paywalling_hits += row.paywalling_hits;
+        marketingTeams[mTeam].Plan_Page_Load += row.Plan_Page_Load;
+        marketingTeams[mTeam].Plan_Selected += row.Plan_Selected;
+        marketingTeams[mTeam].Pay_Initiated += row.Pay_Initiated;
+        marketingTeams[mTeam].Purchased += row.Purchased;
+
+        if (!marketingTeams[mTeam].daily[row.dateStr]) marketingTeams[mTeam].daily[row.dateStr] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0 };
+        marketingTeams[mTeam].daily[row.dateStr].DAU += row.DAU;
+        marketingTeams[mTeam].daily[row.dateStr].paywalling_hits += row.paywalling_hits;
+        marketingTeams[mTeam].daily[row.dateStr].Plan_Page_Load += row.Plan_Page_Load;
+        marketingTeams[mTeam].daily[row.dateStr].Plan_Selected += row.Plan_Selected;
+        marketingTeams[mTeam].daily[row.dateStr].Pay_Initiated += row.Pay_Initiated;
+        marketingTeams[mTeam].daily[row.dateStr].Purchased += row.Purchased;
+      }
     });
 
-    const dates = Object.keys(trends).sort();
+    // Calculate Overall totals per date
+    const dates = Object.keys(dailyGroups).sort();
+    dates.forEach(d => {
+      const rows = dailyGroups[d];
+
+      // For DAU and Paywall Hits, take max value among rows for date d to avoid duplicating across marketing teams
+      const dayDau = Math.max(...rows.map(r => r.DAU), 0);
+      const dayPaywall = Math.max(...rows.map(r => r.paywalling_hits), 0);
+
+      // For funnel stages, check if there is an Overall row, else sum across team rows
+      const overallRow = rows.find(r => r.marketingTeam.toLowerCase() === 'overall');
+
+      let dayPageLoad = 0, daySelected = 0, dayInit = 0, dayPurch = 0;
+      if (overallRow && filterMktTeam === 'All') {
+        dayPageLoad = overallRow.Plan_Page_Load;
+        daySelected = overallRow.Plan_Selected;
+        dayInit = overallRow.Pay_Initiated;
+        dayPurch = overallRow.Purchased;
+      } else {
+        const teamRows = rows.filter(r => r.marketingTeam.toLowerCase() !== 'overall' || rows.length === 1);
+        teamRows.forEach(r => {
+          dayPageLoad += r.Plan_Page_Load;
+          daySelected += r.Plan_Selected;
+          dayInit += r.Pay_Initiated;
+          dayPurch += r.Purchased;
+        });
+      }
+
+      overall.DAU += dayDau;
+      overall.paywalling_hits += dayPaywall;
+      overall.Plan_Page_Load += dayPageLoad;
+      overall.Plan_Selected += daySelected;
+      overall.Pay_Initiated += dayInit;
+      overall.Purchased += dayPurch;
+
+      overall.daily[d] = {
+        DAU: dayDau,
+        paywalling_hits: dayPaywall,
+        Plan_Page_Load: dayPageLoad,
+        Plan_Selected: daySelected,
+        Pay_Initiated: dayInit,
+        Purchased: dayPurch
+      };
+
+      trends[d] = {
+        DAU: dayDau,
+        paywalling_hits: dayPaywall,
+        Plan_Page_Load: dayPageLoad,
+        Plan_Selected: daySelected,
+        Pay_Initiated: dayInit,
+        Purchased: dayPurch
+      };
+    });
+
     const uniqueDays = dates.length || 1;
 
-    // Calculate Daily Averages for Overall
+    // Daily Averages
     const overallAvg = {
       DAU: Math.round(overall.DAU / uniqueDays),
       paywalling_hits: Math.round(overall.paywalling_hits / uniqueDays),
@@ -4000,7 +4082,6 @@ function FunnelAnalysis({ isDark }) {
       daily: overall.daily
     };
 
-    // Calculate Daily Averages for Platforms
     const platformAvg = {};
     Object.keys(platforms).forEach(plat => {
       const p = platforms[plat];
@@ -4015,27 +4096,133 @@ function FunnelAnalysis({ isDark }) {
       };
     });
 
+    const marketingTeamAvg = {};
+    Object.keys(marketingTeams).forEach(team => {
+      const t = marketingTeams[team];
+      marketingTeamAvg[team] = {
+        DAU: Math.round(t.DAU / uniqueDays),
+        paywalling_hits: Math.round(t.paywalling_hits / uniqueDays),
+        Plan_Page_Load: Math.round(t.Plan_Page_Load / uniqueDays),
+        Plan_Selected: Math.round(t.Plan_Selected / uniqueDays),
+        Pay_Initiated: Math.round(t.Pay_Initiated / uniqueDays),
+        Purchased: Math.round(t.Purchased / uniqueDays),
+        daily: t.daily
+      };
+    });
+
+    // Step Conversion Daily Rates
     const trendDau = dates.map(d => trends[d] ? trends[d].DAU : 0);
+    const trendPaywallHits = dates.map(d => trends[d] ? trends[d].paywalling_hits : 0);
     const trendConv = dates.map(d => (trends[d] && trends[d].Plan_Page_Load > 0) ? (trends[d].Purchased / trends[d].Plan_Page_Load) * 100 : 0);
-    const trendPaywall = dates.map(d => (trends[d] && trends[d].DAU > 0) ? (trends[d].paywalling_hits / trends[d].DAU) * 100 : 0);
+    const trendPaywallRate = dates.map(d => (trends[d] && trends[d].DAU > 0) ? (trends[d].paywalling_hits / trends[d].DAU) * 100 : 0);
+
+    const step1LoadToSelect = dates.map(d => (trends[d] && trends[d].Plan_Page_Load > 0) ? (trends[d].Plan_Selected / trends[d].Plan_Page_Load) * 100 : 0);
+    const step2SelectToInit = dates.map(d => (trends[d] && trends[d].Plan_Selected > 0) ? (trends[d].Pay_Initiated / trends[d].Plan_Selected) * 100 : 0);
+    const step3InitToPurch = dates.map(d => (trends[d] && trends[d].Pay_Initiated > 0) ? (trends[d].Purchased / trends[d].Pay_Initiated) * 100 : 0);
+    const step4LoadToPurch = dates.map(d => (trends[d] && trends[d].Plan_Page_Load > 0) ? (trends[d].Purchased / trends[d].Plan_Page_Load) * 100 : 0);
 
     return { 
       overallSum: overall, 
       overallAvg, 
       platformAvg, 
+      marketingTeamAvg,
       uniqueDays, 
       dates,
-      trendData: { dates, dau: trendDau, conv: trendConv, paywall: trendPaywall, uniqueDays }
+      trendData: { 
+        dates, 
+        dau: trendDau, 
+        paywallHits: trendPaywallHits,
+        paywallRate: trendPaywallRate, 
+        conv: trendConv, 
+        uniqueDays,
+        step1: step1LoadToSelect,
+        step2: step2SelectToInit,
+        step3: step3InitToPurch,
+        step4: step4LoadToPurch
+      }
     };
   }, [rawData]);
 
-  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate, selectedCountry, selectedMarketingTeam), [processFunnelData, startDate, endDate, selectedCountry, selectedMarketingTeam]);
+  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek), [processFunnelData, startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek]);
   
   const isCompActive = compPreset !== "None" && compStartDate && compEndDate;
   const compFunnel = useMemo(() => {
     if (!isCompActive) return null;
-    return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedMarketingTeam);
-  }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedMarketingTeam]);
+    return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek);
+  }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek]);
+
+  // Helper to compute weekly grouped step data for trendlines
+  const computeWeeklyStepData = useCallback((trendObj, dauMode = "Daily Average") => {
+    if (!trendObj || !trendObj.dates || !trendObj.dates.length) {
+      return { dates: [], dau: [], paywallHits: [], step1: [], step2: [], step3: [], step4: [] };
+    }
+
+    const weeklyBuckets = {};
+    trendObj.dates.forEach((dateStr, idx) => {
+      const d = new Date(dateStr);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.setDate(diff));
+      const monthStr = String(monday.getMonth() + 1).padStart(2, '0');
+      const dateNumStr = String(monday.getDate()).padStart(2, '0');
+      const weekKey = `${monday.getFullYear()}-${monthStr}-${dateNumStr}`;
+      const weekLabel = weekKey; // Week Start Date (YYYY-MM-DD)
+
+      if (!weeklyBuckets[weekKey]) {
+        weeklyBuckets[weekKey] = { label: weekLabel, dauSum: 0, paywallHitsSum: 0, step1Sum: 0, step2Sum: 0, step3Sum: 0, step4Sum: 0, count: 0 };
+      }
+      weeklyBuckets[weekKey].dauSum += trendObj.dau[idx] || 0;
+      weeklyBuckets[weekKey].paywallHitsSum += trendObj.paywallHits[idx] || 0;
+      weeklyBuckets[weekKey].step1Sum += trendObj.step1[idx] || 0;
+      weeklyBuckets[weekKey].step2Sum += trendObj.step2[idx] || 0;
+      weeklyBuckets[weekKey].step3Sum += trendObj.step3[idx] || 0;
+      weeklyBuckets[weekKey].step4Sum += trendObj.step4[idx] || 0;
+      weeklyBuckets[weekKey].count += 1;
+    });
+
+    const sortedKeys = Object.keys(weeklyBuckets).sort();
+    return {
+      dates: sortedKeys.map(k => weeklyBuckets[k].label),
+      dau: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].dauSum : Math.round(weeklyBuckets[k].dauSum / weeklyBuckets[k].count)),
+      paywallHits: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].paywallHitsSum : Math.round(weeklyBuckets[k].paywallHitsSum / weeklyBuckets[k].count)),
+      step1: sortedKeys.map(k => parseFloat((weeklyBuckets[k].step1Sum / weeklyBuckets[k].count).toFixed(1))),
+      step2: sortedKeys.map(k => parseFloat((weeklyBuckets[k].step2Sum / weeklyBuckets[k].count).toFixed(1))),
+      step3: sortedKeys.map(k => parseFloat((weeklyBuckets[k].step3Sum / weeklyBuckets[k].count).toFixed(1))),
+      step4: sortedKeys.map(k => parseFloat((weeklyBuckets[k].step4Sum / weeklyBuckets[k].count).toFixed(1))),
+    };
+  }, []);
+
+  const primaryTrendDisplay = useMemo(() => {
+    if (!primaryFunnel.trendData) return null;
+    if (trendlineViewMode === "Weekly") {
+      return computeWeeklyStepData(primaryFunnel.trendData, weeklyDauMode);
+    }
+    return {
+      dates: primaryFunnel.trendData.dates,
+      dau: primaryFunnel.trendData.dau,
+      paywallHits: primaryFunnel.trendData.paywallHits,
+      step1: primaryFunnel.trendData.step1.map(v => parseFloat(v.toFixed(1))),
+      step2: primaryFunnel.trendData.step2.map(v => parseFloat(v.toFixed(1))),
+      step3: primaryFunnel.trendData.step3.map(v => parseFloat(v.toFixed(1))),
+      step4: primaryFunnel.trendData.step4.map(v => parseFloat(v.toFixed(1)))
+    };
+  }, [primaryFunnel.trendData, trendlineViewMode, weeklyDauMode, computeWeeklyStepData]);
+
+  const compTrendDisplay = useMemo(() => {
+    if (!compFunnel || !compFunnel.trendData) return null;
+    if (trendlineViewMode === "Weekly") {
+      return computeWeeklyStepData(compFunnel.trendData, weeklyDauMode);
+    }
+    return {
+      dates: compFunnel.trendData.dates,
+      dau: compFunnel.trendData.dau,
+      paywallHits: compFunnel.trendData.paywallHits,
+      step1: compFunnel.trendData.step1.map(v => parseFloat(v.toFixed(1))),
+      step2: compFunnel.trendData.step2.map(v => parseFloat(v.toFixed(1))),
+      step3: compFunnel.trendData.step3.map(v => parseFloat(v.toFixed(1))),
+      step4: compFunnel.trendData.step4.map(v => parseFloat(v.toFixed(1)))
+    };
+  }, [compFunnel, trendlineViewMode, weeklyDauMode, computeWeeklyStepData]);
 
   if (loading) {
     return (
@@ -4082,13 +4269,13 @@ function FunnelAnalysis({ isDark }) {
     textinfo: "text",
     hoverinfo: "text",
     marker: {
-      color: ['#FEF9C3', '#FEF08A', '#FDE047', '#FCD34D', '#FBBF24', '#F59E0B'],
+      color: ['#FDE68A', '#FCD34D', '#FBBF24', '#F59E0B', '#D97706', '#B45309'],
       line: { width: 1, color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }
     },
     textfont: { family: 'inherit', color: '#0F172A', size: 11, weight: 'bold' }
   });
 
-  if (compFunnel) {
+  if (isCompActive && compFunnel) {
     const compValues = FUNNEL_STAGES.map(s => compFunnel.overallAvg[s.key]);
     const compFakeX = compValues.map((_, i) => Math.pow(0.7, i) * 100);
     const compText = compValues.map((v, i) => {
@@ -4246,6 +4433,64 @@ function FunnelAnalysis({ isDark }) {
               ))}
             </select>
           </div>
+
+          {/* Day of Week Multi-select Checkbox Popover Dropdown */}
+          <div className="relative border-l border-warm-border dark:border-dark-border pl-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Day of Week:</span>
+              <button
+                type="button"
+                onClick={() => setIsDayOfWeekDropdownOpen(!isDayOfWeekDropdownOpen)}
+                className="flex items-center gap-2 bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+              >
+                <span>
+                  {selectedDaysOfWeek.length === 7 
+                    ? 'All Days' 
+                    : selectedDaysOfWeek.length === 0 
+                    ? 'None Selected' 
+                    : `${selectedDaysOfWeek.length} Days Selected`}
+                </span>
+                <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted" />
+              </button>
+            </div>
+
+            {isDayOfWeekDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-lg z-50 p-3">
+                <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
+                  <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Days</span>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      if (selectedDaysOfWeek.length === 7) {
+                        setSelectedDaysOfWeek([]);
+                      } else {
+                        setSelectedDaysOfWeek([...DAYS_LIST]);
+                      }
+                    }}
+                    className="text-[11px] font-bold text-amber-accent hover:underline cursor-pointer"
+                  >
+                    {selectedDaysOfWeek.length === 7 ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {DAYS_LIST.map(day => {
+                    const checked = selectedDaysOfWeek.includes(day);
+                    return (
+                      <label key={day} className="flex items-center gap-2 text-xs font-medium text-warm-text dark:text-dark-text cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleDayOfWeek(day)}
+                          className="accent-amber-500 rounded cursor-pointer"
+                        />
+                        <span>{day}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -4306,7 +4551,7 @@ function FunnelAnalysis({ isDark }) {
           {trendData && (
             <div className="w-32 h-16">
               <Plot
-                data={[{ x: trendData.dates, y: trendData.paywall, type: 'scatter', mode: 'lines+markers', marker: { size: 4 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)' }]}
+                data={[{ x: trendData.dates, y: trendData.paywallRate, type: 'scatter', mode: 'lines+markers', marker: { size: 4 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)' }]}
                 layout={sparklineLayout} config={{ displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
             </div>
@@ -4354,8 +4599,355 @@ function FunnelAnalysis({ isDark }) {
         </div>
       </section>
 
+      {/* Funnel Trendlines Section (DAU, Paywall Hits & Step Conversions) */}
+      {primaryTrendDisplay && (
+        <section className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Funnel Volume & Step Conversion Rate Trendlines</h3>
+              <p className="text-xs text-warm-muted dark:text-dark-muted">Volume trends and step-by-step conversion percentages ({trendlineViewMode} View)</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+              {/* Sub-toggle for DAU & Paywall Hits in Weekly View */}
+              {trendlineViewMode === "Weekly" && (
+                <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 p-1 rounded-lg border border-amber-200 dark:border-amber-900/50 text-xs">
+                  <span className="text-[11px] font-bold text-amber-900 dark:text-amber-300 px-1">DAU / Paywall:</span>
+                  <button
+                    type="button"
+                    onClick={() => setWeeklyDauMode("Daily Average")}
+                    className={`px-2 py-0.5 text-[11px] font-bold rounded cursor-pointer transition-all ${
+                      weeklyDauMode === "Daily Average"
+                        ? "bg-amber-500 text-white shadow-xs"
+                        : "text-amber-800 dark:text-amber-300 hover:bg-amber-200/50"
+                    }`}
+                  >
+                    Daily Avg
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWeeklyDauMode("Weekly Sum")}
+                    className={`px-2 py-0.5 text-[11px] font-bold rounded cursor-pointer transition-all ${
+                      weeklyDauMode === "Weekly Sum"
+                        ? "bg-amber-500 text-white shadow-xs"
+                        : "text-amber-800 dark:text-amber-300 hover:bg-amber-200/50"
+                    }`}
+                  >
+                    Weekly Sum
+                  </button>
+                </div>
+              )}
+
+              {/* Daily / Weekly View Toggle */}
+              <div className="flex items-center gap-1 bg-warm-bg dark:bg-zinc-800 p-1 rounded-lg border border-warm-border dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={() => setTrendlineViewMode("Daily")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    trendlineViewMode === "Daily"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Daily View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendlineViewMode("Weekly")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    trendlineViewMode === "Weekly"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Weekly View
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Absolute Chart 1: DAU */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Daily Active Users (DAU)</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Volume</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.dau,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} DAU</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.dau,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} DAU</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 55, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Absolute Chart 2: Paywall Hits */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Paywall Hits</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Volume</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.paywallHits,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: isDark ? '#f59e0b' : '#b45309', width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Hits</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.paywallHits,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Hits</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 55, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Step 1: Plan Load -> Plan Selected */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Plan Page Load &rarr; Plan Selected %</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Step 1</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.step1,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.step1,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 45, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Step 2: Plan Selected -> Pay Initiated */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Plan Selected &rarr; Pay Initiated %</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Step 2</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.step2,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: isDark ? '#f59e0b' : '#b45309', width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.step2,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 45, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Step 3: Pay Initiated -> Purchased */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Pay Initiated &rarr; Purchased %</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Step 3</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.step3,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: isDark ? '#10b981' : '#047857', width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.step3,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 45, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Step 4: Plan Load -> Purchased (Overall Conversion) */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Plan Page Load &rarr; Purchased % (Overall Step Conversion)</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Overall</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.step4,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: isDark ? '#ec4899' : '#be185d', width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.step4,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 45, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Platform Breakdown Table Section with COLUMN comparison & FIXED STICKY HEADERS */}
-      <section className="mt-8 pb-10">
+      <section className="mt-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 px-1 gap-2">
           <div>
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Platform-wise Funnel Breakdown</h3>
@@ -4485,6 +5077,130 @@ function FunnelAnalysis({ isDark }) {
                           })}
 
                           {/* Comparison Day Values (Looked up using corresponding comparison date index) */}
+                          {isCompActive && FUNNEL_STAGES.map((stage, idx) => {
+                            const compVal = cDay ? (cDay[stage.key] || 0) : 0;
+                            const compPrevVal = idx > 0 && cDay ? (cDay[FUNNEL_STAGES[idx-1].key] || 0) : compVal;
+                            const primaryVal = pDay[stage.key] || 0;
+
+                            return renderStageCell(compVal, compPrevVal, primaryVal, false);
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Marketing Team-wise Funnel Breakdown Table Section */}
+      <section className="mt-8 pb-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 px-1 gap-2">
+          <div>
+            <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Marketing Team-wise Funnel Breakdown</h3>
+            <p className="text-xs text-warm-muted dark:text-dark-muted font-medium">Daily average metrics per marketing team (click row chevron to reveal day-level data)</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto border border-warm-border dark:border-dark-border rounded-xl shadow-xs bg-white dark:bg-dark-card max-h-[500px]">
+          <table className="w-full text-xs text-left border-collapse">
+            <thead className="sticky top-0 z-20 shadow-xs">
+              {isCompActive ? (
+                <>
+                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th rowSpan={2} className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] sticky left-0 z-30 border-r border-warm-border dark:border-dark-border">Marketing Team</th>
+                    <th colSpan={FUNNEL_STAGES.length} className="p-2 text-center bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-extrabold border-r border-warm-border dark:border-dark-border">
+                      Primary ({startDate} to {endDate})
+                    </th>
+                    <th colSpan={FUNNEL_STAGES.length} className="p-2 text-center bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">
+                      Comparison ({compStartDate} to {compEndDate})
+                    </th>
+                  </tr>
+                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-[10px] tracking-wider border-b border-warm-border dark:border-dark-border">
+                    {FUNNEL_STAGES.map(stage => (
+                      <th key={`mkt-prim-${stage.key}`} className="p-2.5 whitespace-nowrap text-right bg-warm-tableBg dark:bg-[#1E293B]">{stage.label}</th>
+                    ))}
+                    {FUNNEL_STAGES.map((stage, idx) => (
+                      <th key={`mkt-comp-${stage.key}`} className={`p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold ${idx === 0 ? 'border-l border-warm-border dark:border-dark-border' : ''}`}>
+                        {stage.label}
+                      </th>
+                    ))}
+                  </tr>
+                </>
+              ) : (
+                <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                  <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] sticky left-0 z-30">Marketing Team</th>
+                  {FUNNEL_STAGES.map(stage => (
+                    <th key={stage.key} className="p-3 whitespace-nowrap text-right bg-warm-tableBg dark:bg-[#1E293B]">{stage.label}</th>
+                  ))}
+                </tr>
+              )}
+            </thead>
+            <tbody>
+              {[ 'overall', ...Object.keys(primaryFunnel.marketingTeamAvg || {}).sort() ].map(rowKey => {
+                const title = rowKey === 'overall' ? 'Overall (All Teams)' : rowKey;
+                const mktRowKey = `mkt-${rowKey}`;
+                const isExpanded = expandedRows[mktRowKey];
+                
+                const primaryDataObj = rowKey === 'overall' ? primaryFunnel.overallAvg : (primaryFunnel.marketingTeamAvg[rowKey] || {});
+                const compDataObj = compFunnel ? (rowKey === 'overall' ? compFunnel.overallAvg : (compFunnel.marketingTeamAvg[rowKey] || {})) : null;
+
+                const primaryDaily = primaryDataObj.daily || {};
+                const compDaily = compDataObj ? (compDataObj.daily || {}) : {};
+
+                const sortedPrimaryDates = Object.keys(primaryDaily).sort((a,b) => b.localeCompare(a));
+                const sortedCompDates = Object.keys(compDaily).sort((a,b) => b.localeCompare(a));
+
+                return (
+                  <React.Fragment key={mktRowKey}>
+                    <tr className="border-b border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-semibold text-warm-text dark:text-dark-text">
+                      <td className="p-3 whitespace-nowrap font-bold border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-10 bg-warm-tableBg dark:bg-[#1E293B]">
+                        <div 
+                          onClick={() => toggleRow(mktRowKey)}
+                          className="flex items-center gap-2 cursor-pointer select-none text-amber-accent dark:text-amber-400 hover:opacity-80"
+                        >
+                          {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                          <span className="text-warm-text dark:text-dark-text">{title}</span>
+                        </div>
+                      </td>
+
+                      {FUNNEL_STAGES.map((stage, idx) => {
+                        const val = primaryDataObj[stage.key] || 0;
+                        const prevVal = idx > 0 ? (primaryDataObj[FUNNEL_STAGES[idx-1].key] || 0) : val;
+                        return renderStageCell(val, prevVal, null, true);
+                      })}
+
+                      {isCompActive && compDataObj && FUNNEL_STAGES.map((stage, idx) => {
+                        const compVal = compDataObj[stage.key] || 0;
+                        const compPrevVal = idx > 0 ? (compDataObj[FUNNEL_STAGES[idx-1].key] || 0) : compVal;
+                        const primaryVal = primaryDataObj[stage.key] || 0;
+                        
+                        return renderStageCell(compVal, compPrevVal, primaryVal, true);
+                      })}
+                    </tr>
+
+                    {isExpanded && sortedPrimaryDates.map((dateStr, pIdx) => {
+                      const pDay = primaryDaily[dateStr] || {};
+                      const compDateStr = sortedCompDates[pIdx];
+                      const cDay = compDateStr ? (compDaily[compDateStr] || {}) : null;
+
+                      return (
+                        <tr key={`${mktRowKey}-${dateStr}`} className="border-b border-warm-border/30 dark:border-zinc-800/60 bg-black/5 dark:bg-white/5 font-medium text-warm-text dark:text-dark-text text-xs">
+                          <td className="p-2.5 pl-7 whitespace-nowrap font-bold text-warm-muted dark:text-dark-muted border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-10 bg-warm-tableBg dark:bg-[#1E293B]">
+                            <div>{dateStr}</div>
+                            {isCompActive && compDateStr && (
+                              <div className="text-[10px] text-blue-500 font-semibold mt-0.5">vs {compDateStr}</div>
+                            )}
+                          </td>
+
+                          {FUNNEL_STAGES.map((stage, idx) => {
+                            const val = pDay[stage.key] || 0;
+                            const prevVal = idx > 0 ? (pDay[FUNNEL_STAGES[idx-1].key] || 0) : val;
+                            return renderStageCell(val, prevVal, null, false);
+                          })}
+
                           {isCompActive && FUNNEL_STAGES.map((stage, idx) => {
                             const compVal = cDay ? (cDay[stage.key] || 0) : 0;
                             const compPrevVal = idx > 0 && cDay ? (cDay[FUNNEL_STAGES[idx-1].key] || 0) : compVal;
