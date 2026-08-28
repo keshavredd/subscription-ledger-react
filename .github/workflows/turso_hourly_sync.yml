@@ -1,0 +1,28 @@
+name: Hourly Turso DB Sync
+
+on:
+  schedule:
+    # Runs at the 20th minute of every hour (e.g. 10:20, 11:20, 12:20 UTC)
+    - cron: '20 * * * *'
+  workflow_dispatch: # Enables one-click manual execution from GitHub UI
+
+jobs:
+  sync-turso:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Google Sheets Data to Turso Database
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: node scripts/sync_to_turso.js

@@ -4351,27 +4351,27 @@ function FunnelAnalysis({ isDark }) {
     <div className="animate-in fade-in duration-300">
       
       {/* Date Range & Comparison Selector Toolbar */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-4 shadow-sm">
-        <div>
-          <h2 className="text-base font-bold text-warm-text dark:text-dark-text tracking-tight">Funnel Period Controls</h2>
-          <p className="text-xs text-warm-muted dark:text-dark-muted font-medium">Select primary timeframe and compare against previous periods</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3 2xl:p-4 shadow-sm">
+        <div className="shrink-0">
+          <h2 className="text-sm font-bold text-warm-text dark:text-dark-text tracking-tight">Funnel Period Controls</h2>
+          <p className="text-[11px] text-warm-muted dark:text-dark-muted font-medium">Select primary timeframe and compare against previous periods</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2.5 2xl:gap-3.5">
           {/* Primary Range Selection */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Primary:</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Primary:</span>
             {datePreset === "Custom range" && (
-              <div className="flex items-center gap-1.5">
-                <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
-                <span className="text-xs text-warm-muted dark:text-dark-muted">to</span>
-                <input type="date" value={endDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+              <div className="flex items-center gap-1">
+                <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                <span className="text-[11px] text-warm-muted dark:text-dark-muted">to</span>
+                <input type="date" value={endDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
               </div>
             )}
             <select 
               value={datePreset} 
               onChange={(e) => setDatePreset(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               <option value="Yesterday">Yesterday</option>
               <option value="Last 7 days">Last 7 days</option>
@@ -4385,19 +4385,19 @@ function FunnelAnalysis({ isDark }) {
           </div>
 
           {/* Comparison Period Selector */}
-          <div className="flex items-center gap-2 border-l border-warm-border dark:border-dark-border pl-4">
-            <span className="text-xs font-bold text-amber-accent">Compare:</span>
+          <div className="flex items-center gap-1.5 border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+            <span className="text-[11px] font-bold text-amber-accent">Compare:</span>
             {compPreset === "Custom range" && (
-              <div className="flex items-center gap-1.5">
-                <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-2 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
-                <span className="text-xs text-warm-muted dark:text-dark-muted">to</span>
-                <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-2 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+              <div className="flex items-center gap-1">
+                <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                <span className="text-[11px] text-warm-muted dark:text-dark-muted">to</span>
+                <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
               </div>
             )}
             <select 
               value={compPreset} 
               onChange={(e) => setCompPreset(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-amber-500/40 text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+              className="bg-warm-tableBg dark:bg-slate-800 border border-amber-500/40 text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               <option value="None">No Comparison</option>
               <option value="Previous period">Previous period</option>
@@ -4407,12 +4407,12 @@ function FunnelAnalysis({ isDark }) {
           </div>
 
           {/* Country Filter Selector */}
-          <div className="flex items-center gap-2 border-l border-warm-border dark:border-dark-border pl-4">
-            <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Country:</span>
+          <div className="flex items-center gap-1.5 border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Country:</span>
             <select 
               value={selectedCountry} 
               onChange={(e) => setSelectedCountry(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               {availableCountries.map(c => (
                 <option key={c} value={c}>{c === 'All' ? 'All Countries' : c}</option>
@@ -4421,12 +4421,12 @@ function FunnelAnalysis({ isDark }) {
           </div>
 
           {/* Marketing Team Filter Selector */}
-          <div className="flex items-center gap-2 border-l border-warm-border dark:border-dark-border pl-4">
-            <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Marketing Team:</span>
+          <div className="flex items-center gap-1.5 border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Marketing Team:</span>
             <select 
               value={selectedMarketingTeam} 
               onChange={(e) => setSelectedMarketingTeam(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               {availableMarketingTeams.map(m => (
                 <option key={m} value={m}>{m === 'All' ? 'All Teams' : m}</option>
@@ -4435,13 +4435,13 @@ function FunnelAnalysis({ isDark }) {
           </div>
 
           {/* Day of Week Multi-select Checkbox Popover Dropdown */}
-          <div className="relative border-l border-warm-border dark:border-dark-border pl-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Day of Week:</span>
+          <div className="relative border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Day of Week:</span>
               <button
                 type="button"
                 onClick={() => setIsDayOfWeekDropdownOpen(!isDayOfWeekDropdownOpen)}
-                className="flex items-center gap-2 bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+                className="flex items-center gap-1.5 bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
               >
                 <span>
                   {selectedDaysOfWeek.length === 7 
@@ -5226,44 +5226,84 @@ function FunnelAnalysis({ isDark }) {
 function Realtime({ isDark }) {
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [realtimeCompMode, setRealtimeCompMode] = useState("4-Week"); // "4-Week" | "7-Day"
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      try {
-        const results = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
-        const data = results.data.map(r => {
-          const rawDate = r.event_date || r.EVENT_DATE || '';
-          const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
-          const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
-          const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
-          const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
+  const loadRealtimeData = async (forceBypassCache = false) => {
+    setLoading(true);
+    try {
+      if (forceBypassCache && isTursoConfigured()) {
+        const tursoResult = await fetchTursoTable('realtime');
+        if (tursoResult && tursoResult.data && tursoResult.data.length > 0) {
+          const data = tursoResult.data.map(r => {
+            const rawDate = r.event_date || r.EVENT_DATE || '';
+            const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
+            const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
+            const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
+            const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
 
-          const dateStr = String(rawDate).trim();
-          const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
-          const platform = String(rawPlatform).trim();
-          const event = String(rawEvent).trim();
-          const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
+            const dateStr = String(rawDate).trim();
+            const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
+            const platform = String(rawPlatform).trim();
+            const event = String(rawEvent).trim();
+            const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
 
-          return {
-            dateStr,
-            hour,
-            platform,
-            event,
-            count
-          };
-        }).filter(r => r.dateStr && !isNaN(r.hour));
+            return { dateStr, hour, platform, event, count };
+          }).filter(r => r.dateStr && !isNaN(r.hour));
 
-        setRawData(data);
-        setLoading(false);
-      } catch (err) {
-        console.error("Realtime fetch error", err);
-        setLoading(false);
+          setRawData(data);
+          setLoading(false);
+          return;
+        }
       }
+
+      const results = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
+      const data = results.data.map(r => {
+        const rawDate = r.event_date || r.EVENT_DATE || '';
+        const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
+        const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
+        const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
+        const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
+
+        const dateStr = String(rawDate).trim();
+        const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
+        const platform = String(rawPlatform).trim();
+        const event = String(rawEvent).trim();
+        const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
+
+        return {
+          dateStr,
+          hour,
+          platform,
+          event,
+          count
+        };
+      }).filter(r => r.dateStr && !isNaN(r.hour));
+
+      setRawData(data);
+      setLoading(false);
+    } catch (err) {
+      console.error("Realtime fetch error", err);
+      setLoading(false);
     }
-    fetchData();
+  };
+
+  useEffect(() => {
+    loadRealtimeData();
   }, []);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      // Trigger netlify function or reload live dataset
+      await fetch('/.netlify/functions/sync-turso').catch(() => {});
+      await loadRealtimeData(true);
+    } catch (e) {
+      console.warn("Manual sync error", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const processedData = useMemo(() => {
     if (!rawData.length) return null;
@@ -5340,29 +5380,29 @@ function Realtime({ isDark }) {
         if (isLast7 && isPurchase) {
           last7HourlySums[r.hour] += r.count;
         }
-      } else {
-        // Specific Platform counts
-        if (isToday) {
-          ensurePlatObj(platformFunnelToday, r.platform);
-          if (r.event === 'Plan Page Loaded') platformFunnelToday[r.platform].PlanPageLoaded += r.count;
-          if (r.event === 'Plan Selected') platformFunnelToday[r.platform].PlanSelected += r.count;
-          if (r.event === 'Pay Initiated') platformFunnelToday[r.platform].PayInitiated += r.count;
-          if (r.event === 'Purchase') platformFunnelToday[r.platform].Purchase += r.count;
-        }
-        if (isPast4 && r.hour <= currentHour) {
-          ensurePlatObj(platformFunnelPast4, r.platform);
-          if (r.event === 'Plan Page Loaded') platformFunnelPast4[r.platform].PlanPageLoaded += r.count;
-          if (r.event === 'Plan Selected') platformFunnelPast4[r.platform].PlanSelected += r.count;
-          if (r.event === 'Pay Initiated') platformFunnelPast4[r.platform].PayInitiated += r.count;
-          if (r.event === 'Purchase') platformFunnelPast4[r.platform].Purchase += r.count;
-        }
-        if (isLast7 && r.hour <= currentHour) {
-          ensurePlatObj(platformFunnelLast7, r.platform);
-          if (r.event === 'Plan Page Loaded') platformFunnelLast7[r.platform].PlanPageLoaded += r.count;
-          if (r.event === 'Plan Selected') platformFunnelLast7[r.platform].PlanSelected += r.count;
-          if (r.event === 'Pay Initiated') platformFunnelLast7[r.platform].PayInitiated += r.count;
-          if (r.event === 'Purchase') platformFunnelLast7[r.platform].Purchase += r.count;
-        }
+      }
+
+      // Funnel counts (for all platforms, including 'Combined')
+      if (isToday) {
+        ensurePlatObj(platformFunnelToday, r.platform);
+        if (r.event === 'Plan Page Loaded') platformFunnelToday[r.platform].PlanPageLoaded += r.count;
+        if (r.event === 'Plan Selected') platformFunnelToday[r.platform].PlanSelected += r.count;
+        if (r.event === 'Pay Initiated') platformFunnelToday[r.platform].PayInitiated += r.count;
+        if (r.event === 'Purchase') platformFunnelToday[r.platform].Purchase += r.count;
+      }
+      if (isPast4 && r.hour <= currentHour) {
+        ensurePlatObj(platformFunnelPast4, r.platform);
+        if (r.event === 'Plan Page Loaded') platformFunnelPast4[r.platform].PlanPageLoaded += r.count;
+        if (r.event === 'Plan Selected') platformFunnelPast4[r.platform].PlanSelected += r.count;
+        if (r.event === 'Pay Initiated') platformFunnelPast4[r.platform].PayInitiated += r.count;
+        if (r.event === 'Purchase') platformFunnelPast4[r.platform].Purchase += r.count;
+      }
+      if (isLast7 && r.hour <= currentHour) {
+        ensurePlatObj(platformFunnelLast7, r.platform);
+        if (r.event === 'Plan Page Loaded') platformFunnelLast7[r.platform].PlanPageLoaded += r.count;
+        if (r.event === 'Plan Selected') platformFunnelLast7[r.platform].PlanSelected += r.count;
+        if (r.event === 'Pay Initiated') platformFunnelLast7[r.platform].PayInitiated += r.count;
+        if (r.event === 'Purchase') platformFunnelLast7[r.platform].Purchase += r.count;
       }
     });
 
@@ -5468,7 +5508,11 @@ function Realtime({ isDark }) {
   } = processedData;
 
   const hours = Array.from({length: 24}, (_, i) => i);
-  const activePlatforms = [...new Set([...Object.keys(platformToday), ...Object.keys(platformBenchmark)])].sort();
+  const otherPlatforms = [...new Set([...Object.keys(platformToday), ...Object.keys(platformBenchmark)])]
+    .filter(p => p !== 'Combined')
+    .sort();
+  const hasCombined = platformToday['Combined'] || platformBenchmark['Combined'];
+  const activePlatforms = hasCombined ? ['Combined', ...otherPlatforms] : otherPlatforms;
 
   return (
     <div className="animate-in fade-in duration-300 pb-12">
@@ -5643,15 +5687,33 @@ function Realtime({ isDark }) {
               {activePlatforms.map(plat => {
                 const tData = platformToday[plat] || { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
                 const bData = platformBenchmark[plat] || { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
+                const isCombined = plat === 'Combined';
 
                 return (
-                  <tr key={plat} className="border-b border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-warm-text dark:text-dark-text transition-colors">
-                    <td className="p-3 whitespace-nowrap font-bold text-amber-accent dark:text-amber-400 border-r border-warm-border/30 dark:border-zinc-800">{plat}</td>
+                  <tr 
+                    key={plat} 
+                    className={`border-b transition-colors ${
+                      isCombined 
+                        ? 'bg-amber-500/10 dark:bg-amber-500/15 font-black border-amber-500/30 border-b-2' 
+                        : 'border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-warm-text dark:text-dark-text'
+                    }`}
+                  >
+                    <td className={`p-3 whitespace-nowrap border-r border-warm-border/30 dark:border-zinc-800 ${
+                      isCombined ? 'font-black text-amber-700 dark:text-amber-300' : 'font-bold text-amber-accent dark:text-amber-400'
+                    }`}>
+                      {isCombined ? 'Overall (Combined)' : plat}
+                    </td>
                     
-                    {/* Today's Data with % comparison badge */}
+                    {/* Today's Data with % comparison badge & previous step conversion % */}
                     {['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'].map((key, idx) => {
+                      const stageKeys = ['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'];
                       const tVal = tData[key] || 0;
                       const bVal = bData[key] || 0;
+
+                      // Step conversion % (of previous step)
+                      const prevTVal = idx > 0 ? (tData[stageKeys[idx - 1]] || 0) : 0;
+                      const tStepPct = idx > 0 && prevTVal > 0 ? ((tVal / prevTVal) * 100).toFixed(1) : null;
+
                       let diffPct = null;
                       if (bVal > 0) {
                         diffPct = (((tVal - bVal) / bVal) * 100).toFixed(1);
@@ -5660,7 +5722,14 @@ function Realtime({ isDark }) {
 
                       return (
                         <td key={key} className={`p-3 whitespace-nowrap text-right ${isLast ? 'border-r border-warm-border/30 dark:border-zinc-800' : ''}`}>
-                          <div className="font-extrabold text-sm text-warm-text dark:text-dark-text">{tVal.toLocaleString()}</div>
+                          <div className={`font-extrabold ${isCombined ? 'text-base text-amber-800 dark:text-amber-200' : 'text-sm text-warm-text dark:text-dark-text'}`}>
+                            {tVal.toLocaleString()}
+                            {tStepPct !== null && (
+                              <span className="ml-1 text-xs font-semibold text-warm-muted dark:text-dark-muted">
+                                ({tStepPct}%)
+                              </span>
+                            )}
+                          </div>
                           {diffPct !== null ? (
                             <div className="flex items-center justify-end mt-0.5">
                               <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded ${
@@ -5678,11 +5747,26 @@ function Realtime({ isDark }) {
                       );
                     })}
 
-                    {/* Benchmark Data */}
-                    <td className="p-3 whitespace-nowrap text-right font-medium text-warm-muted dark:text-dark-muted">{bData.PlanPageLoaded.toLocaleString()}</td>
-                    <td className="p-3 whitespace-nowrap text-right font-medium text-warm-muted dark:text-dark-muted">{bData.PlanSelected.toLocaleString()}</td>
-                    <td className="p-3 whitespace-nowrap text-right font-medium text-warm-muted dark:text-dark-muted">{bData.PayInitiated.toLocaleString()}</td>
-                    <td className="p-3 whitespace-nowrap text-right font-medium text-warm-muted dark:text-dark-muted">{bData.Purchase.toLocaleString()}</td>
+                    {/* Benchmark Data with previous step conversion % */}
+                    {['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'].map((key, idx) => {
+                      const stageKeys = ['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'];
+                      const bVal = bData[key] || 0;
+
+                      // Benchmark step conversion % (of previous step)
+                      const prevBVal = idx > 0 ? (bData[stageKeys[idx - 1]] || 0) : 0;
+                      const bStepPct = idx > 0 && prevBVal > 0 ? ((bVal / prevBVal) * 100).toFixed(1) : null;
+
+                      return (
+                        <td key={key} className={`p-3 whitespace-nowrap text-right ${isCombined ? 'font-bold text-warm-text dark:text-dark-text' : 'font-medium text-warm-muted dark:text-dark-muted'}`}>
+                          <span>{bVal.toLocaleString()}</span>
+                          {bStepPct !== null && (
+                            <span className="ml-1 text-xs text-warm-muted/75 dark:text-dark-muted/75 font-semibold">
+                              ({bStepPct}%)
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}

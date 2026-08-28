@@ -12,8 +12,8 @@ import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 
 import { 
-  getAllowedUsers, addAllowedUser, removeAllowedUser, 
-  getTelemetryStats, isAdminEmail 
+  getAllowedUsersAsync, addAllowedUserAsync, removeAllowedUserAsync, 
+  getTelemetryStatsAsync, isAdminEmail 
 } from '../services/telemetryService';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -26,37 +26,43 @@ export default function AdminPanel({ user, isDark }) {
   const [telemetry, setTelemetry] = useState({ totalTabViews: 0, tabViews: {}, userSessions: [], chatLogs: [] });
   const [chatSearch, setChatSearch] = useState('');
 
-  const refreshData = () => {
-    setAllowedUsers(getAllowedUsers());
-    setTelemetry(getTelemetryStats());
+  const refreshData = async () => {
+    const [users, stats] = await Promise.all([
+      getAllowedUsersAsync(),
+      getTelemetryStatsAsync()
+    ]);
+    setAllowedUsers(users);
+    setTelemetry(stats);
   };
 
   useEffect(() => {
     refreshData();
   }, []);
 
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e.preventDefault();
     if (!newEmailInput || !newEmailInput.trim()) return;
     const target = newEmailInput.trim();
 
-    if (addAllowedUser(target)) {
+    const success = await addAllowedUserAsync(target);
+    if (success) {
       setUserMsg({ type: 'success', text: `Access successfully granted to ${target}` });
       setNewEmailInput('');
-      refreshData();
+      await refreshData();
     } else {
       setUserMsg({ type: 'error', text: `${target} is already on the allowed list.` });
     }
   };
 
-  const handleRemoveUser = (emailToRemove) => {
+  const handleRemoveUser = async (emailToRemove) => {
     if (isAdminEmail(emailToRemove)) {
       setUserMsg({ type: 'error', text: "Cannot remove root administrator accounts." });
       return;
     }
-    if (removeAllowedUser(emailToRemove)) {
+    const success = await removeAllowedUserAsync(emailToRemove);
+    if (success) {
       setUserMsg({ type: 'success', text: `Revoked access for ${emailToRemove}` });
-      refreshData();
+      await refreshData();
     }
   };
 

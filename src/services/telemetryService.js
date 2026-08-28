@@ -1,7 +1,17 @@
 /**
  * telemetryService.js
  * Access Whitelisting, Pageview Telemetry, and Conversational Chat Audit Logging Service
+ * Hybrid Persistence: Turso Database (shared across all devices) + Local Storage Fallback
  */
+import { 
+  isTursoConfigured, 
+  fetchAllowedUsersTurso, 
+  addAllowedUserTurso, 
+  removeAllowedUserTurso, 
+  logTabPageViewTurso, 
+  logChatQueryTurso, 
+  getTelemetryStatsTurso 
+} from './tursoService';
 
 const ADMIN_EMAILS = [
   'keshavreddy731@gmail.com',
@@ -13,6 +23,7 @@ const INITIAL_ALLOWED_USERS = [
   'keshavreddy731@gmail.com',
   'keshaveddy731@gmail.com',
   'keshava.reddy@timesinternet.in',
+  'nitish.gupta@timesinternet.in',
   'analyst@timesinternet.in',
   'product.lead@timesinternet.in'
 ];
@@ -56,9 +67,24 @@ export function isAdminEmail(email) {
 
 export function getAllowedUsers() {
   const stored = getStorageJSON(STORAGE_KEYS.ALLOWED_USERS, INITIAL_ALLOWED_USERS);
-  // Ensure default admins are always present
   const combined = Array.from(new Set([...ADMIN_EMAILS, ...stored]));
   return combined;
+}
+
+export async function getAllowedUsersAsync() {
+  if (isTursoConfigured()) {
+    try {
+      const dbUsers = await fetchAllowedUsersTurso();
+      if (dbUsers && dbUsers.length > 0) {
+        const combined = Array.from(new Set([...ADMIN_EMAILS, ...dbUsers]));
+        setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, combined);
+        return combined;
+      }
+    } catch (err) {
+      console.warn('[Telemetry] Error fetching async whitelist from Turso:', err);
+    }
+  }
+  return getAllowedUsers();
 }
 
 export function isUserAuthorized(email) {
@@ -73,27 +99,74 @@ export function isUserAuthorized(email) {
   return allowedList.some(userEmail => userEmail.toLowerCase().trim() === norm);
 }
 
+export async function isUserAuthorizedAsync(email) {
+  if (!email) return false;
+  const norm = email.toLowerCase().trim();
+
+  // 1. Check if Admin
+  if (isAdminEmail(norm)) return true;
+
+  // 2. Fetch live Whitelist from Turso DB
+  const allowedList = await getAllowedUsersAsync();
+  return allowedList.some(userEmail => userEmail.toLowerCase().trim() === norm);
+}
+
 export function addAllowedUser(newEmail) {
   if (!newEmail || !newEmail.trim()) return false;
   const norm = newEmail.toLowerCase().trim();
   const current = getAllowedUsers();
+  let updated = current;
+
   if (!current.includes(norm)) {
-    const updated = [...current, norm];
+    updated = [...current, norm];
     setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
-    return true;
   }
-  return false;
+
+  // Persist to Turso DB asynchronously
+  if (isTursoConfigured()) {
+    addAllowedUserTurso(norm).catch(err => console.warn('[Telemetry] Error syncing user add to Turso:', err));
+  }
+
+  return true;
+}
+
+export async function addAllowedUserAsync(newEmail) {
+  if (!newEmail || !newEmail.trim()) return false;
+  const norm = newEmail.toLowerCase().trim();
+
+  addAllowedUser(norm);
+  if (isTursoConfigured()) {
+    await addAllowedUserTurso(norm);
+  }
+  return true;
 }
 
 export function removeAllowedUser(targetEmail) {
   if (!targetEmail) return false;
   const norm = targetEmail.toLowerCase().trim();
-  // Prevent removing root admin emails
   if (isAdminEmail(norm)) return false;
 
   const current = getAllowedUsers();
   const updated = current.filter(e => e.toLowerCase().trim() !== norm);
   setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
+
+  // Remove from Turso DB asynchronously
+  if (isTursoConfigured()) {
+    removeAllowedUserTurso(norm).catch(err => console.warn('[Telemetry] Error syncing user removal to Turso:', err));
+  }
+
+  return true;
+}
+
+export async function removeAllowedUserAsync(targetEmail) {
+  if (!targetEmail) return false;
+  const norm = targetEmail.toLowerCase().trim();
+  if (isAdminEmail(norm)) return false;
+
+  removeAllowedUser(norm);
+  if (isTursoConfigured()) {
+    await removeAllowedUserTurso(norm);
+  }
   return true;
 }
 
@@ -105,7 +178,7 @@ export function logTabPageView(userEmail, tabName) {
   if (!userEmail || !tabName) return;
   const normEmail = userEmail.toLowerCase().trim();
 
-  // Update Tab View Counts
+  // Update Tab View Counts in Local Storage
   const tabViews = getStorageJSON(STORAGE_KEYS.TAB_VIEWS, {
     'Realtime': 142,
     'Funnel Analysis': 389,
@@ -116,7 +189,7 @@ export function logTabPageView(userEmail, tabName) {
   tabViews[tabName] = (tabViews[tabName] || 0) + 1;
   setStorageJSON(STORAGE_KEYS.TAB_VIEWS, tabViews);
 
-  // Update User Sessions
+  // Update User Sessions in Local Storage
   const sessions = getStorageJSON(STORAGE_KEYS.USER_SESSIONS, [
     { email: 'keshaveddy731@gmail.com', role: 'Admin', totalVisits: 48, lastActive: '2026-08-16 19:45' },
     { email: 'keshava.reddy@timesinternet.in', role: 'Admin', totalVisits: 32, lastActive: '2026-08-16 19:30' },
@@ -138,38 +211,18 @@ export function logTabPageView(userEmail, tabName) {
     });
   }
   setStorageJSON(STORAGE_KEYS.USER_SESSIONS, sessions);
+
+  // Log to Turso DB asynchronously
+  if (isTursoConfigured()) {
+    logTabPageViewTurso(normEmail, tabName, isAdminEmail(normEmail) ? 'Admin' : 'User')
+      .catch(err => console.warn('[Telemetry] Error logging view to Turso:', err));
+  }
 }
 
 export function logChatQuery(userEmail, queryText, engineUsed = 'Local React Engine') {
   if (!queryText || !queryText.trim()) return;
 
-  const logs = getStorageJSON(STORAGE_KEYS.CHAT_LOGS, [
-    {
-      id: 1,
-      timestamp: '2026-08-16 19:42',
-      userEmail: 'keshava.reddy@timesinternet.in',
-      query: 'Give me monthly renewal rate from jan\'26 till july\'26',
-      engine: 'Gemini 3.6 Flash',
-      status: 'Success (200)'
-    },
-    {
-      id: 2,
-      timestamp: '2026-08-16 19:20',
-      userEmail: 'analyst@timesinternet.in',
-      query: 'Which platform leads sales?',
-      engine: 'Gemini 3.6 Flash',
-      status: 'Success (200)'
-    },
-    {
-      id: 3,
-      timestamp: '2026-08-16 19:15',
-      userEmail: 'keshaveddy731@gmail.com',
-      query: 'What is the renewal rate for the month of july\'26?',
-      engine: 'Local React Engine',
-      status: 'Success (200)'
-    }
-  ]);
-
+  const logs = getStorageJSON(STORAGE_KEYS.CHAT_LOGS, []);
   const newLog = {
     id: Date.now(),
     timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16),
@@ -179,8 +232,14 @@ export function logChatQuery(userEmail, queryText, engineUsed = 'Local React Eng
     status: 'Success (200)'
   };
 
-  const updated = [newLog, ...logs].slice(0, 100); // Keep last 100 logs
+  const updated = [newLog, ...logs].slice(0, 100);
   setStorageJSON(STORAGE_KEYS.CHAT_LOGS, updated);
+
+  // Log to Turso DB asynchronously
+  if (isTursoConfigured()) {
+    logChatQueryTurso(userEmail, queryText, engineUsed)
+      .catch(err => console.warn('[Telemetry] Error logging chat query to Turso:', err));
+  }
 }
 
 export function getTelemetryStats() {
@@ -199,7 +258,6 @@ export function getTelemetryStats() {
   ]);
 
   const chatLogs = getStorageJSON(STORAGE_KEYS.CHAT_LOGS, []);
-
   const totalTabViews = Object.values(tabViews).reduce((a, b) => a + b, 0);
 
   return {
@@ -208,4 +266,16 @@ export function getTelemetryStats() {
     userSessions,
     chatLogs
   };
+}
+
+export async function getTelemetryStatsAsync() {
+  if (isTursoConfigured()) {
+    try {
+      const stats = await getTelemetryStatsTurso();
+      if (stats) return stats;
+    } catch (err) {
+      console.warn('[Telemetry] Error fetching telemetry stats from Turso:', err);
+    }
+  }
+  return getTelemetryStats();
 }

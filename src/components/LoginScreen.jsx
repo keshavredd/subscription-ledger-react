@@ -5,16 +5,17 @@
 import React, { useState } from 'react';
 import { ShieldAlert, LogIn, Lock, ArrowRight, UserCheck, CheckCircle, Mail } from 'lucide-react';
 import { loginWithGoogleSSO } from '../services/googleAuthService';
-import { isUserAuthorized } from '../services/telemetryService';
+import { isUserAuthorizedAsync } from '../services/telemetryService';
 
 export default function LoginScreen({ onLoginSuccess, isDark }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const processEmailAuth = (emailStr) => {
+  const processEmailAuth = async (emailStr) => {
     if (!emailStr || !emailStr.trim()) return;
     const email = emailStr.trim();
-    if (isUserAuthorized(email)) {
+    const authorized = await isUserAuthorizedAsync(email);
+    if (authorized) {
       onLoginSuccess({ email, displayName: email.split('@')[0] });
     } else {
       setErrorMsg(`Access Denied: Your Google account (${email}) has not been granted access to this dashboard.`);
