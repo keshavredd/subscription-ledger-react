@@ -16,10 +16,10 @@ export async function handler(event, context) {
   const TURSO_URL = process.env.VITE_TURSO_DATABASE_URL || process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL;
   const TURSO_TOKEN = process.env.VITE_TURSO_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN || DEFAULT_TURSO_TOKEN;
 
-  // By default, sync fast hourly datasets ('realtime' and 'funnel') to stay well under Netlify's 10s timeout
+  // Support single table sync per request to guarantee completion under 5 seconds (e.g. ?table=realtime or ?table=funnel)
   const params = event.queryStringParameters || {};
-  const syncAll = params.tables === 'all';
-  const targetTables = syncAll ? Object.keys(DATASET_URLS) : ['realtime', 'funnel'];
+  const requestedTable = params.table || 'realtime';
+  const targetTables = requestedTable === 'all' ? Object.keys(DATASET_URLS) : [requestedTable];
 
   try {
     const client = createClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
@@ -48,7 +48,7 @@ export async function handler(event, context) {
       await client.execute(`DROP TABLE IF EXISTS ${key}`);
       await client.execute(`CREATE TABLE ${key} (${sqlColumns.join(', ')})`);
 
-      const chunkSize = 200;
+      const chunkSize = 250;
       for (let i = 0; i < rows.length; i += chunkSize) {
         const chunk = rows.slice(i, i + chunkSize);
         const statements = chunk.map(row => {
