@@ -540,6 +540,7 @@ export function SubscriptionReport({ isDark }) {
               channel: channelName || 'Unknown',
               user_txn_type: String(cleanRow['user_txn_type'] || '').trim().toLowerCase() || 'unknown',
               plan_category: planCategory || 'UNKNOWN',
+              plan_tenure: getPlanTenureCategory(planCategory),
               geo_region: countryName || geoRegion || 'UNKNOWN',
               auto_renew: autoRenewVal
             };
@@ -771,7 +772,15 @@ export function SubscriptionReport({ isDark }) {
       dateMap[dStr].dayTotalConv += (r.conversion || 0);
     });
 
-    const categories = [...categorySet].sort();
+    let categories = [...categorySet].sort();
+    if (field === 'plan_tenure') {
+      const order = ['< 1 Year', '1-3 Years', '> 3 Years'];
+      categories.sort((a, b) => {
+        const idxA = order.indexOf(a);
+        const idxB = order.indexOf(b);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      });
+    }
     const categoryGrandTotals = {};
     categories.forEach(c => categoryGrandTotals[c] = { rev: 0, conv: 0 });
 
@@ -995,6 +1004,7 @@ export function SubscriptionReport({ isDark }) {
 
   const platformPivot = useMemo(() => buildPivotData('platformDisplay'), [buildPivotData]);
   const userTypePivot = useMemo(() => buildPivotData('user_txn_type'), [buildPivotData]);
+  const tenurePivot = useMemo(() => buildPivotData('plan_tenure'), [buildPivotData]);
   const planPivot = useMemo(() => buildPivotData('plan_category'), [buildPivotData]);
   const channelPivot = useMemo(() => buildPivotData('channel'), [buildPivotData]);
 
@@ -1348,6 +1358,14 @@ export function SubscriptionReport({ isDark }) {
         <PivotTable 
           pivotData={channelPivot} 
           title="Channel-wise Revenue & Conversions"
+          metricMode={tableMetricMode}
+          isDark={isDark}
+        />
+
+        {/* Plan Duration Tenure-wise Revenue & Conversions Table */}
+        <PivotTable 
+          pivotData={tenurePivot} 
+          title="Plan Duration Tenure-wise Revenue & Conversions"
           metricMode={tableMetricMode}
           isDark={isDark}
         />
@@ -3445,12 +3463,12 @@ export default function App() {
           </div>
 
           {/* View Toggle */}
-          <div className="flex items-center gap-1 bg-warm-totalBg dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-full p-1 overflow-x-auto custom-scrollbar">
+          <div className="flex items-center gap-1 bg-warm-totalBg dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-full p-1 overflow-x-auto custom-scrollbar shrink-0">
             {navTabs.map(tab => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-5 py-1.5 text-sm font-semibold rounded-full whitespace-nowrap transition-all duration-300 ease-in-out cursor-pointer ${
+                className={`px-3 xl:px-4 py-1.5 text-xs xl:text-sm font-semibold rounded-full whitespace-nowrap transition-all duration-300 ease-in-out cursor-pointer ${
                   activeTab === tab 
                     ? 'bg-white dark:bg-slate-700 shadow-sm border border-warm-border/50 dark:border-slate-600 text-amber-accent font-bold' 
                     : 'text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text hover:bg-black/5 dark:hover:bg-white/5'
@@ -3911,6 +3929,29 @@ function formatMetric(num) {
   return num.toString();
 }
 
+function getPlanTenureCategory(planCat) {
+  if (!planCat) return '< 1 Year';
+  const str = String(planCat).trim().toUpperCase();
+  const numMatch = str.match(/(\d+)/);
+  if (!numMatch) return '< 1 Year';
+  const num = parseInt(numMatch[1], 10);
+  
+  let days = 0;
+  if (str.includes('MONTH') || str.includes('MO')) {
+    days = num * 30;
+  } else if (str.includes('YEAR') || str.includes('YR')) {
+    days = num * 365;
+  } else if (str.includes('DAY') || str.includes('D')) {
+    days = num;
+  } else {
+    days = num;
+  }
+
+  if (days < 365) return '< 1 Year';
+  if (days <= 1095) return '1-3 Years';
+  return '> 3 Years';
+}
+
 function FunnelAnalysis({ isDark }) {
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3932,6 +3973,10 @@ function FunnelAnalysis({ isDark }) {
 
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
+  const [isPlatformsTouched, setIsPlatformsTouched] = useState(false);
+
+  const platformDropdownRef = useRef(null);
+  const dayOfWeekDropdownRef = useRef(null);
 
   const DAYS_LIST = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState([...DAYS_LIST]);
@@ -3945,6 +3990,40 @@ function FunnelAnalysis({ isDark }) {
       setSelectedDaysOfWeek(prev => [...prev, day]);
     }
   };
+
+  const availablePlatforms = useMemo(() => {
+    const list = Array.from(new Set(rawData.map(r => r.platform).filter(Boolean))).sort();
+    return list.filter(p => p.toLowerCase() !== 'combined');
+  }, [rawData]);
+
+  useEffect(() => {
+    if (availablePlatforms.length > 0 && !isPlatformsTouched) {
+      setSelectedPlatforms(availablePlatforms);
+    }
+  }, [availablePlatforms, isPlatformsTouched]);
+
+  const togglePlatform = (plat) => {
+    setIsPlatformsTouched(true);
+    if (selectedPlatforms.includes(plat)) {
+      setSelectedPlatforms(prev => prev.filter(p => p !== plat));
+    } else {
+      setSelectedPlatforms(prev => [...prev, plat]);
+    }
+  };
+
+  // Close popovers on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (platformDropdownRef.current && !platformDropdownRef.current.contains(event.target)) {
+        setIsPlatformDropdownOpen(false);
+      }
+      if (dayOfWeekDropdownRef.current && !dayOfWeekDropdownRef.current.contains(event.target)) {
+        setIsDayOfWeekDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const [expandedRows, setExpandedRows] = useState({});
   const toggleRow = (key) => setExpandedRows(prev => ({ ...prev, [key]: !prev[key] }));
@@ -3962,10 +4041,7 @@ function FunnelAnalysis({ isDark }) {
     return ['All', ...sorted];
   }, [rawData]);
 
-  const availablePlatforms = useMemo(() => {
-    const list = Array.from(new Set(rawData.map(r => r.platform).filter(Boolean))).sort();
-    return list.filter(p => p.toLowerCase() !== 'combined');
-  }, [rawData]);
+
 
   // Auto-calculate primary date range
   useEffect(() => {
@@ -4050,7 +4126,7 @@ function FunnelAnalysis({ isDark }) {
             dateObj: new Date(formattedDateStr),
             dateStr: formattedDateStr,
             viewType: row.view_type || 'Overall',
-            platform: row.ET_Platform || row.platform,
+            platform: String(row.ET_Platform || row.et_platform || row.platform || '').trim(),
             country: String(row.Country || row.country || 'Overall').trim(),
             marketingTeam: String(row.Marketing_team || row.marketing_team || row.MarketingTeam || 'Overall').trim(),
             DAU: parseInt(row.DAU, 10) || 0,
@@ -4101,9 +4177,13 @@ function FunnelAnalysis({ isDark }) {
       }
 
       let platMatch = true;
-      if (platformsFilter && platformsFilter.length > 0 && availablePlatforms.length > 0 && platformsFilter.length < availablePlatforms.length) {
-        const p = r.platform || '';
-        platMatch = platformsFilter.includes(p);
+      if (availablePlatforms.length > 0) {
+        if (selectedPlatforms.length === 0 && isPlatformsTouched) {
+          platMatch = false;
+        } else if (selectedPlatforms.length > 0 && selectedPlatforms.length < availablePlatforms.length) {
+          const p = r.platform || '';
+          platMatch = p.toLowerCase() === 'combined' || selectedPlatforms.includes(p);
+        }
       }
 
       return cMatch && mMatch && dayMatch && platMatch;
@@ -4599,27 +4679,31 @@ function FunnelAnalysis({ isDark }) {
   return (
     <div className="animate-in fade-in duration-300">
       
-      {/* Date Range & Comparison Selector Toolbar */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-6 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3 2xl:p-4 shadow-sm">
-        <div className="shrink-0">
-          <h2 className="text-sm font-bold text-warm-text dark:text-dark-text tracking-tight">Funnel Period Controls</h2>
+      {/* Date Range & Segment Controls Card (Header on Line 1, Filters on Line 2) */}
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3.5 2xl:p-4 shadow-sm mb-6">
+        {/* Header Line */}
+        <div className="pb-2.5 mb-3 border-b border-warm-border/60 dark:border-dark-border/60">
+          <h2 className="text-sm font-bold text-warm-text dark:text-dark-text tracking-tight">
+            Funnel Period Controls
+          </h2>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 2xl:gap-3">
-          {/* Primary Range Selection */}
-          <div className="flex items-center gap-1.5">
+        {/* Filter Controls Line Below */}
+        <div className="flex items-center justify-between gap-2.5 2xl:gap-3.5 overflow-x-auto custom-scrollbar">
+          {/* 1. Primary Range Selection */}
+          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
             <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Primary:</span>
             {datePreset === "Custom range" && (
               <div className="flex items-center gap-1">
-                <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
                 <span className="text-[11px] text-warm-muted dark:text-dark-muted">to</span>
-                <input type="date" value={endDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                <input type="date" value={endDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
               </div>
             )}
             <select 
               value={datePreset} 
               onChange={(e) => setDatePreset(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               <option value="Yesterday">Yesterday</option>
               <option value="Last 7 days">Last 7 days</option>
@@ -4632,20 +4716,20 @@ function FunnelAnalysis({ isDark }) {
             </select>
           </div>
 
-          {/* Comparison Period Selector */}
-          <div className="flex items-center gap-1.5 border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+          {/* 2. Comparison Period Selector */}
+          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
             <span className="text-[11px] font-bold text-amber-accent">Compare:</span>
             {compPreset === "Custom range" && (
               <div className="flex items-center gap-1">
-                <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
                 <span className="text-[11px] text-warm-muted dark:text-dark-muted">to</span>
-                <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
               </div>
             )}
             <select 
               value={compPreset} 
               onChange={(e) => setCompPreset(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-amber-500/40 text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="bg-white dark:bg-slate-800 border border-amber-500/40 text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               <option value="None">No Comparison</option>
               <option value="Previous period">Previous period</option>
@@ -4654,31 +4738,32 @@ function FunnelAnalysis({ isDark }) {
             </select>
           </div>
 
-          {/* Platform Multi-select Checkbox Popover Dropdown */}
-          <div className="relative border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Platform:</span>
-              <button
-                type="button"
-                onClick={() => setIsPlatformDropdownOpen(!isPlatformDropdownOpen)}
-                className="flex items-center gap-1.5 bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
-              >
-                <span>
-                  {selectedPlatforms.length === 0 || selectedPlatforms.length === availablePlatforms.length
-                    ? 'All Platforms' 
-                    : `${selectedPlatforms.length} Selected`}
-                </span>
-                <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted" />
-              </button>
-            </div>
+          {/* 3. Platform Multi-select Checkbox Popover */}
+          <div className="relative flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40" ref={platformDropdownRef}>
+            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Platform:</span>
+            <button
+              type="button"
+              onClick={() => setIsPlatformDropdownOpen(!isPlatformDropdownOpen)}
+              className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+            >
+              <span>
+                {selectedPlatforms.length === 0
+                  ? 'None Selected'
+                  : selectedPlatforms.length === availablePlatforms.length
+                  ? 'All Platforms' 
+                  : `${selectedPlatforms.length} Selected`}
+              </span>
+              <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0" />
+            </button>
 
             {isPlatformDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-lg z-50 p-3">
+              <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
                 <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
                   <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Platforms</span>
                   <button 
                     type="button" 
                     onClick={() => {
+                      setIsPlatformsTouched(true);
                       if (selectedPlatforms.length === availablePlatforms.length) {
                         setSelectedPlatforms([]);
                       } else {
@@ -4687,26 +4772,18 @@ function FunnelAnalysis({ isDark }) {
                     }}
                     className="text-[11px] font-bold text-amber-accent hover:underline cursor-pointer"
                   >
-                    {selectedPlatforms.length === availablePlatforms.length || selectedPlatforms.length === 0 ? 'Deselect All' : 'Select All'}
+                    {selectedPlatforms.length === availablePlatforms.length ? 'Deselect All' : 'Select All'}
                   </button>
                 </div>
                 <div className="space-y-1.5 max-h-52 overflow-y-auto custom-scrollbar">
                   {availablePlatforms.map(plat => {
-                    const checked = selectedPlatforms.length === 0 || selectedPlatforms.includes(plat);
+                    const checked = selectedPlatforms.includes(plat);
                     return (
                       <label key={plat} className="flex items-center gap-2 text-xs font-medium text-warm-text dark:text-dark-text cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1 rounded">
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() => {
-                            let current = selectedPlatforms.length === 0 ? [...availablePlatforms] : [...selectedPlatforms];
-                            if (current.includes(plat)) {
-                              current = current.filter(p => p !== plat);
-                            } else {
-                              current.push(plat);
-                            }
-                            setSelectedPlatforms(current.length === availablePlatforms.length ? [] : current);
-                          }}
+                          onChange={() => togglePlatform(plat)}
                           className="accent-amber-500 rounded cursor-pointer"
                         />
                         <span>{plat}</span>
@@ -4718,13 +4795,13 @@ function FunnelAnalysis({ isDark }) {
             )}
           </div>
 
-          {/* Country Filter Selector */}
-          <div className="flex items-center gap-1.5 border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+          {/* 4. Country Filter Selector */}
+          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
             <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Country:</span>
             <select 
               value={selectedCountry} 
               onChange={(e) => setSelectedCountry(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               {availableCountries.map(c => (
                 <option key={c} value={c}>{c === 'All' ? 'All Countries' : c}</option>
@@ -4732,13 +4809,13 @@ function FunnelAnalysis({ isDark }) {
             </select>
           </div>
 
-          {/* Marketing Team Filter Selector */}
-          <div className="flex items-center gap-1.5 border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+          {/* 5. Marketing Team Filter Selector */}
+          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
             <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Marketing Team:</span>
             <select 
               value={selectedMarketingTeam} 
               onChange={(e) => setSelectedMarketingTeam(e.target.value)}
-              className="bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               {availableMarketingTeams.map(m => (
                 <option key={m} value={m}>{m === 'All' ? 'All Teams' : m}</option>
@@ -4746,28 +4823,26 @@ function FunnelAnalysis({ isDark }) {
             </select>
           </div>
 
-          {/* Day of Week Multi-select Checkbox Popover Dropdown */}
-          <div className="relative border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Day of Week:</span>
-              <button
-                type="button"
-                onClick={() => setIsDayOfWeekDropdownOpen(!isDayOfWeekDropdownOpen)}
-                className="flex items-center gap-1.5 bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
-              >
-                <span>
-                  {selectedDaysOfWeek.length === 7 
-                    ? 'All Days' 
-                    : selectedDaysOfWeek.length === 0 
-                    ? 'None Selected' 
-                    : `${selectedDaysOfWeek.length} Days Selected`}
-                </span>
-                <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted" />
-              </button>
-            </div>
+          {/* 6. Day of Week Multi-select Checkbox Popover */}
+          <div className="relative flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40" ref={dayOfWeekDropdownRef}>
+            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Day of Week:</span>
+            <button
+              type="button"
+              onClick={() => setIsDayOfWeekDropdownOpen(!isDayOfWeekDropdownOpen)}
+              className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+            >
+              <span>
+                {selectedDaysOfWeek.length === 7 
+                  ? 'All Days' 
+                  : selectedDaysOfWeek.length === 0 
+                  ? 'None Selected' 
+                  : `${selectedDaysOfWeek.length} Days Selected`}
+              </span>
+              <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0" />
+            </button>
 
             {isDayOfWeekDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-lg z-50 p-3">
+              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
                 <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
                   <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Days</span>
                   <button 
@@ -4784,7 +4859,7 @@ function FunnelAnalysis({ isDark }) {
                     {selectedDaysOfWeek.length === 7 ? 'Deselect All' : 'Select All'}
                   </button>
                 </div>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
                   {DAYS_LIST.map(day => {
                     const checked = selectedDaysOfWeek.includes(day);
                     return (
