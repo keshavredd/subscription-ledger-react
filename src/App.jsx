@@ -391,6 +391,7 @@ export function SubscriptionReport({ isDark }) {
   const [error, setError] = useState(null);
   const [tableMetricMode, setTableMetricMode] = useState("Revenue (₹)");
   const [trendDataCut, setTrendDataCut] = useState("Overall");
+  const [revenueTrendViewMode, setRevenueTrendViewMode] = useState("Daily"); // "Daily" | "Weekly"
 
   const [datePreset, setDatePreset] = useState("Last 30 days");
   const [startDate, setStartDate] = useState("");
@@ -802,6 +803,117 @@ export function SubscriptionReport({ isDark }) {
   const trendChartTraces = useMemo(() => {
     if (!filteredData.length) return [];
 
+    if (revenueTrendViewMode === "Weekly") {
+      const getWeekInfo = (dateStr) => {
+        if (!dateStr) return { key: '', label: '' };
+        const parts = dateStr.includes('-') ? dateStr.split('-') : dateStr.split('/');
+        let d;
+        if (dateStr.includes('-') && parts.length === 3) {
+          d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else if (dateStr.includes('/') && parts.length === 3) {
+          d = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+        } else {
+          d = new Date(dateStr);
+        }
+        if (isNaN(d.getTime())) return { key: dateStr, label: dateStr };
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d.getFullYear(), d.getMonth(), diff);
+        const mStr = String(monday.getMonth() + 1).padStart(2, '0');
+        const dStr = String(monday.getDate()).padStart(2, '0');
+        const weekKey = `${monday.getFullYear()}-${mStr}-${dStr}`;
+        
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const weekLabel = `Wk ${monday.getDate()} ${monthNames[monday.getMonth()]}`;
+        return { key: weekKey, label: weekLabel };
+      };
+
+      const weekMap = {};
+      filteredData.forEach(r => {
+        if (r.dateStr) {
+          const { key, label } = getWeekInfo(r.dateStr);
+          if (key && !weekMap[key]) weekMap[key] = label;
+        }
+      });
+      const sortedWeekKeys = Object.keys(weekMap).sort();
+      const weekLabels = sortedWeekKeys.map(k => weekMap[k]);
+
+      if (trendDataCut === 'Overall') {
+        const revMap = {};
+        filteredData.forEach(r => {
+          if (r.dateStr) {
+            const { key } = getWeekInfo(r.dateStr);
+            revMap[key] = (revMap[key] || 0) + (r.revenue || 0);
+          }
+        });
+        const revValues = sortedWeekKeys.map(k => revMap[k] || 0);
+
+        return [{
+          x: weekLabels,
+          y: revValues,
+          type: 'scatter',
+          mode: 'lines+markers+text',
+          name: 'Overall Weekly Revenue',
+          text: revValues.map(v => formatIndianCurrency1Dec(v)),
+          textposition: revValues.map((v, idx) => {
+            if (idx === 0) return 'top right';
+            if (idx === revValues.length - 1) return 'top left';
+            return 'top center';
+          }),
+          cliponaxis: false,
+          textfont: { family: "DM Sans, sans-serif", size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
+          line: { color: '#f59e0b', width: 2.5, shape: 'spline' },
+          fill: 'tozeroy',
+          fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+          hovertemplate: "<b>%{x}</b><br>Overall Weekly Revenue: ₹%{y:,.2f}<extra></extra>"
+        }];
+      }
+
+      const fieldMap = {
+        'Platform': 'platformDisplay',
+        'Channel': 'channel',
+        'Txn Type': 'user_txn_type'
+      };
+      const fieldKey = fieldMap[trendDataCut];
+
+      const categories = [...new Set(filteredData.map(r => r[fieldKey]))].filter(Boolean).sort();
+      const CUT_COLORS = ['#f59e0b', '#3B82F6', '#10B981', '#EC4899', '#8B5CF6', '#F97316', '#06B6D4', '#6366F1'];
+      let colorIdx = 0;
+
+      return categories.map(cat => {
+        const color = CUT_COLORS[colorIdx % CUT_COLORS.length];
+        colorIdx++;
+
+        const catRevMap = {};
+        filteredData.forEach(r => {
+          if (r[fieldKey] === cat && r.dateStr) {
+            const { key } = getWeekInfo(r.dateStr);
+            catRevMap[key] = (catRevMap[key] || 0) + (r.revenue || 0);
+          }
+        });
+        const catRevs = sortedWeekKeys.map(k => catRevMap[k] || 0);
+
+        return {
+          x: weekLabels,
+          y: catRevs,
+          type: 'scatter',
+          mode: 'lines+markers+text',
+          name: cat,
+          text: catRevs.map(v => v > 0 ? formatIndianCurrency1Dec(v) : ''),
+          textposition: catRevs.map((v, idx) => {
+            if (idx === 0) return 'top right';
+            if (idx === catRevs.length - 1) return 'top left';
+            return 'top center';
+          }),
+          cliponaxis: false,
+          textfont: { family: "DM Sans, sans-serif", size: 9, color: color, weight: 'bold' },
+          line: { color: color, width: 2, shape: 'spline' },
+          marker: { size: 5, color: color },
+          hovertemplate: `<b>${cat}</b><br>%{x}<br>Weekly Revenue: ₹%{y:,.2f}<extra></extra>`
+        };
+      });
+    }
+
     const dateMap = {};
     filteredData.forEach(r => {
       if (r.dateStr) dateMap[r.dateStr] = r.dateShort;
@@ -879,7 +991,7 @@ export function SubscriptionReport({ isDark }) {
         hovertemplate: `<b>${cat}</b><br>%{x}<br>Revenue: ₹%{y:,.2f}<extra></extra>`
       };
     });
-  }, [filteredData, trendDataCut, isDark]);
+  }, [filteredData, trendDataCut, revenueTrendViewMode, isDark]);
 
   const platformPivot = useMemo(() => buildPivotData('platformDisplay'), [buildPivotData]);
   const userTypePivot = useMemo(() => buildPivotData('user_txn_type'), [buildPivotData]);
@@ -1116,28 +1228,47 @@ export function SubscriptionReport({ isDark }) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text px-1">
-              Daily Revenue Trend {trendDataCut !== 'Overall' ? `(${trendDataCut} Split)` : ''}
+              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} Revenue Trend {trendDataCut !== 'Overall' ? `(${trendDataCut} Split)` : ''}
             </h3>
             <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">
-              Daily revenue trajectory for selected date range
+              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} revenue trajectory for selected date range
             </p>
           </div>
 
-          {/* Pill-like Toggle Bar for Trend Data Cuts */}
-          <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-1 rounded-full border border-warm-border dark:border-zinc-700 shadow-sm self-start sm:self-auto">
-            {['Overall', 'Platform', 'Channel', 'Txn Type'].map(cut => (
-              <button
-                key={cut}
-                onClick={() => setTrendDataCut(cut)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all cursor-pointer ${
-                  trendDataCut === cut
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
-                }`}
-              >
-                {cut}
-              </button>
-            ))}
+          <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+            {/* Daily / Weekly View Mode Switch */}
+            <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-1 rounded-full border border-warm-border dark:border-zinc-700 shadow-sm">
+              {['Daily', 'Weekly'].map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setRevenueTrendViewMode(mode)}
+                  className={`px-3 py-1 text-xs font-bold rounded-full transition-all cursor-pointer ${
+                    revenueTrendViewMode === mode
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            {/* Pill-like Toggle Bar for Trend Data Cuts */}
+            <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-1 rounded-full border border-warm-border dark:border-zinc-700 shadow-sm">
+              {['Overall', 'Platform', 'Channel', 'Txn Type'].map(cut => (
+                <button
+                  key={cut}
+                  onClick={() => setTrendDataCut(cut)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all cursor-pointer ${
+                    trendDataCut === cut
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  {cut}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1225,11 +1356,6 @@ export function SubscriptionReport({ isDark }) {
           pivotData={planPivot} 
           title="Plan-wise Revenue & Conversions"
           metricMode={tableMetricMode}
-          isDark={isDark}
-        />
-
-        <AovMatrixTable 
-          aovData={aovData} 
           isDark={isDark}
         />
       </section>
@@ -3800,9 +3926,12 @@ function FunnelAnalysis({ isDark }) {
   const [compStartDate, setCompStartDate] = useState("");
   const [compEndDate, setCompEndDate] = useState("");
 
-  // Segment Filters State (Country, Marketing Team & Day of Week)
+  // Segment Filters State (Platform, Country, Marketing Team & Day of Week)
   const [selectedCountry, setSelectedCountry] = useState("All");
   const [selectedMarketingTeam, setSelectedMarketingTeam] = useState("All");
+
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
+  const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
 
   const DAYS_LIST = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState([...DAYS_LIST]);
@@ -3831,6 +3960,11 @@ function FunnelAnalysis({ isDark }) {
     const list = Array.from(new Set(rawData.map(r => r.marketingTeam).filter(Boolean))).sort();
     const sorted = list.filter(m => m.toLowerCase() !== 'overall');
     return ['All', ...sorted];
+  }, [rawData]);
+
+  const availablePlatforms = useMemo(() => {
+    const list = Array.from(new Set(rawData.map(r => r.platform).filter(Boolean))).sort();
+    return list.filter(p => p.toLowerCase() !== 'combined');
   }, [rawData]);
 
   // Auto-calculate primary date range
@@ -3940,8 +4074,8 @@ function FunnelAnalysis({ isDark }) {
   const [trendlineViewMode, setTrendlineViewMode] = useState("Daily"); // "Daily" | "Weekly"
   const [weeklyDauMode, setWeeklyDauMode] = useState("Daily Average"); // "Daily Average" | "Weekly Sum"
 
-  // Process data for a given date range, segment filters, and day of week list
-  const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeam = 'All', daysOfWeekFilter = []) => {
+  // Process data for a given date range, segment filters, day of week list, and platforms list
+  const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeam = 'All', daysOfWeekFilter = [], platformsFilter = []) => {
     const overall = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
     const platforms = {};
     const marketingTeams = {};
@@ -3957,84 +4091,75 @@ function FunnelAnalysis({ isDark }) {
 
     const filtered = rawData.filter(r => {
       if (r.dateStr < sDate || r.dateStr > eDate) return false;
-      const cMatch = filterCountry === 'All' || r.country.toLowerCase() === targetCountry.toLowerCase();
-      const mMatch = filterMktTeam === 'All' || r.marketingTeam.toLowerCase() === targetMktTeam.toLowerCase();
+      const cMatch = r.country && r.country.toLowerCase() === targetCountry.toLowerCase();
+      const mMatch = filterMktTeam === 'All' || (r.marketingTeam && r.marketingTeam.toLowerCase() === targetMktTeam.toLowerCase());
       
       let dayMatch = true;
       if (daysOfWeekFilter && daysOfWeekFilter.length > 0 && daysOfWeekFilter.length < 7) {
         const dayName = DAYS[r.dateObj.getDay()];
         dayMatch = daysOfWeekFilter.includes(dayName);
       }
-      return cMatch && mMatch && dayMatch;
+
+      let platMatch = true;
+      if (platformsFilter && platformsFilter.length > 0 && availablePlatforms.length > 0 && platformsFilter.length < availablePlatforms.length) {
+        const p = r.platform || '';
+        platMatch = platformsFilter.includes(p);
+      }
+
+      return cMatch && mMatch && dayMatch && platMatch;
     });
 
-    // Group filtered rows by dateStr for accurate max DAU / Paywall Hits calculation per day
+    // Group filtered rows by dateStr, platform, and marketing team
     const dailyGroups = {};
+    const platformDailyMap = {};
+    const mktTeamDailyMap = {};
+
     filtered.forEach(row => {
       if (!dailyGroups[row.dateStr]) dailyGroups[row.dateStr] = [];
       dailyGroups[row.dateStr].push(row);
 
-      // Populate platform aggregations
+      // Platform grouping
       if (row.viewType === 'By Platform' || row.platform) {
         const plat = row.platform || 'Other';
-        if (!platforms[plat]) platforms[plat] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
-        platforms[plat].DAU += row.DAU;
-        platforms[plat].paywalling_hits += row.paywalling_hits;
-        platforms[plat].Plan_Page_Load += row.Plan_Page_Load;
-        platforms[plat].Plan_Selected += row.Plan_Selected;
-        platforms[plat].Pay_Initiated += row.Pay_Initiated;
-        platforms[plat].Purchased += row.Purchased;
-        
-        if (!platforms[plat].daily[row.dateStr]) platforms[plat].daily[row.dateStr] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0 };
-        platforms[plat].daily[row.dateStr].DAU += row.DAU;
-        platforms[plat].daily[row.dateStr].paywalling_hits += row.paywalling_hits;
-        platforms[plat].daily[row.dateStr].Plan_Page_Load += row.Plan_Page_Load;
-        platforms[plat].daily[row.dateStr].Plan_Selected += row.Plan_Selected;
-        platforms[plat].daily[row.dateStr].Pay_Initiated += row.Pay_Initiated;
-        platforms[plat].daily[row.dateStr].Purchased += row.Purchased;
+        const key = `${plat}_${row.dateStr}`;
+        if (!platformDailyMap[key]) {
+          platformDailyMap[key] = { plat, dateStr: row.dateStr, rows: [] };
+        }
+        platformDailyMap[key].rows.push(row);
       }
 
-      // Populate marketing team aggregations
+      // Marketing team grouping
       const mTeam = row.marketingTeam;
       if (mTeam && mTeam.toLowerCase() !== 'overall') {
-        if (!marketingTeams[mTeam]) marketingTeams[mTeam] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
-        marketingTeams[mTeam].DAU += row.DAU;
-        marketingTeams[mTeam].paywalling_hits += row.paywalling_hits;
-        marketingTeams[mTeam].Plan_Page_Load += row.Plan_Page_Load;
-        marketingTeams[mTeam].Plan_Selected += row.Plan_Selected;
-        marketingTeams[mTeam].Pay_Initiated += row.Pay_Initiated;
-        marketingTeams[mTeam].Purchased += row.Purchased;
-
-        if (!marketingTeams[mTeam].daily[row.dateStr]) marketingTeams[mTeam].daily[row.dateStr] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0 };
-        marketingTeams[mTeam].daily[row.dateStr].DAU += row.DAU;
-        marketingTeams[mTeam].daily[row.dateStr].paywalling_hits += row.paywalling_hits;
-        marketingTeams[mTeam].daily[row.dateStr].Plan_Page_Load += row.Plan_Page_Load;
-        marketingTeams[mTeam].daily[row.dateStr].Plan_Selected += row.Plan_Selected;
-        marketingTeams[mTeam].daily[row.dateStr].Pay_Initiated += row.Pay_Initiated;
-        marketingTeams[mTeam].daily[row.dateStr].Purchased += row.Purchased;
+        const key = `${mTeam}_${row.dateStr}`;
+        if (!mktTeamDailyMap[key]) {
+          mktTeamDailyMap[key] = { mTeam, dateStr: row.dateStr, rows: [] };
+        }
+        mktTeamDailyMap[key].rows.push(row);
       }
     });
 
-    // Calculate Overall totals per date
-    const dates = Object.keys(dailyGroups).sort();
-    dates.forEach(d => {
-      const rows = dailyGroups[d];
+    // Aggregate platforms: DAU & paywalling_hits are identical across marketing teams for a platform on a date -> take once per date
+    Object.values(platformDailyMap).forEach(({ plat, dateStr, rows }) => {
+      if (!platforms[plat]) {
+        platforms[plat] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
+      }
 
-      // For DAU and Paywall Hits, take max value among rows for date d to avoid duplicating across marketing teams
       const dayDau = Math.max(...rows.map(r => r.DAU), 0);
       const dayPaywall = Math.max(...rows.map(r => r.paywalling_hits), 0);
 
-      // For funnel stages, check if there is an Overall row, else sum across team rows
-      const overallRow = rows.find(r => r.marketingTeam.toLowerCase() === 'overall');
-
       let dayPageLoad = 0, daySelected = 0, dayInit = 0, dayPurch = 0;
-      if (overallRow && filterMktTeam === 'All') {
-        dayPageLoad = overallRow.Plan_Page_Load;
-        daySelected = overallRow.Plan_Selected;
-        dayInit = overallRow.Pay_Initiated;
-        dayPurch = overallRow.Purchased;
+      const overallTeamRow = rows.find(r => r.marketingTeam && r.marketingTeam.toLowerCase() === 'overall');
+
+      if (overallTeamRow && filterMktTeam === 'All') {
+        dayPageLoad = overallTeamRow.Plan_Page_Load;
+        daySelected = overallTeamRow.Plan_Selected;
+        dayInit = overallTeamRow.Pay_Initiated;
+        dayPurch = overallTeamRow.Purchased;
       } else {
-        const teamRows = rows.filter(r => r.marketingTeam.toLowerCase() !== 'overall' || rows.length === 1);
+        const teamRows = filterMktTeam === 'All' 
+          ? rows.filter(r => !r.marketingTeam || r.marketingTeam.toLowerCase() !== 'overall' || rows.length === 1)
+          : rows;
         teamRows.forEach(r => {
           dayPageLoad += r.Plan_Page_Load;
           daySelected += r.Plan_Selected;
@@ -4043,23 +4168,14 @@ function FunnelAnalysis({ isDark }) {
         });
       }
 
-      overall.DAU += dayDau;
-      overall.paywalling_hits += dayPaywall;
-      overall.Plan_Page_Load += dayPageLoad;
-      overall.Plan_Selected += daySelected;
-      overall.Pay_Initiated += dayInit;
-      overall.Purchased += dayPurch;
+      platforms[plat].DAU += dayDau;
+      platforms[plat].paywalling_hits += dayPaywall;
+      platforms[plat].Plan_Page_Load += dayPageLoad;
+      platforms[plat].Plan_Selected += daySelected;
+      platforms[plat].Pay_Initiated += dayInit;
+      platforms[plat].Purchased += dayPurch;
 
-      overall.daily[d] = {
-        DAU: dayDau,
-        paywalling_hits: dayPaywall,
-        Plan_Page_Load: dayPageLoad,
-        Plan_Selected: daySelected,
-        Pay_Initiated: dayInit,
-        Purchased: dayPurch
-      };
-
-      trends[d] = {
+      platforms[plat].daily[dateStr] = {
         DAU: dayDau,
         paywalling_hits: dayPaywall,
         Plan_Page_Load: dayPageLoad,
@@ -4068,6 +4184,139 @@ function FunnelAnalysis({ isDark }) {
         Purchased: dayPurch
       };
     });
+
+    // Aggregate marketing teams
+    Object.values(mktTeamDailyMap).forEach(({ mTeam, dateStr, rows }) => {
+      if (!marketingTeams[mTeam]) {
+        marketingTeams[mTeam] = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
+      }
+
+      const combinedPlatRow = rows.find(r => r.platform && r.platform.toLowerCase() === 'combined');
+      let dayDau = 0;
+      let dayPaywall = 0;
+
+      if (combinedPlatRow) {
+        dayDau = combinedPlatRow.DAU;
+        dayPaywall = combinedPlatRow.paywalling_hits;
+      } else {
+        const platSeen = new Set();
+        rows.forEach(r => {
+          const plat = r.platform || 'Other';
+          if (!platSeen.has(plat)) {
+            platSeen.add(plat);
+            dayDau += r.DAU;
+            dayPaywall += r.paywalling_hits;
+          }
+        });
+      }
+
+      let dayPageLoad = 0, daySelected = 0, dayInit = 0, dayPurch = 0;
+      if (combinedPlatRow && rows.length > 1) {
+        const nonCombinedRows = rows.filter(r => r !== combinedPlatRow);
+        nonCombinedRows.forEach(r => {
+          dayPageLoad += r.Plan_Page_Load;
+          daySelected += r.Plan_Selected;
+          dayInit += r.Pay_Initiated;
+          dayPurch += r.Purchased;
+        });
+      } else {
+        rows.forEach(r => {
+          dayPageLoad += r.Plan_Page_Load;
+          daySelected += r.Plan_Selected;
+          dayInit += r.Pay_Initiated;
+          dayPurch += r.Purchased;
+        });
+      }
+
+      marketingTeams[mTeam].DAU += dayDau;
+      marketingTeams[mTeam].paywalling_hits += dayPaywall;
+      marketingTeams[mTeam].Plan_Page_Load += dayPageLoad;
+      marketingTeams[mTeam].Plan_Selected += daySelected;
+      marketingTeams[mTeam].Pay_Initiated += dayInit;
+      marketingTeams[mTeam].Purchased += dayPurch;
+
+      marketingTeams[mTeam].daily[dateStr] = {
+        DAU: dayDau,
+        paywalling_hits: dayPaywall,
+        Plan_Page_Load: dayPageLoad,
+        Plan_Selected: daySelected,
+        Pay_Initiated: dayInit,
+        Purchased: dayPurch
+      };
+    });
+
+    // Calculate Overall totals per date
+    const dates = Object.keys(dailyGroups).sort();
+
+    // Use Combined platform metrics for Overall if present, taking DAU and paywalling_hits once per date
+    const combinedPlatformKey = Object.keys(platforms).find(k => k.toLowerCase() === 'combined');
+    if (combinedPlatformKey && platforms[combinedPlatformKey]) {
+      const pComb = platforms[combinedPlatformKey];
+      overall.DAU = pComb.DAU;
+      overall.paywalling_hits = pComb.paywalling_hits;
+      overall.Plan_Page_Load = pComb.Plan_Page_Load;
+      overall.Plan_Selected = pComb.Plan_Selected;
+      overall.Pay_Initiated = pComb.Pay_Initiated;
+      overall.Purchased = pComb.Purchased;
+      overall.daily = pComb.daily;
+
+      dates.forEach(d => {
+        const dObj = pComb.daily[d] || { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0 };
+        trends[d] = { ...dObj };
+      });
+    } else {
+      dates.forEach(d => {
+        const rows = dailyGroups[d];
+
+        // For DAU and Paywall Hits, take max value among rows for date d to count DAU and paywall hits once per date
+        const dayDau = Math.max(...rows.map(r => r.DAU), 0);
+        const dayPaywall = Math.max(...rows.map(r => r.paywalling_hits), 0);
+
+        // For funnel stages, check if there is an Overall row, else sum across team rows
+        const overallRow = rows.find(r => r.marketingTeam && r.marketingTeam.toLowerCase() === 'overall');
+
+        let dayPageLoad = 0, daySelected = 0, dayInit = 0, dayPurch = 0;
+        if (overallRow && filterMktTeam === 'All') {
+          dayPageLoad = overallRow.Plan_Page_Load;
+          daySelected = overallRow.Plan_Selected;
+          dayInit = overallRow.Pay_Initiated;
+          dayPurch = overallRow.Purchased;
+        } else {
+          const teamRows = rows.filter(r => !r.marketingTeam || r.marketingTeam.toLowerCase() !== 'overall' || rows.length === 1);
+          teamRows.forEach(r => {
+            dayPageLoad += r.Plan_Page_Load;
+            daySelected += r.Plan_Selected;
+            dayInit += r.Pay_Initiated;
+            dayPurch += r.Purchased;
+          });
+        }
+
+        overall.DAU += dayDau;
+        overall.paywalling_hits += dayPaywall;
+        overall.Plan_Page_Load += dayPageLoad;
+        overall.Plan_Selected += daySelected;
+        overall.Pay_Initiated += dayInit;
+        overall.Purchased += dayPurch;
+
+        overall.daily[d] = {
+          DAU: dayDau,
+          paywalling_hits: dayPaywall,
+          Plan_Page_Load: dayPageLoad,
+          Plan_Selected: daySelected,
+          Pay_Initiated: dayInit,
+          Purchased: dayPurch
+        };
+
+        trends[d] = {
+          DAU: dayDau,
+          paywalling_hits: dayPaywall,
+          Plan_Page_Load: dayPageLoad,
+          Plan_Selected: daySelected,
+          Pay_Initiated: dayInit,
+          Purchased: dayPurch
+        };
+      });
+    }
 
     const uniqueDays = dates.length || 1;
 
@@ -4143,13 +4392,13 @@ function FunnelAnalysis({ isDark }) {
     };
   }, [rawData]);
 
-  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek), [processFunnelData, startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek]);
+  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms), [processFunnelData, startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms]);
   
   const isCompActive = compPreset !== "None" && compStartDate && compEndDate;
   const compFunnel = useMemo(() => {
     if (!isCompActive) return null;
-    return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek);
-  }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek]);
+    return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms);
+  }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms]);
 
   // Helper to compute weekly grouped step data for trendlines
   const computeWeeklyStepData = useCallback((trendObj, dauMode = "Daily Average") => {
@@ -4312,7 +4561,7 @@ function FunnelAnalysis({ isDark }) {
     hovermode: 'x'
   };
 
-  const activePlatforms = Object.keys(primaryFunnel.platformAvg).sort();
+  const activePlatforms = Object.keys(primaryFunnel.platformAvg).filter(p => p.toLowerCase() !== 'combined').sort();
 
   // Helper renderer for cell stage metrics
   const renderStageCell = (val, prevVal, compVal = null, showPerDay = true) => {
@@ -4351,13 +4600,12 @@ function FunnelAnalysis({ isDark }) {
     <div className="animate-in fade-in duration-300">
       
       {/* Date Range & Comparison Selector Toolbar */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3 2xl:p-4 shadow-sm">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 mb-6 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3 2xl:p-4 shadow-sm">
         <div className="shrink-0">
           <h2 className="text-sm font-bold text-warm-text dark:text-dark-text tracking-tight">Funnel Period Controls</h2>
-          <p className="text-[11px] text-warm-muted dark:text-dark-muted font-medium">Select primary timeframe and compare against previous periods</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 2xl:gap-3.5">
+        <div className="flex flex-wrap items-center gap-2 2xl:gap-3">
           {/* Primary Range Selection */}
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Primary:</span>
@@ -4404,6 +4652,70 @@ function FunnelAnalysis({ isDark }) {
               <option value="Previous month">Previous month</option>
               <option value="Custom range">Custom range</option>
             </select>
+          </div>
+
+          {/* Platform Multi-select Checkbox Popover Dropdown */}
+          <div className="relative border-l border-warm-border dark:border-dark-border pl-2.5 2xl:pl-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Platform:</span>
+              <button
+                type="button"
+                onClick={() => setIsPlatformDropdownOpen(!isPlatformDropdownOpen)}
+                className="flex items-center gap-1.5 bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              >
+                <span>
+                  {selectedPlatforms.length === 0 || selectedPlatforms.length === availablePlatforms.length
+                    ? 'All Platforms' 
+                    : `${selectedPlatforms.length} Selected`}
+                </span>
+                <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted" />
+              </button>
+            </div>
+
+            {isPlatformDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-lg z-50 p-3">
+                <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
+                  <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Platforms</span>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      if (selectedPlatforms.length === availablePlatforms.length) {
+                        setSelectedPlatforms([]);
+                      } else {
+                        setSelectedPlatforms([...availablePlatforms]);
+                      }
+                    }}
+                    className="text-[11px] font-bold text-amber-accent hover:underline cursor-pointer"
+                  >
+                    {selectedPlatforms.length === availablePlatforms.length || selectedPlatforms.length === 0 ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+                <div className="space-y-1.5 max-h-52 overflow-y-auto custom-scrollbar">
+                  {availablePlatforms.map(plat => {
+                    const checked = selectedPlatforms.length === 0 || selectedPlatforms.includes(plat);
+                    return (
+                      <label key={plat} className="flex items-center gap-2 text-xs font-medium text-warm-text dark:text-dark-text cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1 rounded">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            let current = selectedPlatforms.length === 0 ? [...availablePlatforms] : [...selectedPlatforms];
+                            if (current.includes(plat)) {
+                              current = current.filter(p => p !== plat);
+                            } else {
+                              current.push(plat);
+                            }
+                            setSelectedPlatforms(current.length === availablePlatforms.length ? [] : current);
+                          }}
+                          className="accent-amber-500 rounded cursor-pointer"
+                        />
+                        <span>{plat}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Country Filter Selector */}
