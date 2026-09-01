@@ -37,6 +37,21 @@ const activePromises = {};
  * 3. Live Google Sheets CSV fallback
  */
 export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
+  // For 'realtime' dataset: Always fetch live Google Sheet data directly with 0 cache delay
+  if (key === 'realtime') {
+    console.log("⚡ [Realtime] Fetching live Google Sheet data directly with 0 cache delay...");
+    const liveUrl = (fallbackUrl || DATASET_URLS.realtime) + (DATASET_URLS.realtime.includes('?') ? '&' : '?') + `_t=${Date.now()}`;
+    try {
+      const liveData = await syncLiveDataset(key, liveUrl, parseConfig);
+      if (liveData && liveData.data && liveData.data.length > 0) {
+        dataCache[key] = liveData;
+        return liveData;
+      }
+    } catch (liveErr) {
+      console.warn("Live realtime fetch failed, falling back to cache/Turso...", liveErr);
+    }
+  }
+
   if (dataCache[key]) {
     return Promise.resolve(dataCache[key]);
   }
