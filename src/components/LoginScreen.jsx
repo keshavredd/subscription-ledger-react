@@ -47,7 +47,7 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
         {/* Branding Logo & Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-3">
-            <div className="bg-black dark:bg-white text-white dark:text-black font-black px-3 py-1.5 rounded-lg text-xl tracking-wider">
+            <div className="bg-[#ED1C24] text-white font-serif font-black text-4xl leading-none h-16 w-16 rounded-xl tracking-tighter shadow-md flex items-center justify-center shrink-0">
               ET
             </div>
             <span className="text-2xl font-extrabold tracking-tight">Prime</span>

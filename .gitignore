@@ -27,4 +27,6 @@ dist-ssr/
 .idea
 .DS_Store
 scratch/
-
+vite.config.js.timestamp*
+__pycache__/
+*.pyc

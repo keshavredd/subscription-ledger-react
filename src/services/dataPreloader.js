@@ -37,22 +37,11 @@ const activePromises = {};
  * 3. Live Google Sheets CSV fallback
  */
 export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
-  // For 'realtime' dataset: Always fetch live Google Sheet data directly with 0 cache delay
-  if (key === 'realtime') {
-    console.log("⚡ [Realtime] Fetching live Google Sheet data directly with 0 cache delay...");
-    const liveUrl = (fallbackUrl || DATASET_URLS.realtime) + (DATASET_URLS.realtime.includes('?') ? '&' : '?') + `_t=${Date.now()}`;
-    try {
-      const liveData = await syncLiveDataset(key, liveUrl, parseConfig);
-      if (liveData && liveData.data && liveData.data.length > 0) {
-        dataCache[key] = liveData;
-        return liveData;
-      }
-    } catch (liveErr) {
-      console.warn("Live realtime fetch failed, falling back to cache/Turso...", liveErr);
-    }
-  }
-
   if (dataCache[key]) {
+    // Return instant memory cache and trigger background revalidation from Google Sheets
+    if (fallbackUrl || DATASET_URLS[key]) {
+      syncLiveDatasetInBackground(key, fallbackUrl, parseConfig);
+    }
     return Promise.resolve(dataCache[key]);
   }
 
@@ -69,6 +58,11 @@ export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
         if (tursoResult && tursoResult.data && tursoResult.data.length > 0) {
           dataCache[key] = tursoResult;
           setCachedParquet(key, null, { version: CACHE_VERSION, data: tursoResult.data });
+          
+          // Trigger background live Google Sheet sync for up-to-date data
+          if (fallbackUrl || DATASET_URLS[key]) {
+            syncLiveDatasetInBackground(key, fallbackUrl, parseConfig);
+          }
           return tursoResult;
         }
       } catch (tursoErr) {
@@ -102,7 +96,7 @@ export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
 }
 
 async function syncLiveDataset(key, fallbackUrl, parseConfig) {
-  const targetUrl = fallbackUrl || DATASET_URLS[key];
+  const targetUrl = (fallbackUrl || DATASET_URLS[key]) + (DATASET_URLS[key] && DATASET_URLS[key].includes('?') ? '&' : '?') + `_t=${Date.now()}`;
   try {
     const res = await fetch(targetUrl);
     if (!res.ok) throw new Error(`HTTP error ${res.status}`);
@@ -120,6 +114,10 @@ async function syncLiveDataset(key, fallbackUrl, parseConfig) {
           // Cache parsed records in IndexedDB for instant subsequent loads
           setCachedParquet(key, null, { version: CACHE_VERSION, data: results.data });
 
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('dataset-updated', { detail: { key, data: results.data } }));
+          }
+
           resolve(result);
         },
         error: (err) => {
@@ -136,19 +134,6 @@ async function syncLiveDataset(key, fallbackUrl, parseConfig) {
 
 function syncLiveDatasetInBackground(key, fallbackUrl, parseConfig) {
   setTimeout(async () => {
-    if (isTursoConfigured()) {
-      try {
-        const tursoResult = await fetchTursoTable(key);
-        if (tursoResult && tursoResult.data && tursoResult.data.length > 0) {
-          dataCache[key] = tursoResult;
-          setCachedParquet(key, null, { version: CACHE_VERSION, data: tursoResult.data });
-          console.log(`🔄 [Background Sync] '${key}' revalidated with latest Turso DB data`);
-          return;
-        }
-      } catch (e) {
-        console.warn(`Background Turso sync failed for ${key}`, e);
-      }
-    }
     syncLiveDataset(key, fallbackUrl, parseConfig)
       .then(() => console.log(`🔄 [Background Sync] '${key}' updated with latest live Google Sheets data`))
       .catch(err => console.warn(`Background sync error for ${key}:`, err));

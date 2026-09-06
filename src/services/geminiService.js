@@ -1,8 +1,10 @@
 /**
  * geminiService.js
- * Integration service for Google Gemini Free API (gemini-2.0-flash)
- * Used as fallback for complex BI queries outside pre-baked React rules.
+ * Integration service for Google Gemini 2.0 Flash Function Calling Agent
+ * Executes multi-turn tool calling, multi-period comparative analytics, and response synthesis.
  */
+
+import { executeToolByName } from '../utils/aiDataEngine.js';
 
 export function getStoredApiKey() {
   if (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_GEMINI_API_KEY) {
@@ -28,79 +30,72 @@ export function setStoredApiKey(key) {
   }
 }
 
-/**
- * Generates aggregated summary context from raw datasets to include in LLM prompt.
- */
-function prepareContextSummary(contextData = {}) {
-  const { subscriptionData = [], funnelData = [], realtimeData = null, renewalsData = [] } = contextData;
-
-  // Monthly Renewals Aggregation (Jan 2026 - Aug 2026)
-  const monthlyRenewals = {
-    "Jan 2026": { due: 38500, renewed: 15870, rate: "41.2%", topPlatform: "Main iOS (62.1%)" },
-    "Feb 2026": { due: 40200, renewed: 16884, rate: "42.0%", topPlatform: "Main iOS (62.5%)" },
-    "Mar 2026": { due: 42100, renewed: 18313, rate: "43.5%", topPlatform: "Main iOS (63.2%)" },
-    "Apr 2026": { due: 41800, renewed: 18015, rate: "43.1%", topPlatform: "Main iOS (62.9%)" },
-    "May 2026": { due: 43500, renewed: 19140, rate: "44.0%", topPlatform: "Main iOS (64.1%)" },
-    "Jun 2026": { due: 44200, renewed: 18608, rate: "42.1%", topPlatform: "Main iOS (61.8%)" },
-    "Jul 2026": { due: 46011, renewed: 21855, rate: "47.5%", topPlatform: "Main iOS (64.0%)" },
-    "Aug 2026 (Pacing)": { due: 47200, renewed: 22656, rate: "48.0%", topPlatform: "Main iOS (65.2%)" }
-  };
-
-  // Platform Breakdown for July 2026
-  const julyPlatformBreakdown = {
-    "Main - iOS": { due: 6150, renewed: 3936, rate: "64.0%" },
-    "Market - iOS": { due: 1951, renewed: 1071, rate: "54.9%" },
-    "Main - Android": { due: 12100, renewed: 6340, rate: "52.4%" },
-    "Market - Android": { due: 3400, renewed: 1693, rate: "49.8%" },
-    "WEB": { due: 22410, renewed: 5849, rate: "26.1%" },
-    "WAP": { due: 3000, renewed: 702, rate: "23.4%" }
-  };
-
-  // Plan Category Breakdown (1 YEAR, 3 YEAR, 1 MONTH, etc.)
-  const planCategoryRenewals = {
-    "1 YEAR": { due: 7694, renewed: 2369, rate: "30.8%" },
-    "1 MONTH": { due: 3902, renewed: 3166, rate: "81.1%" },
-    "3 YEAR": { due: 1060, renewed: 193, rate: "18.2%" },
-    "2 MONTH": { due: 719, renewed: 454, rate: "63.1%" },
-    "2 YEAR": { due: 578, renewed: 105, rate: "18.2%" },
-    "6 MONTH": { due: 378, renewed: 157, rate: "41.5%" },
-    "3 MONTH": { due: 68, renewed: 56, rate: "82.4%" },
-    "4 MONTH": { due: 8, renewed: 5, rate: "62.5%" }
-  };
-
-  // Platform-wise Recurring Breakdown
-  const platformRecurringBreakdown = {
-    "Period Total": { totalSold: 9099, recurring: 1495, nonRecurring: 7604, recurringShare: "16.4%", recurringRevenue: "₹35.36L" },
-    "Main - iOS": { totalSold: 724, recurring: 724, nonRecurring: 0, recurringShare: "100.0%", recurringRevenue: "₹17.00L" },
-    "Market - iOS": { totalSold: 163, recurring: 163, nonRecurring: 0, recurringShare: "100.0%", recurringRevenue: "₹2.80L" },
-    "Market - Android": { totalSold: 475, recurring: 103, nonRecurring: 372, recurringShare: "21.7%", recurringRevenue: "₹1.78L" },
-    "Main - Android": { totalSold: 903, recurring: 160, nonRecurring: 743, recurringShare: "17.7%", recurringRevenue: "₹2.54L" },
-    "WEB": { totalSold: 2100, recurring: 138, nonRecurring: 1962, recurringShare: "6.6%", recurringRevenue: "₹3.87L" },
-    "WAP": { totalSold: 4734, recurring: 207, nonRecurring: 4527, recurringShare: "4.4%", recurringRevenue: "₹7.38L" }
-  };
-
-  // Funnel Stage Benchmark Summary
-  const funnelSummary = {
-    "Daily Avg DAU": "3.56M users/day",
-    "Paywall Hit Rate": "2.65% of DAU (~94.4k hits/day)",
-    "Plan Page Load to Purchase": "1.55% conversion rate",
-    "Average Daily Purchases": "270 - 320 transactions/day"
-  };
-
-  return JSON.stringify({
-    businessUnit: "ET Prime Subscription Ledger",
-    currentPeriod: "August 2026",
-    platformRecurringBreakdown: platformRecurringBreakdown,
-    planCategoryRenewals: planCategoryRenewals,
-    monthlyRenewals2026: monthlyRenewals,
-    july2026PlatformBreakdown: julyPlatformBreakdown,
-    funnelBenchmarks: funnelSummary,
-    realtimeStatus: realtimeData ? { todayPurchases: realtimeData.todayPurchases, projectedEOD: realtimeData.projectedTotal } : "Pacing smoothly"
-  }, null, 2);
-}
+const GEMINI_TOOLS_DECLARATION = [
+  {
+    functionDeclarations: [
+      {
+        name: "query_renewals",
+        description: "Fetch subscription renewal metrics, rates, and platform or plan breakdowns for a specified target period (e.g. 'July 2026', 'August 2026', 'Jan 2026')",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            period: { type: "STRING", description: "Target period or month e.g. 'July 2026', 'August 2026', 'Jan 2026'" },
+            platform: { type: "STRING", description: "Platform filter e.g. 'All', 'Main iOS', 'MWeb', 'Main Android'" },
+            planCategory: { type: "STRING", description: "Plan category filter e.g. 'All', '1 YEAR', '1 MONTH'" }
+          },
+          required: ["period"]
+        }
+      },
+      {
+        name: "query_funnel",
+        description: "Fetch user acquisition funnel metrics including DAU, Paywall Hits, Plan Page Loads, Purchases, and conversion rates across stages",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            datePreset: { type: "STRING", description: "Time period e.g. 'Last 7 days', 'Last 30 days', 'Yesterday'" },
+            platform: { type: "STRING", description: "Platform filter" },
+            marketingTeam: { type: "STRING", description: "Marketing team filter" }
+          }
+        }
+      },
+      {
+        name: "query_subscription",
+        description: "Fetch subscription performance metrics including Total Revenue, Conversions, Daily Avg Revenue, Avg Revenue per Txn, and Recurring Rate",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            datePreset: { type: "STRING", description: "Time period e.g. 'Last 30 days', 'Last 7 days', 'Yesterday'" },
+            metric: { type: "STRING", description: "Metric to analyze e.g. 'Revenue', 'Conversions', 'ARPU', 'Recurring'" },
+            platform: { type: "STRING", description: "Platform filter" }
+          }
+        }
+      },
+      {
+        name: "query_realtime",
+        description: "Fetch today's live pacing, hourly sales breakdown, and EOD projected sales compared to historical benchmarks",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            platform: { type: "STRING", description: "Platform filter" }
+          }
+        }
+      },
+      {
+        name: "query_general_qa",
+        description: "Handle general conversational queries, questions about capabilities, onboarding, or dashboard explanations (e.g. 'how can you help me', 'who are you')",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            topic: { type: "STRING", description: "The general topic or query intent" }
+          }
+        }
+      }
+    ]
+  }
+];
 
 /**
- * Queries Gemini 2.0 Flash API for natural language BI analysis
+ * Queries Gemini 2.0 Flash Function Calling Agent
  */
 export async function queryGeminiBI(rawQuery, contextData = {}) {
   const apiKey = getStoredApiKey();
@@ -108,93 +103,190 @@ export async function queryGeminiBI(rawQuery, contextData = {}) {
     throw new Error("NO_API_KEY");
   }
 
-  const contextJsonStr = prepareContextSummary(contextData);
-
-  const systemInstruction = `You are the Conversational BI Analytics Engine for ET Prime Subscription Ledger.
-Analyze the user query using the following live context data:
-
-${contextJsonStr}
-
-Respond ALWAYS and ONLY in strict JSON format (no outer text) adhering to this schema:
-{
-  "text": "Clear markdown answer summarizing key insights",
-  "kpis": [
-    { "label": "KPI Name", "value": "Formatted Value", "sub": "Short description" }
-  ],
-  "chart": {
-    "type": "bar" | "line",
-    "title": "Chart Title",
-    "labels": ["Label 1", "Label 2", ...],
-    "values": [12.3, 45.6, ...]
-  },
-  "table": {
-    "headers": ["Header 1", "Header 2", ...],
-    "rows": [["Cell 1", "Cell 2", ...], ...]
-  },
-  "suggestedFollowups": ["Followup question 1", "Followup question 2"]
-}
-
-Guidelines:
-- Return ONLY valid JSON.
-- Make 'kpis' array contain 2-3 key metrics.
-- Provide a chart with numbers if relevant (e.g. monthly rates over time, platform comparisons).
-- Include detailed 'table' rows if comparing multiple months or platforms.
-- Keep markdown text insightful, accurate to context data, concise, and executive-ready.`;
-
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-  const requestBody = {
+  const systemInstructionPass1 = `You are the Conversational BI Agent for ET Prime Subscription Ledger.
+Analyze the user's prompt alongside conversation history.
+CONTEXT & MULTI-TURN RULES:
+- If user query mentions "renewals", "renew", "recurring", "renewed", or month comparison like "August vs July renewals", YOU MUST CALL query_renewals! NEVER call query_subscription for renewals!
+- Maintain active topic & domain (Renewals, Funnel, Subscription, Realtime) from conversation history. If user is exploring the Subscription Report tab (e.g. sales, platforms, revenue, plans), follow-up questions (such as "Compare 1 Year vs 1 Month plan revenue" or "which plan leads") MUST be answered using query_subscription only, NEVER query_funnel!
+- If user asks "can you split the above into weekly" after asking about August renewals, query renewals for August with weekly granularity!
+- If prompt requires comparing multiple periods (e.g. "August vs July renewals"), call query_renewals for both periods.
+- If prompt is general or vague, call query_general_qa.`;
+
+  // Format last 6 messages (3 turns) into Gemini contents array
+  const rawHistory = contextData.conversationHistory || [];
+  const historyContents = [];
+  rawHistory.slice(-6).forEach(msg => {
+    if (msg.sender === 'user' && msg.text) {
+      historyContents.push({ role: 'user', parts: [{ text: msg.text }] });
+    } else if (msg.sender === 'bot' && msg.text) {
+      historyContents.push({ role: 'model', parts: [{ text: msg.text }] });
+    }
+  });
+
+  // Pass 1: Initial Prompt with Tool Declarations & Multi-Turn History
+  const pass1Body = {
     contents: [
+      ...historyContents,
       {
         role: 'user',
         parts: [{ text: `User Question: "${rawQuery}"` }]
       }
     ],
     systemInstruction: {
-      parts: [{ text: systemInstruction }]
+      parts: [{ text: systemInstructionPass1 }]
     },
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.2
-    }
+    tools: GEMINI_TOOLS_DECLARATION
   };
 
-  const response = await fetch(url, {
+  const responsePass1 = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(pass1Body)
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API Error (${response.status}): ${errorText}`);
+  if (!responsePass1.ok) {
+    const errorText = await responsePass1.text();
+    throw new Error(`Gemini API Error (${responsePass1.status}): ${errorText}`);
   }
 
-  const data = await response.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const dataPass1 = await responsePass1.json();
+  const candidatePass1 = dataPass1?.candidates?.[0];
+  const messagePartsPass1 = candidatePass1?.content?.parts || [];
 
+  // Check for Function Calls
+  const functionCalls = messagePartsPass1.filter(p => p.functionCall);
+
+  if (functionCalls.length > 0) {
+    console.log("⚡ [Gemini Agent] Function Calls Requested by Gemini 2.0:", functionCalls);
+
+    // Execute Tools locally
+    const functionResponses = [];
+    for (const callPart of functionCalls) {
+      const call = callPart.functionCall;
+      const toolResult = executeToolByName(call.name, call.args || {}, contextData);
+      functionResponses.push({
+        functionResponse: {
+          name: call.name,
+          response: { result: toolResult }
+        }
+      });
+    }
+
+    // Pass 2: Synthesize Final Output using Tool Execution Data
+    const systemInstructionPass2 = `You are the Conversational BI Analytics Engine for ET Prime Subscription Ledger.
+Synthesize the tool execution results into a comprehensive, executive-ready response.
+
+Adhere STRICTLY to this JSON format (no outer text or markdown wrappers):
+{
+  "text": "Executive markdown narrative summarizing key findings, percentage deltas, and insights",
+  "kpis": [
+    { "label": "Metric Label", "value": "Value", "sub": "Subtext or delta" }
+  ],
+  "table": {
+    "headers": ["Column 1", "Column 2", ...],
+    "rows": [["Cell 1", "Cell 2", ...], ...]
+  },
+  "chart": {
+    "type": "bar" | "line" | "grouped_bar",
+    "title": "Chart Title",
+    "labels": ["Label 1", "Label 2"],
+    // Single-metric:
+    "values": [10.5, 20.3],
+    // OR Multi-metric / multi-series (e.g. daily DAU, Paywall Hits, Purchases):
+    "series": [
+      { "name": "DAU", "values": [2720041, 3059039], "color": "#3B82F6", "type": "line" },
+      { "name": "Paywall Hits", "values": [78872, 91838], "color": "#F59E0B", "type": "line" }
+    ]
+  },
+  "suggestedFollowups": ["Followup Question 1", "Followup Question 2"]
+}
+
+CHART RULES:
+- Every value in "values" MUST BE A STRICT NUMBER (e.g. 1500, 24000).
+- NEVER use hyphenated strings (e.g. "3059039 - 91838" or "24 - 20") in values.
+- For multiple metrics over time, ALWAYS use the "series" array with separate objects!
+
+Guidelines & Verification:
+- Return ONLY valid JSON.
+- For SIMPLE GREETINGS (e.g. 'hey', 'hi', 'hello'), respond naturally with "Hello! 👋 How can I help you analyze your subscription, renewal, funnel, or realtime data today?". DO NOT say "I'm doing great, thank you for asking!" UNLESS the user explicitly asked "how are you" or "how are yu".
+- Set "kpis", "chart", and "table" to null for simple greetings or general meta questions.
+- CRITICAL REQUIREMENT MATCHING: Ensure output DIRECTLY matches user's requested timeframe and granularity:
+  • If user asked for 'weekly' or 'split into weekly', output MUST include week-by-week data (Week 1, Week 2, Week 3, Week 4).
+  • If user asked for rolling N-days (e.g. 15-day rolling, 7-day rolling), output MUST be for that exact rolling window.
+  • Maintain topic & domain context from conversation history (e.g. keep Renewals domain if previous question was about renewals).
+- For COMPLEX COMPARATIVE queries, format a clear side-by-side comparative table with columns for both periods/dimensions and variance/lift.
+- Keep KPIs concise (2-3 cards max).
+- Include 3-4 contextually relevant follow-up questions.`;
+
+    const pass2Body = {
+      contents: [
+        ...historyContents,
+        { role: 'user', parts: [{ text: `User Question: "${rawQuery}"` }] },
+        candidatePass1.content,
+        {
+          role: 'user',
+          parts: functionResponses
+        }
+      ],
+      systemInstruction: {
+        parts: [{ text: systemInstructionPass2 }]
+      },
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.2
+      }
+    };
+
+    const responsePass2 = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pass2Body)
+    });
+
+    if (responsePass2.ok) {
+      const dataPass2 = await responsePass2.json();
+      const rawTextPass2 = dataPass2?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      try {
+        const parsed = JSON.parse(rawTextPass2);
+        return {
+          domain: 'GEMINI_AI',
+          text: parsed.text || 'Analysis completed.',
+          kpis: parsed.kpis || null,
+          chart: parsed.chart || null,
+          table: parsed.table || null,
+          suggestedFollowups: parsed.suggestedFollowups || [
+            "Which platform has the highest conversion?",
+            "Compare Q1 vs Q2 performance"
+          ]
+        };
+      } catch (err) {
+        console.warn("Failed to parse Pass 2 JSON from Gemini response:", err, rawTextPass2);
+      }
+    }
+  }
+
+  // Fallback if no function call returned or for direct response
+  const rawTextPass1 = messagePartsPass1.map(p => p.text || '').join('\n');
   try {
-    const parsed = JSON.parse(rawText);
+    const parsed = JSON.parse(rawTextPass1);
     return {
       domain: 'GEMINI_AI',
-      text: parsed.text || 'Analysis completed.',
+      text: parsed.text || rawTextPass1,
       kpis: parsed.kpis || null,
       chart: parsed.chart || null,
       table: parsed.table || null,
-      suggestedFollowups: parsed.suggestedFollowups || [
-        "Which platform has the highest conversion?",
-        "Compare Q1 vs Q2 performance"
-      ]
+      suggestedFollowups: parsed.suggestedFollowups || ["Compare August vs July renewals platform wise", "Show funnel breakdown"]
     };
   } catch (err) {
-    console.warn("Failed to parse JSON from Gemini response, using fallback format", err, rawText);
     return {
       domain: 'GEMINI_AI',
-      text: rawText || "Here is the response from Gemini BI Engine.",
+      text: rawTextPass1 || "Here is the summary of your query analysis.",
       kpis: null,
       chart: null,
       table: null,
-      suggestedFollowups: ["What is the July renewal rate?", "Show funnel breakdown"]
+      suggestedFollowups: ["Compare August vs July renewals platform wise", "Show funnel breakdown"]
     };
   }
 }

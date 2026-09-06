@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { processConversationalQuery, processConversationalQueryAsync } from './utils/aiDataEngine';
 import { getStoredApiKey, setStoredApiKey } from './services/geminiService';
+import { getStoredLlamaConfig, setStoredLlamaConfig } from './services/llamaService';
+import { buildPlotlyConfig } from './utils/chartHelper';
 import Papa from 'papaparse';
 import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck } from 'lucide-react';
 import Plotly from 'plotly.js-dist-min';
@@ -11,6 +13,7 @@ import AdminPanel from './components/AdminPanel';
 import { isAdminEmail, isUserAuthorized, logTabPageView, logChatQuery } from './services/telemetryService';
 import { logoutUser } from './services/firebaseService';
 import { fetchDatasetCached, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
+import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from './components/RenewalVisuals';
 
 const Plot = createPlotlyComponent(Plotly);
 
@@ -187,6 +190,39 @@ function formatIndianCurrency(val) {
   }
 }
 
+function CleanDashboardLoader({ title = "Fetching realtime data...", subtitle = "Updating live platform telemetry & 4-week benchmark data" }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-6 w-full text-center animate-in fade-in duration-300">
+      {/* GPU-Accelerated Hardware Composited Dual Ring Spinner */}
+      <div className="relative mb-5 flex items-center justify-center">
+        {/* Soft Ambient Backlight Glow */}
+        <div className="absolute inset-0 rounded-full bg-amber-500/20 blur-xl animate-pulse" />
+        
+        {/* Outer Ring - Hardware Accelerated GPU Spin */}
+        <div className="h-14 w-14 rounded-full border-3 border-amber-500/20 border-t-amber-500 gpu-spin" />
+        
+        {/* Inner Counter-Pulse Icon Core */}
+        <div className="absolute h-7 w-7 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+          <div className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping opacity-80" />
+        </div>
+      </div>
+
+      {/* Clean Modern Typography */}
+      <h4 className="text-base font-bold text-warm-text dark:text-dark-text tracking-tight mb-1">
+        {title}
+      </h4>
+      <p className="text-xs font-semibold text-warm-muted dark:text-dark-muted tracking-wide max-w-sm">
+        {subtitle}
+      </p>
+
+      {/* Animated GPU Shimmer Progress Line */}
+      <div className="w-48 h-1 bg-warm-border/50 dark:bg-zinc-800 rounded-full overflow-hidden mt-4 relative">
+        <div className="absolute inset-y-0 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400 animate-loading-bar rounded-full" />
+      </div>
+    </div>
+  );
+}
+
 function AovMatrixTable({ aovData, isDark }) {
   const { plans, platforms, matrix } = aovData;
 
@@ -227,16 +263,16 @@ function AovMatrixTable({ aovData, isDark }) {
     <div className="mt-2">
       <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">ARPU by Plan & Platform</h3>
       <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-lg custom-scrollbar overflow-x-auto">
-        <table className="ledger-table text-sm text-left w-full">
-          <thead className="sticky top-0 z-20 bg-warm-tableBg dark:bg-[#1E293B]">
-            <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider">
-              <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] border-b border-warm-border dark:border-dark-border">Plan Category</th>
+        <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
+          <thead className="sticky top-0 z-30">
+            <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider">
+              <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text border-b border-r border-warm-border dark:border-dark-border sticky left-0 top-0 z-50">Plan Category</th>
               {platforms.map(col => (
-                <th key={col} className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] border-b border-warm-border dark:border-dark-border text-right">{col}</th>
+                <th key={col} className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] border-b border-warm-border dark:border-dark-border text-right">{col}</th>
               ))}
             </tr>
-            <tr className="period-total-row text-warm-totalText dark:text-dark-totalText font-bold bg-[#FEF3C7] dark:bg-[#1E293B]">
-              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+            <tr className="period-total-row text-warm-totalText dark:text-dark-totalText font-bold border-b border-warm-border dark:border-dark-border">
+              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
               {platforms.map(pl => {
                 const { rev, conv } = platformTotals[pl];
                 const arpu = conv > 0 ? rev / conv : 0;
@@ -255,7 +291,7 @@ function AovMatrixTable({ aovData, isDark }) {
                   key={p} 
                   className="border-b border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-warm-text dark:text-dark-text transition-colors"
                 >
-                  <td className="p-3 whitespace-nowrap font-bold">{p}</td>
+                  <td className="p-3 whitespace-nowrap font-bold sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">{p}</td>
                   {platforms.map(pl => {
                     const { rev, conv } = matrix[p][pl];
                     const aov = conv > 0 ? rev / conv : 0;
@@ -280,6 +316,14 @@ function AovMatrixTable({ aovData, isDark }) {
 }
 
 function GeoDistributionChart({ geoData, isDark }) {
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 640 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (!geoData || geoData.length === 0) {
     return (
       <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 mt-6 w-full">
@@ -336,28 +380,29 @@ function GeoDistributionChart({ geoData, isDark }) {
       [0.8, '#d97706'],
       [1.0, '#7c2d12']
     ],
-    showscale: true,
+    showscale: !isMobile,
     colorbar: {
-      title: { text: 'Revenue Heatmap', font: { size: 12, color: isDark ? '#d1d5db' : '#374151' } },
-      tickfont: { size: 10, color: isDark ? '#9ca3af' : '#6b7280' },
-      len: 0.8
+      title: { text: 'Revenue Heatmap', font: { size: 11, color: isDark ? '#d1d5db' : '#374151' } },
+      tickfont: { size: 9, color: isDark ? '#9ca3af' : '#6b7280' },
+      len: 0.75,
+      thickness: 10
     }
   }];
 
   return (
-    <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 mt-6 w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4">
+    <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3.5 sm:p-5 mt-6 w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 sm:mb-4">
         <div>
-          <h3 className="text-base font-bold text-warm-text dark:text-dark-text px-1">Geographic Revenue Distribution (World Map)</h3>
+          <h3 className="text-sm sm:text-base font-bold text-warm-text dark:text-dark-text px-1">Geographic Revenue Distribution (World Map)</h3>
           <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">Interactive Revenue Heatmap across Countries (Scaled for Global Visibility)</p>
         </div>
       </div>
-      <div className="w-full h-[450px] rounded-lg overflow-hidden border border-warm-border/50 dark:border-zinc-800">
+      <div className="w-full h-[280px] sm:h-[450px] rounded-lg overflow-hidden border border-warm-border/50 dark:border-zinc-800">
         <Plot
           data={mapData}
           layout={{
             autosize: true,
-            margin: { t: 10, r: 10, b: 10, l: 10 },
+            margin: isMobile ? { t: 0, r: 0, b: 0, l: 0 } : { t: 5, r: 5, b: 5, l: 5 },
             paper_bgcolor: 'transparent',
             plot_bgcolor: 'transparent',
             geo: {
@@ -366,9 +411,9 @@ function GeoDistributionChart({ geoData, isDark }) {
               coastlinecolor: isDark ? '#475569' : '#cbd5e1',
               projection: {
                 type: 'natural earth',
-                scale: 1.1
+                scale: isMobile ? 1.7 : 1.45
               },
-              center: { lon: 15, lat: 20 },
+              center: isMobile ? { lon: 25, lat: 15 } : { lon: 20, lat: 15 },
               bgcolor: 'transparent',
               showland: true,
               landcolor: isDark ? '#1e293b' : '#f1f5f9',
@@ -483,12 +528,80 @@ export function SubscriptionReport({ isDark }) {
   }, [datePreset, maxAvailableDate]);
 
   useEffect(() => {
+    function processParsedData(dataArray) {
+      if (!dataArray || !Array.isArray(dataArray)) return;
+      const processed = dataArray.map(row => {
+        const cleanRow = {};
+        Object.keys(row).forEach(key => {
+          cleanRow[key.trim()] = row[key];
+        });
+
+        let planCategory = 'UNKNOWN';
+        let geoRegion = 'UNKNOWN';
+        let countryName = 'UNKNOWN';
+        let channelName = 'UNKNOWN';
+
+        Object.keys(cleanRow).forEach(key => {
+          const k = key.toLowerCase();
+          if (k.includes('plan_category') || k.includes('plan_name') || k === 'plan') {
+            planCategory = String(cleanRow[key]).trim().toUpperCase();
+          }
+          if (k.includes('country_name') || k.includes('country') || k.includes('geo_region')) {
+            countryName = String(cleanRow[key]).trim();
+          }
+          if (k.includes('channel')) {
+            channelName = String(cleanRow[key]).trim();
+          }
+        });
+
+        const rev = parseFloat(cleanRow['revenue_above_rs_6_txn']) || 0.0;
+        const conv = parseInt(cleanRow['conversion'], 10) || 1;
+        const { dateStr, dateShort } = parseStrictDate(cleanRow['txn_date']);
+
+        const platformCode = String(cleanRow['platform'] || cleanRow['et_platform'] || '').trim().toLowerCase();
+        const platformDisplay = normalizePlatformName(platformCode);
+        const autoRenewVal = String(cleanRow['auto_renew'] || '').trim().toLowerCase() === 'true';
+
+        return {
+          ...cleanRow,
+          dateStr,
+          dateShort,
+          revenue: rev,
+          conversion: conv,
+          platformDisplay,
+          country_name: countryName || 'Unknown',
+          channel: channelName || 'Unknown',
+          user_txn_type: String(cleanRow['user_txn_type'] || '').trim().toLowerCase() || 'unknown',
+          plan_category: planCategory || 'UNKNOWN',
+          plan_tenure: getPlanTenureCategory(planCategory),
+          geo_region: countryName || geoRegion || 'UNKNOWN',
+          auto_renew: autoRenewVal
+        };
+      }).filter(row => row.dateStr);
+
+      setRawData(processed);
+      
+      const platforms = [...new Set(processed.map(r => r.platformDisplay))].sort();
+      const countries = [...new Set(processed.map(r => r.country_name))].sort();
+      const channels = [...new Set(processed.map(r => r.channel))].sort();
+      const plans = [...new Set(processed.map(r => r.plan_category))].sort();
+      const txns = [...new Set(processed.map(r => r.user_txn_type))].sort();
+
+      setSelectedPlatforms(platforms);
+      setSelectedCountries(countries);
+      setSelectedChannels(channels);
+      setSelectedPlans(plans);
+      setSelectedTxnTypes(txns);
+
+      setLoading(false);
+    }
+
     async function fetchData() {
-      setLoading(true);
+      if (!rawData || rawData.length === 0) setLoading(true);
       setError(null);
       try {
         const results = await fetchDatasetCached('subscription', DEFAULT_GSHEET_URL);
-        processParsedData(results.data);
+        if (results && results.data) processParsedData(results.data);
       } catch (err) {
         console.warn("Subscription report fetch error", err);
         setError("Failed to load subscription data.");
@@ -496,74 +609,16 @@ export function SubscriptionReport({ isDark }) {
       }
     }
 
-    function processParsedData(dataArray) {
-      const processed = dataArray.map(row => {
-            const cleanRow = {};
-            Object.keys(row).forEach(key => {
-              cleanRow[key.trim()] = row[key];
-            });
-
-            let planCategory = 'UNKNOWN';
-            let geoRegion = 'UNKNOWN';
-            let countryName = 'UNKNOWN';
-            let channelName = 'UNKNOWN';
-
-            Object.keys(cleanRow).forEach(key => {
-              const k = key.toLowerCase();
-              if (k.includes('plan_category') || k.includes('plan_name') || k === 'plan') {
-                planCategory = String(cleanRow[key]).trim().toUpperCase();
-              }
-              if (k.includes('country_name') || k.includes('country') || k.includes('geo_region')) {
-                countryName = String(cleanRow[key]).trim();
-              }
-              if (k.includes('channel')) {
-                channelName = String(cleanRow[key]).trim();
-              }
-            });
-
-            const rev = parseFloat(cleanRow['revenue_above_rs_6_txn']) || 0.0;
-            const conv = parseInt(cleanRow['conversion'], 10) || 1;
-            const { dateStr, dateShort } = parseStrictDate(cleanRow['txn_date']);
-
-            const platformCode = String(cleanRow['platform'] || cleanRow['et_platform'] || '').trim().toLowerCase();
-            const platformDisplay = normalizePlatformName(platformCode);
-            const autoRenewVal = String(cleanRow['auto_renew'] || '').trim().toLowerCase() === 'true';
-
-            return {
-              ...cleanRow,
-              dateStr,
-              dateShort,
-              revenue: rev,
-              conversion: conv,
-              platformDisplay,
-              country_name: countryName || 'Unknown',
-              channel: channelName || 'Unknown',
-              user_txn_type: String(cleanRow['user_txn_type'] || '').trim().toLowerCase() || 'unknown',
-              plan_category: planCategory || 'UNKNOWN',
-              plan_tenure: getPlanTenureCategory(planCategory),
-              geo_region: countryName || geoRegion || 'UNKNOWN',
-              auto_renew: autoRenewVal
-            };
-          }).filter(row => row.dateStr);
-
-          setRawData(processed);
-          
-          const platforms = [...new Set(processed.map(r => r.platformDisplay))].sort();
-          const countries = [...new Set(processed.map(r => r.country_name))].sort();
-          const channels = [...new Set(processed.map(r => r.channel))].sort();
-          const plans = [...new Set(processed.map(r => r.plan_category))].sort();
-          const txns = [...new Set(processed.map(r => r.user_txn_type))].sort();
-
-          setSelectedPlatforms(platforms);
-          setSelectedCountries(countries);
-          setSelectedChannels(channels);
-          setSelectedPlans(plans);
-          setSelectedTxnTypes(txns);
-
-          setLoading(false);
-    }
-
     fetchData();
+
+    const handleDatasetUpdated = (e) => {
+      if (e.detail && e.detail.key === 'subscription' && e.detail.data) {
+        console.log("⚡ [Subscription UI] Background live Google Sheet update received!");
+        processParsedData(e.detail.data);
+      }
+    };
+    window.addEventListener('dataset-updated', handleDatasetUpdated);
+    return () => window.removeEventListener('dataset-updated', handleDatasetUpdated);
   }, []);
 
   const { minDateLimit, maxDateLimit } = useMemo(() => {
@@ -773,7 +828,23 @@ export function SubscriptionReport({ isDark }) {
     });
 
     let categories = [...categorySet].sort();
-    if (field === 'plan_tenure') {
+    if (field === 'platformDisplay') {
+      const order = ['Main - Android', 'Main - IOS', 'Market - Android', 'Market - IOS', 'WAP', 'WEB'];
+      categories.sort((a, b) => {
+        const idxA = order.indexOf(a);
+        const idxB = order.indexOf(b);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      });
+    } else if (field === 'user_txn_type') {
+      const order = ['new', 'auto_renewal', 'manual_renewal', 'renewal', 'upgrade', 'expired', 'existing', 'unknown'];
+      categories.sort((a, b) => {
+        const cleanA = a.toLowerCase();
+        const cleanB = b.toLowerCase();
+        const idxA = order.findIndex(o => cleanA === o || cleanA.includes(o));
+        const idxB = order.findIndex(o => cleanB === o || cleanB.includes(o));
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      });
+    } else if (field === 'plan_tenure') {
       const order = ['< 1 Year', '1-3 Years', '> 3 Years'];
       categories.sort((a, b) => {
         const idxA = order.indexOf(a);
@@ -1010,9 +1081,8 @@ export function SubscriptionReport({ isDark }) {
 
   if (loading) {
     return (
-      <div className="flex h-64 w-full flex-col items-center justify-center text-warm-text dark:text-dark-text">
-        <Loader2 className="h-10 w-10 animate-spin text-amber-accent" />
-        <p className="mt-4 font-semibold tracking-wide">Loading Subscription Data...</p>
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm my-6 p-4">
+        <CleanDashboardLoader title="Loading Subscription Data..." subtitle="Fetching and aggregating subscription lifecycle metrics" />
       </div>
     );
   }
@@ -1029,26 +1099,26 @@ export function SubscriptionReport({ isDark }) {
   return (
     <div className="w-full animate-in fade-in duration-300">
       
-      {/* Date Range Selector Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">Subscription Performance Report</h2>
-          <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">{dateRangeStr}</p>
+      {/* Date Range Selector Bar (Header & Dropdown Inline for More Screen Real Estate) */}
+      <div className="flex flex-row items-center justify-between flex-wrap gap-2 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-base sm:text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">Subscription Performance Report</h2>
+          <span className="text-xs text-warm-muted dark:text-dark-muted font-medium hidden sm:inline">• {dateRangeStr}</span>
         </div>
 
-        <div className="flex items-center gap-2 self-end">
+        <div className="flex items-center gap-2">
           {datePreset === "Custom range" && (
-            <div className="flex items-center gap-2 mr-2">
-              <input type="date" value={startDate} min={minDateLimit} max={maxDateLimit} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-amber-accent" />
+            <div className="flex items-center gap-1.5 mr-1">
+              <input type="date" value={startDate} min={minDateLimit} max={maxDateLimit} onChange={(e) => setStartDate(e.target.value)} className="px-2 py-1 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-amber-accent" />
               <span className="text-xs text-warm-muted dark:text-dark-muted">to</span>
-              <input type="date" value={endDate} min={minDateLimit} max={maxDateLimit} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-amber-accent" />
+              <input type="date" value={endDate} min={minDateLimit} max={maxDateLimit} onChange={(e) => setEndDate(e.target.value)} className="px-2 py-1 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-amber-accent" />
             </div>
           )}
           <div className="relative">
             <select 
               value={datePreset} 
               onChange={(e) => setDatePreset(e.target.value)}
-              className="appearance-none bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-sm cursor-pointer"
+              className="appearance-none bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg pl-3 pr-7 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               <option value="Yesterday">Yesterday</option>
               <option value="Last 7 days">Last 7 days</option>
@@ -1067,7 +1137,7 @@ export function SubscriptionReport({ isDark }) {
       </div>
 
       {/* 6 Equal Width Symmetrical Filters Header */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-6 p-4 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm w-full">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 p-4 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm w-full">
         
         {/* 1. Platform Filter */}
         <div ref={platformRef} className="relative flex flex-col gap-1 w-full">
@@ -1196,39 +1266,39 @@ export function SubscriptionReport({ isDark }) {
       </div>
 
       {/* KPI Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+      <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
           <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Total Revenue</div>
-          <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.totalRev)}</div>
+          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.totalRev)}</div>
           <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
             Daily avg: <span className="font-bold text-amber-accent">{formatIndianCurrency(metrics.dailyAvgRev)}/day</span> <br />
-            <span className="text-[10px]">{dateRangeStr} ({metrics.numDays} days)</span>
+            <span className="text-[10px] hidden sm:inline">{dateRangeStr} ({metrics.numDays} days)</span>
           </div>
         </div>
 
-        <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Conversions (Excl. Auto-Renewal)</div>
-          <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{metrics.conversionsExclAuto.toLocaleString()}</div>
+        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+          <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Conversions</div>
+          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{metrics.conversionsExclAuto.toLocaleString()}</div>
           <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
             Daily avg: <span className="font-bold text-amber-accent">{metrics.dailyAvgConvExcl.toFixed(0)}/day</span> <br />
             <span>Total conversions: {metrics.totalConversions.toLocaleString()}</span>
           </div>
         </div>
 
-        <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
           <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Avg Revenue / Txn</div>
-          <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.avgRevPerTxn)}</div>
+          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.avgRevPerTxn)}</div>
           <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
             Daily avg volume: <span className="font-bold text-amber-accent">{metrics.dailyAvgTxns.toFixed(0)} txns/day</span> <br />
             <span>Across {metrics.totalTxns.toLocaleString()} transactions</span>
           </div>
         </div>
 
-        <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
           <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Recurring Rate (New)</div>
-          <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{(metrics.recurringRate * 100).toFixed(1)}%</div>
+          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{(metrics.recurringRate * 100).toFixed(1)}%</div>
           <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
-            <span className="font-bold text-amber-accent">{metrics.recurringTrueCount} recurring</span> out of {metrics.nonAutoTxnCount} non-auto_renewal txns
+            <span className="font-bold text-amber-accent">{metrics.recurringTrueCount} recurring transactions</span>
           </div>
         </div>
       </section>
@@ -1327,55 +1397,173 @@ export function SubscriptionReport({ isDark }) {
         )}
       </section>
 
-      {/* Tables & Visualizations in requested exact order:
-          1. Platform-wise Revenue & Conversions
-          2. User-type-wise Revenue & Conversions
-          3. World Map (100% width)
-          4. Plan-wise Revenue & Conversions
-          5. ARPU by Plan & Platform Table
+      {/* Tables & Visualizations in 2-Column Split:
+          1. Platform-wise Table (Left) + Platform Revenue Share Trend Stacked Area (Right)
+          2. User-type-wise Table (Left) + User Type Revenue Share Trend Stacked Area (Right)
+          3. Geographical Chart (100% full width, untouched)
+          4. Channel-wise Table (Left) + Channel Revenue & Conversions Stacked Column (Right)
+          5. Plan Duration Tenure Table (Left) + Plan Duration Tenure Stacked Column (Right)
+          6. Plan-wise Table (Left) + Plan Revenue Dominance Treemap (Right)
       */}
-      <section className="flex flex-col gap-6">
-        <PivotTable 
-          pivotData={platformPivot} 
-          title="Platform-wise Revenue & Conversions"
-          metricMode={tableMetricMode}
-          isDark={isDark}
-        />
-        <PivotTable 
-          pivotData={userTypePivot} 
-          title="User-type-wise Revenue & Conversions"
-          metricMode={tableMetricMode}
-          isDark={isDark}
-        />
+      <section className="flex flex-col gap-8">
+        {/* Row 1: Platform Table & Stacked Area Chart */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+          <div className="xl:col-span-6 overflow-hidden">
+            <PivotTable 
+              pivotData={platformPivot} 
+              title="Platform-wise Revenue & Conversions"
+              metricMode={tableMetricMode}
+              isDark={isDark}
+            />
+          </div>
+          <div className="xl:col-span-6">
+            <StackedAreaTrendChart
+              pivotData={platformPivot}
+              title="Platform-wise Revenue & Conversions"
+              colorMap={{
+                'Main - Android': '#C2410C', // Deep burnt ember red-orange (Bottom layer)
+                'main - android': '#C2410C',
+                'Main - IOS': '#EA580C',     // Warm fiery ember orange
+                'Main - iOS': '#EA580C',
+                'main - ios': '#EA580C',
+                'Market - Android': '#9A3412', // Rich burnt chestnut / russet brown
+                'market - android': '#9A3412',
+                'Market - IOS': '#D97706',   // Golden amber ochre
+                'Market - iOS': '#D97706',
+                'market - ios': '#D97706',
+                'WAP': '#F59E0B',            // Vibrant golden yellow / marigold
+                'wap': '#F59E0B',
+                'MWeb': '#F59E0B',
+                'mweb': '#F59E0B',
+                'WEB': '#FEF08A',            // Soft luminous pale ember yellow glow (Top layer)
+                'Web': '#FEF08A',
+                'web': '#FEF08A'
+              }}
+              isDark={isDark}
+            />
+          </div>
+        </div>
+
+        {/* Row 2: User-type Table & Stacked Area Chart */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+          <div className="xl:col-span-6 overflow-hidden">
+            <PivotTable 
+              pivotData={userTypePivot} 
+              title="User-type-wise Revenue & Conversions"
+              metricMode={tableMetricMode}
+              isDark={isDark}
+            />
+          </div>
+          <div className="xl:col-span-6">
+            <StackedAreaTrendChart
+              pivotData={userTypePivot}
+              title="User-type-wise Revenue & Conversions"
+              colorMap={{
+                'new': '#C2410C',            // Deep burnt ember red-orange (Bottom layer)
+                'New': '#C2410C',
+                'auto_renewal': '#EA580C',    // Warm fiery ember orange
+                'Auto Renewal': '#EA580C',
+                'auto_renew': '#EA580C',
+                'Auto Renew': '#EA580C',
+                'renewal': '#EA580C',        // Warm fiery ember orange
+                'Renewal': '#EA580C',
+                'manual_renewal': '#9A3412', // Rich burnt chestnut / russet brown
+                'Manual Renewal': '#9A3412',
+                'upgrade': '#D97706',        // Golden amber ochre
+                'Upgrade': '#D97706',
+                'existing': '#F59E0B',       // Vibrant golden yellow / marigold
+                'Existing': '#F59E0B',
+                'expired': '#FEF08A',        // Soft luminous pale ember yellow glow (Top layer)
+                'Expired': '#FEF08A',
+                'unknown': '#FEF3C7',
+                'Unknown': '#FEF3C7'
+              }}
+              isDark={isDark}
+            />
+          </div>
+        </div>
         
-        {/* World Map below User-type table */}
+        {/* Geographical Chart (Full width, untouched) */}
         <GeoDistributionChart 
           geoData={geoData} 
           isDark={isDark}
         />
 
-        {/* Channel-wise Revenue & Conversions Table */}
-        <PivotTable 
-          pivotData={channelPivot} 
-          title="Channel-wise Revenue & Conversions"
-          metricMode={tableMetricMode}
-          isDark={isDark}
-        />
+        {/* Row 3: Channel Table & Stacked Column Chart */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+          <div className="xl:col-span-6 overflow-hidden">
+            <PivotTable 
+              pivotData={channelPivot} 
+              title="Channel-wise Revenue & Conversions"
+              metricMode={tableMetricMode}
+              isDark={isDark}
+            />
+          </div>
+          <div className="xl:col-span-6">
+            <StackedColumnTrendChart
+              pivotData={channelPivot}
+              title="Channel-wise Revenue & Conversions"
+              colorMap={{
+                'Google Search': '#059669',
+                'Meta Ads': '#EA580C',
+                'Direct': '#D97706',
+                'Organic': '#10B981',
+                'Organic Search': '#10B981',
+                'Affiliate': '#B45309',
+                'Partner': '#78350F',
+                'Email': '#F59E0B',
+                'Social': '#FBBF24',
+                'Other': '#854D0E'
+              }}
+              initialMetric={tableMetricMode}
+              isDark={isDark}
+            />
+          </div>
+        </div>
 
-        {/* Plan Duration Tenure-wise Revenue & Conversions Table */}
-        <PivotTable 
-          pivotData={tenurePivot} 
-          title="Plan Duration Tenure-wise Revenue & Conversions"
-          metricMode={tableMetricMode}
-          isDark={isDark}
-        />
+        {/* Row 4: Plan Duration Tenure Table & Stacked Column Chart */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+          <div className="xl:col-span-6 overflow-hidden">
+            <PivotTable 
+              pivotData={tenurePivot} 
+              title="Plan Duration Tenure-wise Revenue & Conversions"
+              metricMode={tableMetricMode}
+              isDark={isDark}
+            />
+          </div>
+          <div className="xl:col-span-6">
+            <StackedColumnTrendChart
+              pivotData={tenurePivot}
+              title="Plan Duration Tenure-wise Revenue & Conversions"
+              colorMap={{
+                '< 1 Year': '#FACC15',
+                '1-3 Years': '#F59E0B',
+                '> 3 Years': '#9A3412'
+              }}
+              initialMetric={tableMetricMode}
+              isDark={isDark}
+            />
+          </div>
+        </div>
 
-        <PivotTable 
-          pivotData={planPivot} 
-          title="Plan-wise Revenue & Conversions"
-          metricMode={tableMetricMode}
-          isDark={isDark}
-        />
+        {/* Row 5: Plan Table & Plan Revenue Dominance Treemap */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
+          <div className="xl:col-span-6 overflow-hidden">
+            <PivotTable 
+              pivotData={planPivot} 
+              title="Plan-wise Revenue & Conversions"
+              metricMode={tableMetricMode}
+              isDark={isDark}
+            />
+          </div>
+          <div className="xl:col-span-6">
+            <PlanTreemapChart
+              pivotData={planPivot}
+              title="Plan-wise Revenue & Conversions"
+              isDark={isDark}
+            />
+          </div>
+        </div>
       </section>
     </div>
   );
@@ -1400,9 +1588,13 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
 
   if (!categories || categories.length === 0) {
     return (
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5">
-        <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-4">{title}</h3>
-        <p className="text-sm text-warm-muted dark:text-dark-muted">No data available for the selection.</p>
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+          <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        </div>
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5 h-[480px] flex items-center justify-center">
+          <p className="text-sm text-warm-muted dark:text-dark-muted">No data available for the selection.</p>
+        </div>
       </div>
     );
   }
@@ -1424,20 +1616,22 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
   }
 
   return (
-    <div>
-      <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">{title}</h3>
-      <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[520px] shadow-sm">
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+        <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+      </div>
+      <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto overflow-y-auto h-[480px] shadow-sm">
         <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-          <thead className="sticky top-0 z-20 bg-warm-tableBg dark:bg-[#1E293B]">
-            <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-              <th className="p-3 bg-warm-tableBg dark:bg-[#1E293B] whitespace-nowrap">Date</th>
+          <thead className="sticky top-0 z-30">
+            <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+              <th className="p-3 bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text whitespace-nowrap sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border">Date</th>
               {categories.map(cat => (
-                <th key={cat} className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] text-right">{cat}</th>
+                <th key={cat} className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-right">{cat}</th>
               ))}
-              <th className="p-3 bg-warm-tableBg dark:bg-[#1E293B] text-right whitespace-nowrap">Total</th>
+              <th className="p-3 bg-white dark:bg-[#1E293B] text-right whitespace-nowrap">Total</th>
             </tr>
-            <tr className="period-total-row font-bold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-accent shadow-sm">
-              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+            <tr className="period-total-row font-bold text-amber-accent border-b border-warm-border dark:border-dark-border">
+              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
               {categories.map(cat => (
                 <td key={cat} className="p-3 text-right bg-[#FEF3C7] dark:bg-[#1E293B] font-extrabold text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>
                   {getMetricCell(categoryGrandTotals[cat].rev, categoryGrandTotals[cat].conv)}
@@ -1454,7 +1648,7 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
                 key={row.dateStr} 
                 className="border-b border-warm-border/50 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5 font-medium text-warm-text dark:text-dark-text transition-colors"
               >
-                <td className="p-3 text-warm-muted dark:text-dark-muted whitespace-nowrap font-semibold">{row.dateStr}</td>
+                <td className="p-3 text-warm-muted dark:text-dark-muted whitespace-nowrap font-semibold sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">{row.dateStr}</td>
                 {categories.map(cat => {
                   const cell = row.totals[cat];
                   const r = cell ? cell.rev : 0;
@@ -1485,9 +1679,369 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
     </div>
   );
 }
+ 
+function StackedAreaTrendChart({ pivotData, title, colorMap, defaultColors, isDark }) {
+  const [viewMode, setViewMode] = useState('percent'); // 'percent' | 'value'
+  const { categories, dailyRows } = pivotData;
 
+  const chartData = useMemo(() => {
+    if (!dailyRows || !categories || dailyRows.length === 0) return [];
+    const chronoRows = [...dailyRows].sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+    const dates = chronoRows.map(r => {
+      const parts = r.dateStr.split('-');
+      if (parts.length === 3) {
+        const mNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const m = parseInt(parts[1], 10);
+        const d = parseInt(parts[2], 10);
+        return `${mNames[m-1]} ${d}`;
+      }
+      return r.dateStr;
+    });
 
+    const colors = defaultColors || ['#C2410C', '#EA580C', '#9A3412', '#D97706', '#F59E0B', '#FEF08A', '#FBBF24', '#78350F'];
 
+    return categories.map((cat, idx) => {
+      const color = colorMap?.[cat] || colorMap?.[cat.toLowerCase()] || colors[idx % colors.length];
+      const revs = chronoRows.map(r => (r.totals[cat] ? r.totals[cat].rev : 0));
+
+      return {
+        x: dates,
+        y: revs,
+        name: cat,
+        stackgroup: 'one',
+        groupnorm: viewMode === 'percent' ? 'percent' : undefined,
+        mode: 'lines',
+        line: { color, width: 1.5, shape: 'spline' },
+        fillcolor: color,
+        hovertemplate: viewMode === 'percent'
+          ? `<b>${cat}</b><br>%{x}<br>Share: %{y:.1f}%<extra></extra>`
+          : `<b>${cat}</b><br>%{x}<br>Revenue: ₹%{y:,.0f}<extra></extra>`
+      };
+    });
+  }, [dailyRows, categories, viewMode, colorMap, defaultColors]);
+
+  if (!categories || categories.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+          <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        </div>
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5 h-[480px] flex items-center justify-center text-center">
+          <p className="text-xs text-warm-muted dark:text-dark-muted">No data available to display trend.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+        <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0">
+          <button
+            onClick={() => setViewMode('percent')}
+            className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
+              viewMode === 'percent'
+                ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
+            }`}
+          >
+            % Share
+          </button>
+          <button
+            onClick={() => setViewMode('value')}
+            className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
+              viewMode === 'value'
+                ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
+            }`}
+          >
+            ₹ Value
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[480px]">
+        <div className="w-full h-full min-h-0">
+          <Plot
+            data={chartData}
+            layout={{
+              autosize: true,
+              margin: { l: 45, r: 20, t: 15, b: 70 },
+              paper_bgcolor: 'transparent',
+              plot_bgcolor: 'transparent',
+              xaxis: {
+                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 9, weight: 'bold' },
+                tickangle: -90,
+                showgrid: false,
+                zeroline: false
+              },
+              yaxis: {
+                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10, weight: 'bold' },
+                gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
+                ticksuffix: viewMode === 'percent' ? '%' : '',
+                tickprefix: viewMode === 'value' ? '₹' : '',
+                range: viewMode === 'percent' ? [0, 100] : undefined
+              },
+              legend: {
+                orientation: 'h',
+                traceorder: 'reversed',
+                y: -0.28,
+                x: 0,
+                font: { color: isDark ? '#94A3B8' : '#64748B', size: 10 }
+              },
+              hovermode: 'x unified'
+            }}
+            config={{ responsive: true, displayModeBar: false }}
+            style={{ width: '100%', height: '100%' }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StackedColumnTrendChart({ pivotData, title, colorMap, defaultColors, isDark, initialMetric = "Revenue (₹)" }) {
+  const [metricMode, setMetricMode] = useState(initialMetric);
+  const { categories, dailyRows } = pivotData;
+
+  const chartData = useMemo(() => {
+    if (!dailyRows || !categories || dailyRows.length === 0) return [];
+    const chronoRows = [...dailyRows].sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+    const dates = chronoRows.map(r => {
+      const parts = r.dateStr.split('-');
+      if (parts.length === 3) {
+        const mNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const m = parseInt(parts[1], 10);
+        const d = parseInt(parts[2], 10);
+        return `${mNames[m-1]} ${d}`;
+      }
+      return r.dateStr;
+    });
+
+    const colors = defaultColors || ['#059669', '#D97706', '#EA580C', '#B45309', '#F59E0B', '#10B981', '#78350F', '#854D0E'];
+
+    return categories.map((cat, idx) => {
+      const color = colorMap?.[cat] || colors[idx % colors.length];
+      const vals = chronoRows.map(r => {
+        const cell = r.totals[cat];
+        if (!cell) return 0;
+        return metricMode.includes('Conversion') ? cell.conv : cell.rev;
+      });
+
+      return {
+        x: dates,
+        y: vals,
+        name: cat,
+        type: 'bar',
+        marker: { color },
+        hovertemplate: metricMode.includes('Conversion')
+          ? `<b>${cat}</b><br>%{x}<br>Conversions: %{y:,.0f}<extra></extra>`
+          : `<b>${cat}</b><br>%{x}<br>Revenue: ₹%{y:,.0f}<extra></extra>`
+      };
+    });
+  }, [dailyRows, categories, metricMode, colorMap, defaultColors]);
+
+  if (!categories || categories.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+          <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        </div>
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5 h-[480px] flex items-center justify-center text-center">
+          <p className="text-xs text-warm-muted dark:text-dark-muted">No data available to display chart.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+        <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0">
+          <button
+            onClick={() => setMetricMode("Revenue (₹)")}
+            className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
+              !metricMode.includes('Conversion')
+                ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
+            }`}
+          >
+            Revenue (₹)
+          </button>
+          <button
+            onClick={() => setMetricMode("Conversions (#)")}
+            className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
+              metricMode.includes('Conversion')
+                ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
+            }`}
+          >
+            Conversions (#)
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[480px]">
+        <div className="w-full h-full min-h-0">
+          <Plot
+            data={chartData}
+            layout={{
+              barmode: 'stack',
+              autosize: true,
+              margin: { l: 45, r: 20, t: 15, b: 65 },
+              paper_bgcolor: 'transparent',
+              plot_bgcolor: 'transparent',
+              xaxis: {
+                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10, weight: 'bold' },
+                showgrid: false
+              },
+              yaxis: {
+                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10, weight: 'bold' },
+                gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
+                tickprefix: !metricMode.includes('Conversion') ? '₹' : ''
+              },
+              legend: {
+                orientation: 'h',
+                y: -0.24,
+                x: 0,
+                font: { color: isDark ? '#94A3B8' : '#64748B', size: 10 }
+              },
+              hovermode: 'x unified'
+            }}
+            config={{ responsive: true, displayModeBar: false }}
+            style={{ width: '100%', height: '100%' }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions", isDark }) {
+  const { categoryGrandTotals, finalGrandTotalRev } = pivotData;
+
+  const treemapItems = useMemo(() => {
+    if (!categoryGrandTotals || finalGrandTotalRev <= 0) return null;
+    const sorted = Object.entries(categoryGrandTotals)
+      .map(([name, totals]) => ({
+        name,
+        rev: totals.rev || 0,
+        conv: totals.conv || 0
+      }))
+      .filter(item => item.rev > 0)
+      .sort((a, b) => b.rev - a.rev);
+
+    const labels = sorted.map(s => s.name);
+    const parents = sorted.map(() => "");
+    const values = sorted.map(s => s.rev);
+    const text = sorted.map(s => {
+      const pct = ((s.rev / finalGrandTotalRev) * 100).toFixed(0);
+      return `<b>${s.name}</b><br><br><span style="font-size:18px;font-weight:900;">${formatIndianCurrency1Dec(s.rev)}</span><br><span style="font-size:13px;font-weight:700;">${pct}%</span>`;
+    });
+
+    const warmColors = [
+      '#92400E',
+      '#B45309',
+      '#D97706',
+      '#F59E0B',
+      '#FBBF24',
+      '#FCD34D',
+      '#FDE68A',
+      '#FEF3C7'
+    ];
+
+    return { labels, parents, values, text, warmColors, total: finalGrandTotalRev };
+  }, [categoryGrandTotals, finalGrandTotalRev]);
+
+  if (!treemapItems || treemapItems.labels.length === 0) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+          <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        </div>
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5 h-[480px] flex items-center justify-center text-center">
+          <p className="text-xs text-warm-muted dark:text-dark-muted">No plan revenue data available.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
+        <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        <div className="flex items-center gap-1.5 text-xs bg-warm-tableBg dark:bg-zinc-800 px-2.5 py-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0">
+          <span className="text-[10px] uppercase font-bold text-warm-muted dark:text-dark-muted">Total Rev:</span>
+          <span className="text-xs font-black text-amber-accent">{formatIndianCurrency1Dec(treemapItems.total)}</span>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[480px]">
+        <div className="w-full h-full min-h-0 rounded-lg overflow-hidden border border-warm-border/50 dark:border-zinc-800">
+          <Plot
+            data={[{
+              type: 'treemap',
+              labels: treemapItems.labels,
+              parents: treemapItems.parents,
+              values: treemapItems.values,
+              text: treemapItems.text,
+              textinfo: 'text',
+              textposition: 'middle center',
+              hoverinfo: 'label+value+percent root',
+              marker: {
+                colors: treemapItems.warmColors,
+                line: { width: 2, color: isDark ? '#1E293B' : '#FFFFFF' }
+              }
+            }]}
+            layout={{
+              autosize: true,
+              margin: { l: 4, r: 4, t: 4, b: 4 },
+              paper_bgcolor: 'transparent',
+              plot_bgcolor: 'transparent'
+            }}
+            config={{ responsive: true, displayModeBar: false }}
+            style={{ width: '100%', height: '100%' }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Helper to group dates by Monday-to-Sunday week
+function getWeekKeyAndLabel(dateStr) {
+  if (!dateStr || !dateStr.includes('-')) return { key: dateStr || '', label: dateStr || '', labelShort: dateStr || '' };
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return { key: dateStr, label: dateStr, labelShort: dateStr };
+  
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10) - 1;
+  const d = parseInt(parts[2], 10);
+  const dt = new Date(y, m, d);
+  if (isNaN(dt.getTime())) return { key: dateStr, label: dateStr, labelShort: dateStr };
+  
+  // Day of week: 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const day = dt.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const mon = new Date(dt);
+  mon.setDate(dt.getDate() + diffToMon);
+  
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  
+  const monY = mon.getFullYear();
+  const monM = String(mon.getMonth() + 1).padStart(2, '0');
+  const monD = String(mon.getDate()).padStart(2, '0');
+  const key = `${monY}-${monM}-${monD}`;
+  
+  const mShort = mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const sShort = sun.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const labelShort = `${mShort} - ${sShort}`;
+  
+  return { key, label: key, labelShort };
+}
 
 function RenewalsAndRecurring({ isDark }) {
   // ----------------------------------------------------
@@ -1501,6 +2055,7 @@ function RenewalsAndRecurring({ isDark }) {
   const [renStartDate, setRenStartDate] = useState("");
   const [renEndDate, setRenEndDate] = useState("");
   const [renViewLevel, setRenViewLevel] = useState("Day");
+  const [renTrendMetric, setRenTrendMetric] = useState("rate"); // 'rate' | 'due' | 'renewed' | 'combined'
 
   const [renComparePlatforms, setRenComparePlatforms] = useState([]);
   const [renComparePlans, setRenComparePlans] = useState([]);
@@ -1510,41 +2065,74 @@ function RenewalsAndRecurring({ isDark }) {
   const [expandedRenPlatforms, setExpandedRenPlatforms] = useState({});
   const [expandedRenPlans, setExpandedRenPlans] = useState({});
 
+  const renPlatDropdownRef = useRef(null);
+  const renPlanDropdownRef = useRef(null);
+  const recTeamDropdownRef = useRef(null);
+  const recPlatDropdownRef = useRef(null);
+  const recPlanDropdownRef = useRef(null);
+
   useEffect(() => {
+    function handleClickOutside(event) {
+      if (renPlatDropdownRef.current && !renPlatDropdownRef.current.contains(event.target)) {
+        setShowRenPlatDropdown(false);
+      }
+      if (renPlanDropdownRef.current && !renPlanDropdownRef.current.contains(event.target)) {
+        setShowRenPlanDropdown(false);
+      }
+      if (recTeamDropdownRef.current && !recTeamDropdownRef.current.contains(event.target)) {
+        setShowRecTeamDropdown(false);
+      }
+      if (recPlatDropdownRef.current && !recPlatDropdownRef.current.contains(event.target)) {
+        setShowRecPlatDropdown(false);
+      }
+      if (recPlanDropdownRef.current && !recPlanDropdownRef.current.contains(event.target)) {
+        setShowRecPlanDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    function processRenewals(dataArray) {
+      if (!dataArray || !Array.isArray(dataArray)) return;
+      const processed = dataArray.map(row => {
+        const cleanRow = {};
+        Object.keys(row).forEach(k => cleanRow[k.trim()] = row[k]);
+        
+        const dParts = String(cleanRow['renew_date'] || '').split('/');
+        let dateStr = '';
+        if (dParts.length === 3) {
+          const y = dParts[2];
+          const m = dParts[0].padStart(2, '0');
+          const d = dParts[1].padStart(2, '0');
+          dateStr = `${y}-${m}-${d}`;
+        }
+
+        const platformCode = String(cleanRow['platform'] || '').trim();
+        const platformDisplay = normalizePlatformName(platformCode);
+
+        return {
+          renew_month: String(cleanRow['renew_month'] || '').trim(),
+          renew_date: dateStr,
+          dateShort: dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '',
+          platform: platformDisplay,
+          plan_category: String(cleanRow['plan_category'] || 'UNKNOWN').trim().toUpperCase(),
+          renewal_due: parseInt(cleanRow['renewal_due'], 10) || 0,
+          renewed: parseInt(cleanRow['renewed'], 10) || 0
+        };
+      }).filter(r => r.renew_month || r.renew_date);
+
+      setRenewalsData(processed);
+      setRenewalsLoading(false);
+    }
+
     async function fetchRenewals() {
-      setRenewalsLoading(true);
+      if (!renewalsData || renewalsData.length === 0) setRenewalsLoading(true);
       setRenewalsError(null);
       try {
         const results = await fetchDatasetCached('renewals', DATASET_URLS.renewals);
-        const processed = results.data.map(row => {
-          const cleanRow = {};
-          Object.keys(row).forEach(k => cleanRow[k.trim()] = row[k]);
-          
-          const dParts = String(cleanRow['renew_date'] || '').split('/');
-          let dateStr = '';
-          if (dParts.length === 3) {
-            const y = dParts[2];
-            const m = dParts[0].padStart(2, '0');
-            const d = dParts[1].padStart(2, '0');
-            dateStr = `${y}-${m}-${d}`;
-          }
-
-          const platformCode = String(cleanRow['platform'] || '').trim();
-          const platformDisplay = normalizePlatformName(platformCode);
-
-          return {
-            renew_month: String(cleanRow['renew_month'] || '').trim(),
-            renew_date: dateStr,
-            dateShort: dateStr ? new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) : '',
-            platform: platformDisplay,
-            plan_category: String(cleanRow['plan_category'] || 'UNKNOWN').trim().toUpperCase(),
-            renewal_due: parseInt(cleanRow['renewal_due'], 10) || 0,
-            renewed: parseInt(cleanRow['renewed'], 10) || 0
-          };
-        }).filter(r => r.renew_month || r.renew_date);
-
-        setRenewalsData(processed);
-        setRenewalsLoading(false);
+        if (results && results.data) processRenewals(results.data);
       } catch (err) {
         console.error("Error fetching renewals:", err);
         setRenewalsError("Could not fetch renewal sheet data.");
@@ -1552,6 +2140,15 @@ function RenewalsAndRecurring({ isDark }) {
       }
     }
     fetchRenewals();
+
+    const handleDatasetUpdated = (e) => {
+      if (e.detail && e.detail.key === 'renewals' && e.detail.data) {
+        console.log("⚡ [Renewals UI] Background live Google Sheet update received!");
+        processRenewals(e.detail.data);
+      }
+    };
+    window.addEventListener('dataset-updated', handleDatasetUpdated);
+    return () => window.removeEventListener('dataset-updated', handleDatasetUpdated);
   }, []);
 
   useEffect(() => {
@@ -1606,21 +2203,41 @@ function RenewalsAndRecurring({ isDark }) {
   const renTrendData = useMemo(() => {
     const grouped = {};
     filteredRenewalsData.forEach(r => {
-      const key = renViewLevel === "Day" ? (r.renew_date || r.renew_month) : r.renew_month;
+      let key = '';
+      let labelShort = '';
+      if (renViewLevel === "Day") {
+        key = r.renew_date || r.renew_month;
+      } else if (renViewLevel === "Week") {
+        if (r.renew_date) {
+          const wInfo = getWeekKeyAndLabel(r.renew_date);
+          key = wInfo.key;
+          labelShort = wInfo.labelShort;
+        } else {
+          key = r.renew_month;
+        }
+      } else {
+        key = r.renew_month;
+      }
       if (!key) return;
-      if (!grouped[key]) grouped[key] = { label: key, due: 0, renewed: 0 };
+      if (!grouped[key]) grouped[key] = { label: key, labelShort: labelShort || key, due: 0, renewed: 0 };
       grouped[key].due += r.renewal_due;
       grouped[key].renewed += r.renewed;
     });
 
     return Object.values(grouped)
       .map(g => {
-        let labelShort = g.label;
+        let labelShort = g.labelShort;
         if (renViewLevel === "Day" && g.label && g.label.includes("-")) {
           const parts = g.label.split("-");
           if (parts.length === 3) {
             const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
             labelShort = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          }
+        } else if (renViewLevel === "Month" && g.label && g.label.includes("-")) {
+          const parts = g.label.split("-");
+          if (parts.length >= 2) {
+            const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1);
+            labelShort = d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
           }
         }
         return {
@@ -1740,37 +2357,106 @@ function RenewalsAndRecurring({ isDark }) {
     const dateKeys = renTrendData.map(d => d.label);
     const dateLabels = renTrendData.map(d => d.labelShort);
 
-    const traces = [
-      {
-        x: dateLabels,
-        y: renTrendData.map(d => d.rate),
-        type: 'scatter',
-        mode: 'lines+markers+text',
-        name: 'Overall Renewal Rate',
-        text: renTrendData.map(d => `${d.rate.toFixed(1)}%`),
-        textposition: 'top center',
-        textfont: { size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
-        line: { color: '#f59e0b', width: 3, shape: 'spline' },
-        marker: { size: 6, color: '#f59e0b' },
-        fill: 'tozeroy',
-        fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
-        hovertemplate: "<b>Overall</b><br>%{x}<br>Renewal Rate: <b>%{y:.2f}%</b><extra></extra>>"
-      }
-    ];
+    const getRowKey = (r) => {
+      if (renViewLevel === "Day") return r.renew_date || r.renew_month;
+      if (renViewLevel === "Week") return r.renew_date ? getWeekKeyAndLabel(r.renew_date).key : r.renew_month;
+      return r.renew_month;
+    };
+
+    if (renTrendMetric === "combined") {
+      const traces = [
+        {
+          x: dateLabels,
+          y: renTrendData.map(d => d.due),
+          type: 'scatter',
+          mode: 'lines+markers+text',
+          name: 'Renewal Due',
+          text: renTrendData.map(d => d.due.toLocaleString()),
+          textposition: 'top center',
+          cliponaxis: false,
+          textfont: { size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
+          line: { color: '#f59e0b', width: 2.5, shape: 'spline' },
+          marker: { size: 6, color: '#f59e0b' },
+          fill: 'tozeroy',
+          fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+          hovertemplate: "<b>Renewal Due</b><br>%{x}<br>Due: <b>%{y:,.0f}</b><extra></extra>"
+        },
+        {
+          x: dateLabels,
+          y: renTrendData.map(d => d.renewed),
+          type: 'scatter',
+          mode: 'lines+markers+text',
+          name: 'Renewed',
+          text: renTrendData.map(d => d.renewed.toLocaleString()),
+          textposition: 'top center',
+          cliponaxis: false,
+          textfont: { size: 10, color: '#10b981', weight: 'bold' },
+          line: { color: '#10b981', width: 2.5, shape: 'spline' },
+          marker: { size: 6, color: '#10b981' },
+          hovertemplate: "<b>Renewed</b><br>%{x}<br>Renewed: <b>%{y:,.0f}</b><extra></extra>"
+        }
+      ];
+      return traces;
+    }
 
     const COMPARISON_COLORS = ['#3B82F6', '#10B981', '#EC4899', '#8B5CF6', '#F97316', '#06B6D4', '#EAB308', '#6366F1'];
     let colorIdx = 0;
 
+    let mainY = [];
+    let mainName = '';
+    let mainText = [];
+    let mainColor = '#f59e0b';
+    let hoverLabel = '';
+
+    if (renTrendMetric === "due") {
+      mainY = renTrendData.map(d => d.due);
+      mainName = 'Overall Renewal Due';
+      mainText = renTrendData.map(d => d.due.toLocaleString());
+      hoverLabel = 'Renewal Due';
+    } else if (renTrendMetric === "renewed") {
+      mainY = renTrendData.map(d => d.renewed);
+      mainName = 'Overall Renewed';
+      mainText = renTrendData.map(d => d.renewed.toLocaleString());
+      mainColor = '#10B981';
+      hoverLabel = 'Renewed';
+    } else {
+      mainY = renTrendData.map(d => d.rate);
+      mainName = 'Overall Renewal Rate';
+      mainText = renTrendData.map(d => `${d.rate.toFixed(1)}%`);
+      hoverLabel = 'Renewal Rate';
+    }
+
+    const traces = [
+      {
+        x: dateLabels,
+        y: mainY,
+        type: 'scatter',
+        mode: 'lines+markers+text',
+        name: mainName,
+        text: mainText,
+        textposition: 'top center',
+        cliponaxis: false,
+        textfont: { size: 10, color: mainColor, weight: 'bold' },
+        line: { color: mainColor, width: 3, shape: 'spline' },
+        marker: { size: 6, color: mainColor },
+        fill: 'tozeroy',
+        fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+        hovertemplate: `<b>Overall</b><br>%{x}<br>${hoverLabel}: <b>${renTrendMetric === 'rate' ? '%{y:.2f}%' : '%{y:,.0f}'}</b><extra></extra>`
+      }
+    ];
+
     renComparePlatforms.forEach(plat => {
-      const platRates = dateKeys.map(k => {
+      const platVals = dateKeys.map(k => {
         let due = 0, ren = 0;
         filteredRenewalsData.forEach(r => {
-          const rKey = renViewLevel === "Day" ? (r.renew_date || r.renew_month) : r.renew_month;
+          const rKey = getRowKey(r);
           if (rKey === k && r.platform === plat) {
             due += r.renewal_due;
             ren += r.renewed;
           }
         });
+        if (renTrendMetric === "due") return due;
+        if (renTrendMetric === "renewed") return ren;
         return due > 0 ? (ren / due) * 100 : 0;
       });
 
@@ -1779,29 +2465,32 @@ function RenewalsAndRecurring({ isDark }) {
 
       traces.push({
         x: dateLabels,
-        y: platRates,
+        y: platVals,
         type: 'scatter',
         mode: 'lines+markers+text',
         name: `Platform: ${plat}`,
-        text: platRates.map(r => `${r.toFixed(1)}%`),
+        text: platVals.map(v => renTrendMetric === 'rate' ? `${v.toFixed(1)}%` : v.toLocaleString()),
         textposition: 'top center',
+        cliponaxis: false,
         textfont: { size: 9, color: color, weight: 'bold' },
         line: { color: color, width: 2, dash: 'dot', shape: 'spline' },
         marker: { size: 5, color: color },
-        hovertemplate: `<b>${plat}</b><br>%{x}<br>Renewal Rate: <b>%{y:.2f}%</b><extra></extra>>`
+        hovertemplate: `<b>${plat}</b><br>%{x}<br>${hoverLabel}: <b>${renTrendMetric === 'rate' ? '%{y:.2f}%' : '%{y:,.0f}'}</b><extra></extra>`
       });
     });
 
     renComparePlans.forEach(plan => {
-      const planRates = dateKeys.map(k => {
+      const planVals = dateKeys.map(k => {
         let due = 0, ren = 0;
         filteredRenewalsData.forEach(r => {
-          const rKey = renViewLevel === "Day" ? (r.renew_date || r.renew_month) : r.renew_month;
+          const rKey = getRowKey(r);
           if (rKey === k && r.plan_category === plan) {
             due += r.renewal_due;
             ren += r.renewed;
           }
         });
+        if (renTrendMetric === "due") return due;
+        if (renTrendMetric === "renewed") return ren;
         return due > 0 ? (ren / due) * 100 : 0;
       });
 
@@ -1810,21 +2499,22 @@ function RenewalsAndRecurring({ isDark }) {
 
       traces.push({
         x: dateLabels,
-        y: planRates,
+        y: planVals,
         type: 'scatter',
         mode: 'lines+markers+text',
         name: `Plan: ${plan}`,
-        text: planRates.map(r => `${r.toFixed(1)}%`),
+        text: planVals.map(v => renTrendMetric === 'rate' ? `${v.toFixed(1)}%` : v.toLocaleString()),
         textposition: 'top center',
+        cliponaxis: false,
         textfont: { size: 9, color: color, weight: 'bold' },
         line: { color: color, width: 2, dash: 'dash', shape: 'spline' },
         marker: { size: 5, color: color },
-        hovertemplate: `<b>${plan}</b><br>%{x}<br>Renewal Rate: <b>%{y:.2f}%</b><extra></extra>>`
+        hovertemplate: `<b>${plan}</b><br>%{x}<br>${hoverLabel}: <b>${renTrendMetric === 'rate' ? '%{y:.2f}%' : '%{y:,.0f}'}</b><extra></extra>`
       });
     });
 
     return traces;
-  }, [renTrendData, renComparePlatforms, renComparePlans, filteredRenewalsData, renViewLevel, isDark]);
+  }, [renTrendData, renComparePlatforms, renComparePlans, filteredRenewalsData, renViewLevel, renTrendMetric, isDark]);
 
   // ----------------------------------------------------
   // RECURRING STATE & LOGIC (BOTTOM HALF)
@@ -1972,19 +2662,33 @@ function RenewalsAndRecurring({ isDark }) {
     return { recTotalConv: totC, recRecurringConv: recC, recNonRecurringConv: nonRecC, recRecurringShare: share, recRecurringRev: recR, recTotalRev: totR };
   }, [filteredRecurringData]);
 
-  // Recurring Trend Data (Daily or Monthly Recurring %)
+  // Recurring Trend Data (Daily, Weekly, or Monthly Recurring %)
   const recTrendData = useMemo(() => {
     const map = {};
     filteredRecurringData.forEach(r => {
-      const key = recViewLevel === "Day" ? r.txn_date : (r.txn_month || (r.txn_date ? r.txn_date.substring(0, 7) : ''));
+      let key = '';
+      let labelShort = '';
+      if (recViewLevel === "Day") {
+        key = r.txn_date;
+      } else if (recViewLevel === "Week") {
+        if (r.txn_date) {
+          const wInfo = getWeekKeyAndLabel(r.txn_date);
+          key = wInfo.key;
+          labelShort = wInfo.labelShort;
+        } else {
+          key = r.txn_month;
+        }
+      } else {
+        key = r.txn_month || (r.txn_date ? r.txn_date.substring(0, 7) : '');
+      }
       if (!key) return;
-      if (!map[key]) map[key] = { key, total: 0, rec: 0 };
+      if (!map[key]) map[key] = { key, labelShort: labelShort || key, total: 0, rec: 0 };
       map[key].total += r.conversion;
       if (r.auto_renew) map[key].rec += r.conversion;
     });
 
     return Object.keys(map).sort().map(k => {
-      let labelShort = k;
+      let labelShort = map[k].labelShort || k;
       if (recViewLevel === "Day" && k.includes("-")) {
         const parts = k.split("-");
         if (parts.length === 3) {
@@ -2012,6 +2716,12 @@ function RenewalsAndRecurring({ isDark }) {
     const dateKeys = recTrendData.map(d => d.key);
     const dateLabels = recTrendData.map(d => d.labelShort);
 
+    const getRowKey = (r) => {
+      if (recViewLevel === "Day") return r.txn_date;
+      if (recViewLevel === "Week") return r.txn_date ? getWeekKeyAndLabel(r.txn_date).key : r.txn_month;
+      return r.txn_month || (r.txn_date ? r.txn_date.substring(0, 7) : '');
+    };
+
     const traces = [
       {
         x: dateLabels,
@@ -2021,12 +2731,13 @@ function RenewalsAndRecurring({ isDark }) {
         name: 'Overall Recurring %',
         text: recTrendData.map(d => `${d.rate.toFixed(1)}%`),
         textposition: 'top center',
+        cliponaxis: false,
         textfont: { size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
         line: { color: '#f59e0b', width: 3, shape: 'spline' },
         marker: { size: 6, color: '#f59e0b' },
         fill: 'tozeroy',
         fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
-        hovertemplate: "<b>Overall Recurring</b><br>%{x}<br>Recurring Share: <b>%{y:.2f}%</b><extra></extra>>"
+        hovertemplate: "<b>Overall Recurring</b><br>%{x}<br>Recurring Share: <b>%{y:.2f}%</b><extra></extra>"
       }
     ];
 
@@ -2038,7 +2749,7 @@ function RenewalsAndRecurring({ isDark }) {
       const rates = dateKeys.map(k => {
         let tot = 0, rec = 0;
         filteredRecurringData.forEach(r => {
-          const rKey = recViewLevel === "Day" ? r.txn_date : (r.txn_month || (r.txn_date ? r.txn_date.substring(0, 7) : ''));
+          const rKey = getRowKey(r);
           if (rKey === k && r.marketing_team === team) {
             tot += r.conversion;
             if (r.auto_renew) rec += r.conversion;
@@ -2058,6 +2769,7 @@ function RenewalsAndRecurring({ isDark }) {
         name: `Team: ${team}`,
         text: rates.map(r => `${r.toFixed(1)}%`),
         textposition: 'top center',
+        cliponaxis: false,
         textfont: { size: 9, color: color, weight: 'bold' },
         line: { color: color, width: 2, dash: 'dot', shape: 'spline' },
         marker: { size: 5, color: color },
@@ -2070,7 +2782,7 @@ function RenewalsAndRecurring({ isDark }) {
       const rates = dateKeys.map(k => {
         let tot = 0, rec = 0;
         filteredRecurringData.forEach(r => {
-          const rKey = recViewLevel === "Day" ? r.txn_date : (r.txn_month || (r.txn_date ? r.txn_date.substring(0, 7) : ''));
+          const rKey = getRowKey(r);
           if (rKey === k && r.platform === plat) {
             tot += r.conversion;
             if (r.auto_renew) rec += r.conversion;
@@ -2090,6 +2802,7 @@ function RenewalsAndRecurring({ isDark }) {
         name: `Platform: ${plat}`,
         text: rates.map(r => `${r.toFixed(1)}%`),
         textposition: 'top center',
+        cliponaxis: false,
         textfont: { size: 9, color: color, weight: 'bold' },
         line: { color: color, width: 2, dash: 'dash', shape: 'spline' },
         marker: { size: 5, color: color },
@@ -2102,7 +2815,7 @@ function RenewalsAndRecurring({ isDark }) {
       const rates = dateKeys.map(k => {
         let tot = 0, rec = 0;
         filteredRecurringData.forEach(r => {
-          const rKey = recViewLevel === "Day" ? r.txn_date : (r.txn_month || (r.txn_date ? r.txn_date.substring(0, 7) : ''));
+          const rKey = getRowKey(r);
           if (rKey === k && r.plan_category === plan) {
             tot += r.conversion;
             if (r.auto_renew) rec += r.conversion;
@@ -2122,6 +2835,7 @@ function RenewalsAndRecurring({ isDark }) {
         name: `Plan: ${plan}`,
         text: rates.map(r => `${r.toFixed(1)}%`),
         textposition: 'top center',
+        cliponaxis: false,
         textfont: { size: 9, color: color, weight: 'bold' },
         line: { color: color, width: 2, dash: 'longdash', shape: 'spline' },
         marker: { size: 5, color: color },
@@ -2318,9 +3032,8 @@ function RenewalsAndRecurring({ isDark }) {
 
   if (renewalsLoading || recurringLoading) {
     return (
-      <div className="flex h-64 w-full flex-col items-center justify-center text-warm-text dark:text-dark-text">
-        <Loader2 className="h-10 w-10 animate-spin text-amber-accent" />
-        <p className="mt-4 font-semibold tracking-wide">Loading Renewals & Recurring Data...</p>
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm my-6 p-4">
+        <CleanDashboardLoader title="Loading Renewals & Recurring Data..." subtitle="Processing cohort retention and recurring revenue trends" />
       </div>
     );
   }
@@ -2348,6 +3061,16 @@ function RenewalsAndRecurring({ isDark }) {
                 }`}
               >
                 Day Level View
+              </button>
+              <button
+                onClick={() => setRenViewLevel("Week")}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                  renViewLevel === "Week"
+                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
+                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                }`}
+              >
+                Week Level View
               </button>
               <button
                 onClick={() => setRenViewLevel("Month")}
@@ -2386,7 +3109,7 @@ function RenewalsAndRecurring({ isDark }) {
         </div>
 
         {/* Renewals KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
           <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
             <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Total Renewal Due</div>
             <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{renTotalDue.toLocaleString()}</div>
@@ -2411,95 +3134,148 @@ function RenewalsAndRecurring({ isDark }) {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
             <div>
               <h3 className="text-base font-bold text-warm-text dark:text-dark-text px-1">
-                Overall Renewal Rate Trend ({renViewLevel} Level)
+                {renTrendMetric === 'rate' && `Overall Renewal Rate Trend (${renViewLevel} Level)`}
+                {renTrendMetric === 'due' && `Renewal Due Trend (${renViewLevel} Level)`}
+                {renTrendMetric === 'renewed' && `Renewed Subscriptions Trend (${renViewLevel} Level)`}
+                {renTrendMetric === 'combined' && `Renewal Due vs Renewed Trend (${renViewLevel} Level)`}
               </h3>
-              <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">Compare overall renewal rate against specific Platforms or Plans</p>
+              <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">
+                {renTrendMetric === 'rate' ? 'Compare overall renewal rate against specific Platforms or Plans' : 'Analyze renewal volume trends over time'}
+              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="relative">
+              {/* Metric Selector Pills */}
+              <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-lg border border-warm-border dark:border-zinc-700 shadow-xs">
                 <button
-                  onClick={() => { setShowRenPlatDropdown(!showRenPlatDropdown); setShowRenPlanDropdown(false); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-all shadow-sm"
+                  onClick={() => setRenTrendMetric("rate")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    renTrendMetric === "rate"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
                 >
-                  <span>Compare Platforms ({renComparePlatforms.length})</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
+                  Renewal Rate (%)
                 </button>
-                {showRenPlatDropdown && (
-                  <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-30 p-2 text-xs">
-                    <div className="font-bold text-warm-muted dark:text-dark-muted mb-2 px-1 border-b border-warm-border dark:border-zinc-700 pb-1 flex justify-between items-center">
-                      <span>Select Platforms</span>
-                      {renComparePlatforms.length > 0 && (
-                        <button onClick={() => setRenComparePlatforms([])} className="text-[10px] text-amber-accent font-bold">Clear</button>
-                      )}
-                    </div>
-                    <div className="max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1">
-                      {availableRenPlatforms.map(plat => {
-                        const isSelected = renComparePlatforms.includes(plat);
-                        return (
-                          <label key={plat} className="flex items-center gap-2 p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded cursor-pointer font-medium text-warm-text dark:text-dark-text">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {
-                                setRenComparePlatforms(prev => 
-                                  isSelected ? prev.filter(p => p !== plat) : [...prev, plat]
-                                );
-                              }}
-                              className="rounded text-amber-accent focus:ring-amber-accent"
-                            />
-                            <span>{plat}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                <button
+                  onClick={() => setRenTrendMetric("due")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    renTrendMetric === "due"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Renewal Due
+                </button>
+                <button
+                  onClick={() => setRenTrendMetric("renewed")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    renTrendMetric === "renewed"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Renewed
+                </button>
+                <button
+                  onClick={() => setRenTrendMetric("combined")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    renTrendMetric === "combined"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Due vs Renewed
+                </button>
               </div>
 
-              <div className="relative">
-                <button
-                  onClick={() => { setShowRenPlanDropdown(!showRenPlanDropdown); setShowRenPlatDropdown(false); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-all shadow-sm"
-                >
-                  <span>Compare Plans ({renComparePlans.length})</span>
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
-                {showRenPlanDropdown && (
-                  <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-30 p-2 text-xs">
-                    <div className="font-bold text-warm-muted dark:text-dark-muted mb-2 px-1 border-b border-warm-border dark:border-zinc-700 pb-1 flex justify-between items-center">
-                      <span>Select Plans</span>
-                      {renComparePlans.length > 0 && (
-                        <button onClick={() => setRenComparePlans([])} className="text-[10px] text-amber-accent font-bold">Clear</button>
-                      )}
-                    </div>
-                    <div className="max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1">
-                      {availableRenPlans.map(plan => {
-                        const isSelected = renComparePlans.includes(plan);
-                        return (
-                          <label key={plan} className="flex items-center gap-2 p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded cursor-pointer font-medium text-warm-text dark:text-dark-text">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {
-                                setRenComparePlans(prev => 
-                                  isSelected ? prev.filter(p => p !== plan) : [...prev, plan]
-                                );
-                              }}
-                              className="rounded text-amber-accent focus:ring-amber-accent"
-                            />
-                            <span>{plan}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
+              {renTrendMetric !== "combined" && (
+                <>
+                  <div className="relative" ref={renPlatDropdownRef}>
+                    <button
+                      onClick={() => { setShowRenPlatDropdown(!showRenPlatDropdown); setShowRenPlanDropdown(false); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-all shadow-sm"
+                    >
+                      <span>Compare Platforms ({renComparePlatforms.length})</span>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                    {showRenPlatDropdown && (
+                      <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-30 p-2 text-xs">
+                        <div className="font-bold text-warm-muted dark:text-dark-muted mb-2 px-1 border-b border-warm-border dark:border-zinc-700 pb-1 flex justify-between items-center">
+                          <span>Select Platforms</span>
+                          {renComparePlatforms.length > 0 && (
+                            <button onClick={() => setRenComparePlatforms([])} className="text-[10px] text-amber-accent font-bold">Clear</button>
+                          )}
+                        </div>
+                        <div className="max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1">
+                          {availableRenPlatforms.map(plat => {
+                            const isSelected = renComparePlatforms.includes(plat);
+                            return (
+                              <label key={plat} className="flex items-center gap-2 p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded cursor-pointer font-medium text-warm-text dark:text-dark-text">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    setRenComparePlatforms(prev => 
+                                      isSelected ? prev.filter(p => p !== plat) : [...prev, plat]
+                                    );
+                                  }}
+                                  className="rounded text-amber-accent focus:ring-amber-accent"
+                                />
+                                <span>{plat}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+
+                  <div className="relative" ref={renPlanDropdownRef}>
+                    <button
+                      onClick={() => { setShowRenPlanDropdown(!showRenPlanDropdown); setShowRenPlatDropdown(false); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-all shadow-sm"
+                    >
+                      <span>Compare Plans ({renComparePlans.length})</span>
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                    {showRenPlanDropdown && (
+                      <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-30 p-2 text-xs">
+                        <div className="font-bold text-warm-muted dark:text-dark-muted mb-2 px-1 border-b border-warm-border dark:border-zinc-700 pb-1 flex justify-between items-center">
+                          <span>Select Plans</span>
+                          {renComparePlans.length > 0 && (
+                            <button onClick={() => setRenComparePlans([])} className="text-[10px] text-amber-accent font-bold">Clear</button>
+                          )}
+                        </div>
+                        <div className="max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1">
+                          {availableRenPlans.map(plan => {
+                            const isSelected = renComparePlans.includes(plan);
+                            return (
+                              <label key={plan} className="flex items-center gap-2 p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded cursor-pointer font-medium text-warm-text dark:text-dark-text">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => {
+                                    setRenComparePlans(prev => 
+                                      isSelected ? prev.filter(p => p !== plan) : [...prev, plan]
+                                    );
+                                  }}
+                                  className="rounded text-amber-accent focus:ring-amber-accent"
+                                />
+                                <span>{plan}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {(renComparePlatforms.length > 0 || renComparePlans.length > 0) && (
+          {renTrendMetric !== "combined" && (renComparePlatforms.length > 0 || renComparePlans.length > 0) && (
             <div className="flex flex-wrap items-center gap-2 mb-3 px-1">
               <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Active Comparisons:</span>
               {renComparePlatforms.map(p => (
@@ -2523,19 +3299,23 @@ function RenewalsAndRecurring({ isDark }) {
               layout={{
                 autosize: true,
                 height: 380,
-                margin: { l: 45, r: 25, t: 35, b: 45 },
+                margin: { l: 55, r: 50, t: 40, b: 50 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
                 font: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10 },
                 xaxis: { 
                   showgrid: false,
+                  automargin: true,
                   tickangle: renTrendData.length > 20 ? -45 : 0,
                   tickfont: { size: 10, color: isDark ? '#94A3B8' : '#64748B' }
                 },
-                yaxis: { 
+                yaxis: renTrendMetric === 'rate' ? { 
                   gridcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', 
                   range: [0, 115],
                   ticksuffix: '%'
+                } : {
+                  gridcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                  autorange: true
                 },
                 legend: {
                   orientation: 'h',
@@ -2543,7 +3323,7 @@ function RenewalsAndRecurring({ isDark }) {
                   x: 0,
                   font: { size: 10, color: isDark ? '#cbd5e1' : '#334155' }
                 },
-                showlegend: renChartTraces.length > 1
+                showlegend: renChartTraces.length > 1 || renTrendMetric === 'combined'
               }}
               config={{ displayModeBar: false, responsive: true }}
               className="w-full"
@@ -2556,6 +3336,30 @@ function RenewalsAndRecurring({ isDark }) {
           )}
         </div>
 
+        {/* Two-Column Visualizations: Heatmap & Rate vs Volume */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 mb-6">
+          {/* Left Column: Renewal Performance Heatmap */}
+          <div className="xl:col-span-6 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5 flex flex-col justify-between">
+            <RenewalHeatmap
+              filteredRenewalsData={filteredRenewalsData}
+              renDatePreset={renDatePreset}
+              renViewLevel={renViewLevel}
+              isDark={isDark}
+            />
+          </div>
+
+          {/* Right Column: Renewal Rate vs Volume Quadrant Chart */}
+          <div className="xl:col-span-6 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5 flex flex-col justify-between">
+            <RenewalRateVsVolumeChart
+              renPlatformData={renPlatformData}
+              renTotalDue={renTotalDue}
+              renOverallRate={renOverallRate}
+              renDatePreset={renDatePreset}
+              isDark={isDark}
+            />
+          </div>
+        </div>
+
         {/* Platform & Plan Breakdown Tables */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Platform-wise Table */}
@@ -2563,15 +3367,15 @@ function RenewalsAndRecurring({ isDark }) {
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Platform-wise Renewals</h3>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-                <thead className="sticky top-0 z-20 bg-warm-tableBg dark:bg-[#1E293B] shadow-sm">
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                    <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Platform</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Renewal Due</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Renewed</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Renewal Rate</th>
+                <thead className="sticky top-0 z-30">
+                  <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border">Platform</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewal Due</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewed</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewal Rate</th>
                   </tr>
-                  <tr className="font-bold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                  <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalDue.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalRenewed.toLocaleString()}</td>
                     <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renOverallRate.toFixed(1)}%</td>
@@ -2583,15 +3387,17 @@ function RenewalsAndRecurring({ isDark }) {
                     return (
                       <React.Fragment key={row.platform}>
                         <tr className="border-b border-warm-border/50 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5 font-medium transition-colors">
-                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text flex items-center gap-2">
-                            <button
-                              onClick={() => setExpandedRenPlatforms(prev => ({ ...prev, [row.platform]: !prev[row.platform] }))}
-                              className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
-                              title="Click to view daily trend"
-                            >
-                              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                            </button>
-                            <span>{row.platform}</span>
+                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedRenPlatforms(prev => ({ ...prev, [row.platform]: !prev[row.platform] }))}
+                                className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
+                                title="Click to view daily trend"
+                              >
+                                <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                              </button>
+                              <span>{row.platform}</span>
+                            </div>
                           </td>
                           <td className="p-3 text-right">{row.due.toLocaleString()}</td>
                           <td className="p-3 text-right font-semibold text-amber-accent">{row.renewed.toLocaleString()}</td>
@@ -2640,15 +3446,15 @@ function RenewalsAndRecurring({ isDark }) {
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Plan-wise Renewals</h3>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-                <thead className="sticky top-0 z-20 bg-warm-tableBg dark:bg-[#1E293B] shadow-sm">
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                    <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Plan Category</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Renewal Due</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Renewed</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Renewal Rate</th>
+                <thead className="sticky top-0 z-30">
+                  <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border">Plan Category</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewal Due</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewed</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewal Rate</th>
                   </tr>
-                  <tr className="font-bold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                  <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalDue.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalRenewed.toLocaleString()}</td>
                     <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renOverallRate.toFixed(1)}%</td>
@@ -2660,15 +3466,17 @@ function RenewalsAndRecurring({ isDark }) {
                     return (
                       <React.Fragment key={row.plan}>
                         <tr className="border-b border-warm-border/50 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5 font-medium transition-colors">
-                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text flex items-center gap-2">
-                            <button
-                              onClick={() => setExpandedRenPlans(prev => ({ ...prev, [row.plan]: !prev[row.plan] }))}
-                              className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
-                              title="Click to view daily trend"
-                            >
-                              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                            </button>
-                            <span>{row.plan}</span>
+                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedRenPlans(prev => ({ ...prev, [row.plan]: !prev[row.plan] }))}
+                                className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
+                                title="Click to view daily trend"
+                              >
+                                <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                              </button>
+                              <span>{row.plan}</span>
+                            </div>
                           </td>
                           <td className="p-3 text-right">{row.due.toLocaleString()}</td>
                           <td className="p-3 text-right font-semibold text-amber-accent">{row.renewed.toLocaleString()}</td>
@@ -2728,7 +3536,7 @@ function RenewalsAndRecurring({ isDark }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 self-end">
-            {/* Day / Month Level View Toggle for Recurring */}
+            {/* Day / Week / Month Level View Toggle for Recurring */}
             <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-1 rounded-lg border border-warm-border dark:border-zinc-700">
               <button
                 onClick={() => setRecViewLevel("Day")}
@@ -2739,6 +3547,16 @@ function RenewalsAndRecurring({ isDark }) {
                 }`}
               >
                 Day Level View
+              </button>
+              <button
+                onClick={() => setRecViewLevel("Week")}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                  recViewLevel === "Week"
+                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
+                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                }`}
+              >
+                Week Level View
               </button>
               <button
                 onClick={() => setRecViewLevel("Month")}
@@ -2792,7 +3610,7 @@ function RenewalsAndRecurring({ isDark }) {
         </div>
 
         {/* Recurring KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
             <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Total Subscriptions Sold</div>
             <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{recTotalConv.toLocaleString()}</div>
@@ -2832,7 +3650,7 @@ function RenewalsAndRecurring({ isDark }) {
 
             <div className="flex flex-wrap items-center gap-3">
               {/* Compare Marketing Teams Dropdown */}
-              <div className="relative">
+              <div className="relative" ref={recTeamDropdownRef}>
                 <button
                   onClick={() => { setShowRecTeamDropdown(!showRecTeamDropdown); setShowRecPlatDropdown(false); setShowRecPlanDropdown(false); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-all shadow-sm"
@@ -2873,7 +3691,7 @@ function RenewalsAndRecurring({ isDark }) {
               </div>
 
               {/* Compare Platforms Dropdown */}
-              <div className="relative">
+              <div className="relative" ref={recPlatDropdownRef}>
                 <button
                   onClick={() => { setShowRecPlatDropdown(!showRecPlatDropdown); setShowRecTeamDropdown(false); setShowRecPlanDropdown(false); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-all shadow-sm"
@@ -2914,7 +3732,7 @@ function RenewalsAndRecurring({ isDark }) {
               </div>
 
               {/* Compare Plans Dropdown */}
-              <div className="relative">
+              <div className="relative" ref={recPlanDropdownRef}>
                 <button
                   onClick={() => { setShowRecPlanDropdown(!showRecPlanDropdown); setShowRecTeamDropdown(false); setShowRecPlatDropdown(false); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-all shadow-sm"
@@ -2986,12 +3804,13 @@ function RenewalsAndRecurring({ isDark }) {
               layout={{
                 autosize: true,
                 height: 380,
-                margin: { l: 45, r: 25, t: 35, b: 45 },
+                margin: { l: 55, r: 50, t: 40, b: 50 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
                 font: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10 },
                 xaxis: { 
                   showgrid: false,
+                  automargin: true,
                   tickangle: recTrendData.length > 20 ? -45 : 0,
                   tickfont: { size: 10, color: isDark ? '#94A3B8' : '#64748B' }
                 },
@@ -3019,6 +3838,15 @@ function RenewalsAndRecurring({ isDark }) {
           )}
         </div>
 
+        {/* Recurring 3 Donut Charts Section (Platform, Plan Category, Marketing Team) */}
+        <RecurringDonutsSection
+          recPlatformData={recPlatformData}
+          recPlanData={recPlanData}
+          recTeamData={recTeamData}
+          recRecurringConv={recRecurringConv}
+          isDark={isDark}
+        />
+
         {/* Recurring Breakdown Tables Section (Platform, Plan, Marketing Team) */}
         <div className="flex flex-col gap-6">
           {/* Platform Breakdown */}
@@ -3026,17 +3854,17 @@ function RenewalsAndRecurring({ isDark }) {
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Platform-wise Recurring Breakdown</h3>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-                <thead className="sticky top-0 z-20 bg-warm-tableBg dark:bg-[#1E293B] shadow-sm">
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                    <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Platform</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Total Sold</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Non-Recurring</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring Share</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring Revenue</th>
+                <thead className="sticky top-0 z-30">
+                  <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border">Platform</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Total Sold</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Non-Recurring</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Share</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Revenue</th>
                   </tr>
-                  <tr className="font-bold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                  <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
@@ -3050,15 +3878,17 @@ function RenewalsAndRecurring({ isDark }) {
                     return (
                       <React.Fragment key={row.platform}>
                         <tr className="border-b border-warm-border/50 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5 font-medium transition-colors">
-                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text flex items-center gap-2">
-                            <button
-                              onClick={() => setExpandedRecPlatforms(prev => ({ ...prev, [row.platform]: !prev[row.platform] }))}
-                              className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
-                              title="Click to view daily trend"
-                            >
-                              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                            </button>
-                            <span>{row.platform}</span>
+                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedRecPlatforms(prev => ({ ...prev, [row.platform]: !prev[row.platform] }))}
+                                className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
+                                title="Click to view daily trend"
+                              >
+                                <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                              </button>
+                              <span>{row.platform}</span>
+                            </div>
                           </td>
                           <td className="p-3 text-right">{row.total.toLocaleString()}</td>
                           <td className="p-3 text-right font-semibold text-amber-accent">{row.rec.toLocaleString()}</td>
@@ -3113,17 +3943,17 @@ function RenewalsAndRecurring({ isDark }) {
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Plan-wise Recurring Breakdown</h3>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-                <thead className="sticky top-0 z-20 bg-warm-tableBg dark:bg-[#1E293B] shadow-sm">
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                    <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Plan Category</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Total Sold</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Non-Recurring</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring Share</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring Revenue</th>
+                <thead className="sticky top-0 z-30">
+                  <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border">Plan Category</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Total Sold</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Non-Recurring</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Share</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Revenue</th>
                   </tr>
-                  <tr className="font-bold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                  <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
@@ -3137,15 +3967,17 @@ function RenewalsAndRecurring({ isDark }) {
                     return (
                       <React.Fragment key={row.plan}>
                         <tr className="border-b border-warm-border/50 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5 font-medium transition-colors">
-                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text flex items-center gap-2">
-                            <button
-                              onClick={() => setExpandedRecPlans(prev => ({ ...prev, [row.plan]: !prev[row.plan] }))}
-                              className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
-                              title="Click to view daily trend"
-                            >
-                              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                            </button>
-                            <span>{row.plan}</span>
+                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedRecPlans(prev => ({ ...prev, [row.plan]: !prev[row.plan] }))}
+                                className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
+                                title="Click to view daily trend"
+                              >
+                                <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                              </button>
+                              <span>{row.plan}</span>
+                            </div>
                           </td>
                           <td className="p-3 text-right">{row.total.toLocaleString()}</td>
                           <td className="p-3 text-right font-semibold text-amber-accent">{row.rec.toLocaleString()}</td>
@@ -3200,17 +4032,17 @@ function RenewalsAndRecurring({ isDark }) {
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Marketing Team Breakdown</h3>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-                <thead className="sticky top-0 z-20 bg-warm-tableBg dark:bg-[#1E293B] shadow-sm">
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                    <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Marketing Team</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Total Sold</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Non-Recurring</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring Share</th>
-                    <th className="p-3 text-right whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B]">Recurring Revenue</th>
+                <thead className="sticky top-0 z-30">
+                  <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border">Marketing Team</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Total Sold</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Non-Recurring</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Share</th>
+                    <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Revenue</th>
                   </tr>
-                  <tr className="font-bold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                  <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
                     <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
@@ -3224,15 +4056,17 @@ function RenewalsAndRecurring({ isDark }) {
                     return (
                       <React.Fragment key={row.team}>
                         <tr className="border-b border-warm-border/50 dark:border-zinc-800/60 hover:bg-black/5 dark:hover:bg-white/5 font-medium transition-colors">
-                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text flex items-center gap-2">
-                            <button
-                              onClick={() => setExpandedRecTeams(prev => ({ ...prev, [row.team]: !prev[row.team] }))}
-                              className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
-                              title="Click to view daily trend"
-                            >
-                              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                            </button>
-                            <span>{row.team}</span>
+                          <td className="p-3 font-semibold text-warm-text dark:text-dark-text sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setExpandedRecTeams(prev => ({ ...prev, [row.team]: !prev[row.team] }))}
+                                className="p-1 hover:bg-amber-500/20 rounded text-amber-accent transition-transform cursor-pointer"
+                                title="Click to view daily trend"
+                              >
+                                <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                              </button>
+                              <span>{row.team}</span>
+                            </div>
                           </td>
                           <td className="p-3 text-right">{row.total.toLocaleString()}</td>
                           <td className="p-3 text-right font-semibold text-amber-accent">{row.rec.toLocaleString()}</td>
@@ -3445,30 +4279,61 @@ export default function App() {
   }
 
   const isAdmin = isAdminEmail(currentUser.email);
-  const navTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU', 'Conversational Analytics'];
+  const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU'];
+  const navTabs = isAdmin ? [...baseTabs, 'Conversational Analytics'] : baseTabs;
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'Conversational Analytics') {
+      setActiveTab('Realtime');
+    }
+  }, [isAdmin, activeTab]);
 
   return (
     <div className={`min-h-screen ${isDark ? 'dark bg-[#0F172A] text-[#f8fafc]' : 'bg-[#F8FAFC] text-[#0F172A]'}`}>
       <div className="w-full px-6 py-5 md:px-10 lg:px-12">
         {/* Main Header */}
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-warm-border dark:border-dark-border pb-5 mb-5">
-          <div className="flex items-center gap-3">
-            <div className="bg-[#1E293B] text-white font-extrabold text-xl px-3 py-1.5 rounded-md shadow-sm">
-              ET
+          <div className="flex items-center justify-between w-full xl:w-auto">
+            <div className="flex items-center gap-3">
+              <div className="bg-[#ED1C24] text-white font-serif font-black text-[32px] leading-none h-[54px] w-[54px] rounded-lg shadow-md flex items-center justify-center tracking-tighter shrink-0">
+                ET
+              </div>
+              <div>
+                <h1 className="text-2xl font-black tracking-tight dark:text-dark-text text-warm-text">Prime</h1>
+                <p className="text-xs tracking-wider text-warm-muted dark:text-dark-muted font-bold uppercase">Subscription Ledger</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight dark:text-dark-text text-warm-text">Prime</h1>
-              <p className="text-xs tracking-wider text-warm-muted dark:text-dark-muted font-bold uppercase">Subscription Ledger</p>
+
+            {/* Mobile Header Right Profile Tools */}
+            <div className="flex xl:hidden items-center gap-2">
+              <UserProfileMenu
+                currentUser={currentUser}
+                isAdmin={isAdmin}
+                onLogout={handleLogout}
+                onSelectAdminPanel={() => setActiveTab('Admin Panel')}
+                isDark={isDark}
+              />
+              <button 
+                onClick={() => {
+                  const newTheme = isDark ? 'light' : 'dark';
+                  setTheme(newTheme);
+                  localStorage.setItem('theme', newTheme);
+                }}
+                className="flex items-center justify-center p-2 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg text-warm-text dark:text-dark-text hover:bg-warm-tableBg dark:hover:bg-zinc-800 transition-all shadow-xs focus:outline-hidden cursor-pointer"
+                title="Toggle Light / Dark Mode"
+              >
+                {isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-warm-text" />}
+              </button>
             </div>
           </div>
 
-          {/* View Toggle */}
-          <div className="flex items-center gap-1 bg-warm-totalBg dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-full p-1 overflow-x-auto custom-scrollbar shrink-0">
+          {/* View Toggle Bar (Responsive Scrollable Container) */}
+          <div className="flex items-center gap-1 bg-warm-totalBg dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl xl:rounded-full p-1 overflow-x-auto custom-scrollbar w-full xl:w-auto shrink-0 scrollbar-none">
             {navTabs.map(tab => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-3 xl:px-4 py-1.5 text-xs xl:text-sm font-semibold rounded-full whitespace-nowrap transition-all duration-300 ease-in-out cursor-pointer ${
+                className={`px-3 xl:px-4 py-1.5 text-xs xl:text-sm font-semibold rounded-lg xl:rounded-full whitespace-nowrap transition-all duration-300 ease-in-out cursor-pointer flex-1 xl:flex-none text-center ${
                   activeTab === tab 
                     ? 'bg-white dark:bg-slate-700 shadow-sm border border-warm-border/50 dark:border-slate-600 text-amber-accent font-bold' 
                     : 'text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text hover:bg-black/5 dark:hover:bg-white/5'
@@ -3479,10 +4344,8 @@ export default function App() {
             ))}
           </div>
           
-          {/* Header Right Tools & User Profile */}
-          <div className="flex items-center gap-3 justify-end h-[38px]">
-            
-            {/* Compact Human Avatar Profile Dropdown */}
+          {/* Desktop Right Tools & User Profile */}
+          <div className="hidden xl:flex items-center gap-3 justify-end h-[38px]">
             <UserProfileMenu
               currentUser={currentUser}
               isAdmin={isAdmin}
@@ -3490,8 +4353,6 @@ export default function App() {
               onSelectAdminPanel={() => setActiveTab('Admin Panel')}
               isDark={isDark}
             />
-
-            {/* Theme Toggle */}
             <button 
               onClick={() => {
                 const newTheme = isDark ? 'light' : 'dark';
@@ -3523,9 +4384,11 @@ export default function App() {
           <div className={activeTab === 'ARPU' ? 'block' : 'hidden'}>
             <ArpuReport isDark={isDark} />
           </div>
-          <div className={activeTab === 'Conversational Analytics' ? 'block' : 'hidden'}>
-            <ConversationalAnalytics isDark={isDark} currentUser={currentUser} />
-          </div>
+          {isAdmin && (
+            <div className={activeTab === 'Conversational Analytics' ? 'block' : 'hidden'}>
+              <ConversationalAnalytics isDark={isDark} currentUser={currentUser} />
+            </div>
+          )}
           {isAdmin && (
             <div className={activeTab === 'Admin Panel' ? 'block' : 'hidden'}>
               <AdminPanel user={currentUser} isDark={isDark} />
@@ -3542,20 +4405,62 @@ function ConversationalAnalytics({ isDark, currentUser }) {
   const [subscriptionData, setSubscriptionData] = useState([]);
   const [funnelData, setFunnelData] = useState([]);
   const [renewalsData, setRenewalsData] = useState([]);
+  const [realtimeData, setRealtimeData] = useState([]);
+
+  const [apiKey, setApiKeyState] = useState(getStoredApiKey());
+  const [llamaConfigState, setLlamaConfigState] = useState(getStoredLlamaConfig());
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [keyInput, setKeyInput] = useState(apiKey || '');
+  const [groqInput, setGroqInput] = useState(getStoredLlamaConfig().apiKey || '');
+
+  const handleSaveApiKey = (e) => {
+    e.preventDefault();
+    if (groqInput && groqInput.trim()) {
+      setStoredLlamaConfig({ apiKey: groqInput.trim() });
+    }
+    if (keyInput && keyInput.trim()) {
+      setStoredApiKey(keyInput.trim());
+      setApiKeyState(keyInput.trim());
+    }
+    setLlamaConfigState(getStoredLlamaConfig());
+    setShowKeyModal(false);
+  };
 
   useEffect(() => {
     async function fetchSubData() {
       try {
         const results = await fetchDatasetCached('subscription', DEFAULT_GSHEET_URL);
         const parsed = (results.data || []).map(row => {
-          const dateStr = row.txn_date || row.Date || row.date;
-          if (!dateStr) return null;
+          const rawDate = row.txn_date || row.Date || row.date;
+          if (!rawDate) return null;
+          let dateStr = String(rawDate).trim();
+          if (dateStr.includes('/')) {
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+              const m = parts[0].padStart(2, '0');
+              const d = parts[1].padStart(2, '0');
+              let y = parts[2].trim();
+              if (y.length === 2) y = `20${y}`;
+              dateStr = `${y}-${m}-${d}`;
+            }
+          }
           const platRaw = String(row.platform || row.Platform || '').toLowerCase().trim();
           return {
             dateStr,
+            rawDate: String(rawDate).trim(),
             platform: normalizePlatformName(platRaw) || row.platform || row.Platform,
+            rawPlatform: String(row.platform || row.Platform || '').trim(),
             revenue: parseFloat(row.revenue_above_rs_6_txn || row.Revenue || row.rev || 0),
-            conversions: parseInt(row.conversion || row.Conversions || row.conversions || 0, 10) || 0
+            conversions: parseInt(row.conversion || row.Conversions || row.conversions || 0, 10) || 0,
+            user_txn_type: String(row.user_txn_type || '').trim(),
+            plan_category: String(row.plan_category || '').trim(),
+            country_name: String(row.country_name || '').trim(),
+            acq_source: String(row.acq_source || '').trim(),
+            channel: String(row.channel || '').trim(),
+            auto_renew: String(row.auto_renew || '').trim(),
+            transaction_id: String(row.transaction_id || '').trim(),
+            merchant_code: String(row.merchant_code || '').trim(),
+            transaction_time: String(row.transaction_time || '').trim()
           };
         }).filter(Boolean);
         setSubscriptionData(parsed);
@@ -3574,7 +4479,7 @@ function ConversationalAnalytics({ isDark, currentUser }) {
           const dParts = String(cleanRow['renew_date'] || '').split('/');
           let dateStr = '';
           if (dParts.length === 3) {
-            const y = dParts[2];
+            const y = dParts[2].trim();
             const m = dParts[0].padStart(2, '0');
             const d = dParts[1].padStart(2, '0');
             dateStr = `${y}-${m}-${d}`;
@@ -3586,8 +4491,10 @@ function ConversationalAnalytics({ isDark, currentUser }) {
           return {
             renew_month: String(cleanRow['renew_month'] || '').trim(),
             renew_date: dateStr,
+            raw_renew_date: String(cleanRow['renew_date'] || '').trim(),
             platform: platformDisplay,
-            plan_category: String(cleanRow['plan_category'] || 'UNKNOWN').trim().toUpperCase(),
+            rawPlatform: platformCode,
+            plan_category: String(cleanRow['plan_category'] || 'UNKNOWN').trim(),
             renewal_due: parseInt(cleanRow['renewal_due'], 10) || 0,
             renewed: parseInt(cleanRow['renewed'], 10) || 0
           };
@@ -3616,17 +4523,35 @@ function ConversationalAnalytics({ isDark, currentUser }) {
           }
           if (!formattedDateStr) return null;
           
+          const rawPlatform = String(row.ET_Platform || row.platform || '').trim();
+          const dau = parseInt(row.DAU || row.dau || 0, 10) || 0;
+          const hits = parseInt(row.paywalling_hits || row.paywall_hits || row.paywall_hit || 0, 10) || 0;
+          const loads = parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load || row.plan_page_loads || 0, 10) || 0;
+          const selected = parseInt(row.Plan_Selected || 0, 10) || 0;
+          const initiated = parseInt(row.Pay_Initiated || 0, 10) || 0;
+          const purchased = parseInt(row.Purchased || row.purchased || row.purchases || 0, 10) || 0;
+
           return {
             dateObj: new Date(formattedDateStr),
             dateStr: formattedDateStr,
             viewType: row.view_type || 'Overall',
-            platform: row.ET_Platform || row.platform,
-            DAU: parseInt(row.DAU, 10) || 0,
-            paywalling_hits: parseInt(row.paywalling_hits, 10) || 0,
-            Plan_Page_Load: parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load, 10) || 0,
-            Plan_Selected: parseInt(row.Plan_Selected, 10) || 0,
-            Pay_Initiated: parseInt(row.Pay_Initiated, 10) || 0,
-            Purchased: parseInt(row.Purchased, 10) || 0,
+            platform: rawPlatform,
+            ET_Platform: rawPlatform,
+            country: String(row.Country || row.country || '').trim(),
+            Country: String(row.Country || row.country || '').trim(),
+            marketingTeam: String(row.Marketing_team || row.marketing_team || '').trim(),
+            Marketing_team: String(row.Marketing_team || row.marketing_team || '').trim(),
+            DAU: dau,
+            dau: dau,
+            paywalling_hits: hits,
+            paywall_hits: hits,
+            Plan_Page_Load: loads,
+            Plan_Page_Loaded: loads,
+            plan_page_loads: loads,
+            Plan_Selected: selected,
+            Pay_Initiated: initiated,
+            Purchased: purchased,
+            purchased: purchased
           };
         }).filter(row => row && !isNaN(row.dateObj));
         setFunnelData(parsed);
@@ -3635,32 +4560,115 @@ function ConversationalAnalytics({ isDark, currentUser }) {
       }
     }
 
+    async function fetchRealtimeData() {
+      try {
+        const results = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
+        if (results && results.data) {
+          setRealtimeData(results.data);
+        }
+      } catch (err) {
+        console.warn("ConversationalAnalytics realtime data load fallback", err);
+      }
+    }
+
     fetchSubData();
     fetchFunnelData();
     fetchRenewalsData();
+    fetchRealtimeData();
   }, []);
+
+  const INITIAL_BOT_PROMPTS = [
+    "give me funnel data for the last 7 days day wise",
+    "What is the renewal rate for the month of july'26?",
+    "Give me platform wise breakup of renewals for the month of july'26",
+    "Which platform leads sales?"
+  ];
 
   const [messages, setMessages] = useState([
     {
       id: 1,
+      isWelcome: true,
       sender: 'bot',
       text: 'Hello! I am your AI Ledger Assistant. Ask me anything about subscription trends, renewals, revenue pacing, or platform breakdowns across dates.',
       kpis: [
-        { label: "Total Revenue (30d)", value: "₹4.33 Cr", sub: "₹14.43 L/day" },
-        { label: "Top Sales Platform", value: "MWeb", sub: "68% Total Vol" },
-        { label: "Funnel Conversion", value: "1.55%", sub: "Page Load to Sale" }
+        { label: "Total Revenue (30d)", value: "₹4.23 Cr", sub: "₹14.10 L/day" },
+        { label: "Top Sales Platform", value: "MWeb", sub: "41% Total Vol" },
+        { label: "Funnel Conversion", value: "1.56%", sub: "Page Load to Sale" }
       ],
-      suggestedFollowups: [
-        "give me funnel data for the last 7 days day wise",
-        "What is the renewal rate for the month of july'26?",
-        "Give me platform wise breakup of renewals for the month of july'26",
-        "How much revenue did iOS generate in last 7 days?"
-      ]
+      suggestedFollowups: INITIAL_BOT_PROMPTS
     }
   ]);
+
+  // Dynamically update the initial welcome card KPIs when live data finishes loading
+  useEffect(() => {
+    if ((subscriptionData && subscriptionData.length > 0) || (funnelData && funnelData.length > 0)) {
+      setMessages(prev => {
+        if (!prev || prev.length === 0) return prev;
+        const first = prev[0];
+        if (first.id !== 1 && !first.text.startsWith('Hello! I am your AI Ledger Assistant')) return prev;
+
+        let revStr = "₹4.23 Cr";
+        let dailyAvgStr = "₹14.10 L/day";
+        let topPlatStr = "MWeb";
+        let topVolStr = "41% Total Vol";
+        let convStr = "1.56%";
+
+        if (subscriptionData && subscriptionData.length > 0) {
+          // Filter to distinct dates in the last 30 days of the dataset
+          const allDates = Array.from(new Set(subscriptionData.map(r => r.dateStr).filter(Boolean))).sort();
+          const last30Dates = new Set(allDates.slice(-30));
+
+          let totRev = 0;
+          const pMap = {};
+          subscriptionData.forEach(r => {
+            if (last30Dates.has(r.dateStr)) {
+              const rev = parseFloat(r.revenue) || 0;
+              totRev += rev;
+              const p = r.platform || 'Other';
+              pMap[p] = (pMap[p] || 0) + rev;
+            }
+          });
+          const days = last30Dates.size || 30;
+          if (totRev > 0) {
+            revStr = totRev >= 10000000 ? `₹${(totRev / 10000000).toFixed(2)} Cr` : `₹${(totRev / 100000).toFixed(2)} L`;
+            dailyAvgStr = `₹${(totRev / days / 100000).toFixed(2)} L/day`;
+            let maxP = 'MWeb', maxRev = 0;
+            for (const [p, v] of Object.entries(pMap)) {
+              if (v > maxRev) { maxRev = v; maxP = p; }
+            }
+            topPlatStr = maxP;
+            topVolStr = `${Math.round((maxRev / totRev) * 100)}% Total Vol`;
+          }
+        }
+
+        if (funnelData && funnelData.length > 0) {
+          let totLoads = 0, totPurchased = 0;
+          funnelData.filter(r => (r.viewType || '').toLowerCase() === 'overall' && (r.ET_Platform || '').toLowerCase() === 'combined' && (r.Country || '').toLowerCase() === 'overall' && (r.Marketing_team || '').toLowerCase() === 'overall').forEach(r => {
+            totLoads += (r.Plan_Page_Loaded || r.Plan_Page_Load || r.plan_page_loads || 0);
+            totPurchased += (r.Purchased || r.purchased || 0);
+          });
+          if (totLoads > 0) {
+            convStr = `${((totPurchased / totLoads) * 100).toFixed(2)}%`;
+          }
+        }
+
+        const updated = {
+          ...first,
+          kpis: [
+            { label: "Total Revenue (30d)", value: revStr, sub: dailyAvgStr },
+            { label: "Top Sales Platform", value: topPlatStr, sub: topVolStr },
+            { label: "Funnel Conversion", value: convStr, sub: "Page Load to Sale" }
+          ]
+        };
+
+        return [updated, ...prev.slice(1)];
+      });
+    }
+  }, [subscriptionData, funnelData]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef(null);
+  const lastRealQueryRef = useRef('');
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -3670,20 +4678,50 @@ function ConversationalAnalytics({ isDark, currentUser }) {
     scrollToBottom();
   }, [messages, isTyping]);
 
+  const sanitizeFollowups = (list) => {
+    if (!Array.isArray(list)) return null;
+    const filtered = list.filter(q => {
+      if (!q || typeof q !== 'string') return false;
+      const s = q.toLowerCase();
+      if (s.includes('roas')) return false;
+      if (s.includes('leaking') || s.includes('funnel leaking')) return false;
+      if (s.includes('spend rose') || s.includes('delivery')) return false;
+      if (s.includes('google vs meta') || s.includes('meta vs google')) return false;
+      if (s.includes('landed') || s.includes('payment selected') || s.includes('landed -> payment') || s.includes('landed to payment') || s.includes('landed to pay')) return false;
+      if (s.includes('top 3 campaigns') || s.includes('campaigns by pay initiated')) return false;
+      return true;
+    });
+    return filtered.length > 0 ? filtered : null;
+  };
+
   const sendQuery = async (queryText) => {
     if (!queryText || !queryText.trim()) return;
 
-    const userMsg = { id: Date.now(), sender: 'user', text: queryText.trim() };
+    let targetQuery = queryText.trim();
+    let displayUserText = targetQuery;
+
+    // If user clicked "Retry query" or typed "retry", re-run the previous actual query!
+    if (targetQuery.toLowerCase() === 'retry query' || targetQuery.toLowerCase() === 'retry') {
+      if (lastRealQueryRef.current) {
+        targetQuery = lastRealQueryRef.current;
+        displayUserText = `Retry: "${targetQuery}"`;
+      }
+    } else {
+      lastRealQueryRef.current = targetQuery;
+    }
+
+    const userMsg = { id: Date.now(), sender: 'user', text: displayUserText };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsTyping(true);
 
     try {
-      const result = await processConversationalQueryAsync(queryText.trim(), {
+      const result = await processConversationalQueryAsync(targetQuery, {
         subscriptionData,
         funnelData,
-        realtimeData: null,
-        renewalsData
+        realtimeData,
+        renewalsData,
+        conversationHistory: messages
       });
 
       const engineUsed = getStoredApiKey() ? 'Gemini 2.0 Flash' : 'Local React Engine';
@@ -3695,11 +4733,12 @@ function ConversationalAnalytics({ isDark, currentUser }) {
         {
           id: Date.now() + 1,
           sender: 'bot',
+          domain: result.domain || null,
           text: result.text,
           kpis: result.kpis || null,
           chart: result.chart || null,
           table: result.table || null,
-          suggestedFollowups: result.suggestedFollowups || null
+          suggestedFollowups: sanitizeFollowups(result.suggestedFollowups)
         }
       ]);
     } catch (err) {
@@ -3722,20 +4761,16 @@ function ConversationalAnalytics({ isDark, currentUser }) {
   const handleClearChat = () => {
     setMessages([
       {
-        id: Date.now(),
+        id: 1,
+        isWelcome: true,
         sender: 'bot',
         text: 'Hello! I am your AI Ledger Assistant. Ask me anything about subscription trends, renewals, revenue pacing, or platform breakdowns across dates.',
         kpis: [
-          { label: "Total Revenue (30d)", value: "₹4.33 Cr", sub: "₹14.43 L/day" },
-          { label: "Top Sales Platform", value: "MWeb", sub: "68% Total Vol" },
-          { label: "Funnel Conversion", value: "1.55%", sub: "Page Load to Sale" }
+          { label: "Total Revenue (30d)", value: "₹4.23 Cr", sub: "₹14.10 L/day" },
+          { label: "Top Sales Platform", value: "MWeb", sub: "41% Total Vol" },
+          { label: "Funnel Conversion", value: "1.56%", sub: "Page Load to Sale" }
         ],
-        suggestedFollowups: [
-          "give me funnel data for the last 7 days day wise",
-          "What is the renewal rate for the month of july'26?",
-          "Give me platform wise breakup of renewals for the month of july'26",
-          "Which platform leads sales?"
-        ]
+        suggestedFollowups: INITIAL_BOT_PROMPTS
       }
     ]);
   };
@@ -3746,17 +4781,17 @@ function ConversationalAnalytics({ isDark, currentUser }) {
   };
 
   return (
-    <div className="animate-in fade-in duration-300 max-w-4xl mx-auto py-6 relative">
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl shadow-sm p-6">
+    <div className="animate-in fade-in duration-300 max-w-5xl mx-auto py-2 h-[calc(100vh-165px)] sm:h-[calc(100vh-135px)] flex flex-col">
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl shadow-sm p-4 md:p-5 flex flex-col flex-1 min-h-0">
         {/* Assistant Header */}
-        <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-amber-500/10 text-amber-accent rounded-xl">
-              <Bot className="h-6 w-6" />
+        <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-3 mb-3 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-amber-500/10 text-amber-accent rounded-xl">
+              <Bot className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">Conversational BI Assistant</h2>
-              <p className="text-xs text-warm-muted dark:text-dark-muted font-medium">Ask questions in natural language to analyze live dashboard data</p>
+              <h2 className="text-lg font-bold text-warm-text dark:text-dark-text tracking-tight">Conversational BI Assistant</h2>
+              <p className="text-[11px] text-warm-muted dark:text-dark-muted font-medium">Ask questions in natural language to analyze live dashboard data</p>
             </div>
           </div>
 
@@ -3769,23 +4804,90 @@ function ConversationalAnalytics({ isDark, currentUser }) {
               <Trash2 className="h-3 w-3" />
               <span>Clear Chat</span>
             </button>
-
-            <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Live Data Connected
-            </span>
           </div>
         </div>
 
+        {/* LLM Engine Configuration Modal */}
+        {showKeyModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-zinc-900 border border-warm-border dark:border-zinc-700 rounded-2xl p-5 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between pb-3 border-b border-warm-border dark:border-zinc-800">
+                <div className="flex items-center gap-2 text-amber-500">
+                  <Sparkles className="h-5 w-5" />
+                  <h3 className="font-extrabold text-warm-text dark:text-dark-text text-base">Conversational LLM Settings</h3>
+                </div>
+                <button onClick={() => setShowKeyModal(false)} className="text-warm-muted hover:text-warm-text text-lg cursor-pointer">✕</button>
+              </div>
+              
+              <form onSubmit={handleSaveApiKey} className="space-y-4 pt-4">
+                <p className="text-xs text-warm-muted dark:text-dark-muted font-medium leading-relaxed">
+                  Configure your LLM provider to enable natural language zero-shot reasoning, 2-Pass multi-tool data fetching, and dynamic visualization synthesis.
+                </p>
+                
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider font-extrabold text-amber-600 dark:text-amber-400 mb-1.5 flex items-center justify-between">
+                    <span>🦙 Groq / Llama 3 API Key (Recommended)</span>
+                    <span className="text-[9px] text-emerald-500 font-bold">Fastest (~200ms)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={groqInput}
+                    onChange={(e) => setGroqInput(e.target.value)}
+                    placeholder="gsk_..."
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-warm-tableBg dark:bg-zinc-800 border border-warm-border dark:border-zinc-700 text-warm-text dark:text-dark-text focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] uppercase tracking-wider font-extrabold text-warm-muted dark:text-dark-muted mb-1.5">
+                    <span>⚡ Gemini 2.0 Flash API Key (Secondary Fallback)</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={keyInput}
+                    onChange={(e) => setKeyInput(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full px-3 py-2 text-xs rounded-xl bg-warm-tableBg dark:bg-zinc-800 border border-warm-border dark:border-zinc-700 text-warm-text dark:text-dark-text focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-mono"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStoredApiKey('');
+                      setStoredLlamaConfig({ apiKey: '' });
+                      setApiKeyState('');
+                      setLlamaConfigState({ apiKey: '' });
+                      setKeyInput('');
+                      setGroqInput('');
+                      setShowKeyModal(false);
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-500/10 rounded-xl cursor-pointer"
+                  >
+                    Clear All Keys
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-1.5 text-xs font-extrabold bg-amber-500 hover:bg-amber-600 text-white rounded-xl shadow-sm transition-all cursor-pointer"
+                  >
+                    Save & Enable LLM
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Chat Messages Box */}
-        <div className="h-[520px] overflow-y-auto custom-scrollbar flex flex-col gap-4 p-4 bg-warm-tableBg dark:bg-zinc-900/60 rounded-xl border border-warm-border/50 dark:border-zinc-800 mb-4">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-3.5 p-3.5 bg-warm-tableBg dark:bg-zinc-900/60 rounded-xl border border-warm-border/50 dark:border-zinc-800 mb-3">
           {messages.map(msg => (
             <div key={msg.id} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}>
               <div className={`p-2 rounded-lg shrink-0 ${msg.sender === 'user' ? 'bg-amber-accent text-white' : 'bg-slate-700 text-amber-400'}`}>
                 {msg.sender === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
               </div>
 
-              <div className={`max-w-[85%] p-4 rounded-2xl text-sm font-medium leading-relaxed space-y-3 ${
+              <div className={`max-w-[85%] p-3.5 rounded-2xl text-xs md:text-sm font-medium leading-relaxed space-y-2.5 ${
                 msg.sender === 'user'
                   ? 'bg-amber-500 text-white rounded-tr-none'
                   : 'bg-white dark:bg-slate-800 text-warm-text dark:text-dark-text border border-warm-border dark:border-dark-border rounded-tl-none shadow-sm'
@@ -3797,11 +4899,11 @@ function ConversationalAnalytics({ isDark, currentUser }) {
 
                 {/* 2. Embedded KPI Stat Pills */}
                 {msg.kpis && msg.kpis.length > 0 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1.5">
                     {msg.kpis.map((kpi, idx) => (
-                      <div key={idx} className="bg-warm-tableBg dark:bg-zinc-900/80 border border-warm-border/80 dark:border-zinc-700 p-2.5 rounded-xl shadow-xs">
+                      <div key={idx} className="bg-warm-tableBg dark:bg-zinc-900/80 border border-warm-border/80 dark:border-zinc-700 p-2 rounded-xl shadow-xs">
                         <div className="text-[10px] uppercase tracking-wider font-extrabold text-warm-muted dark:text-dark-muted">{kpi.label}</div>
-                        <div className="text-base font-black text-warm-text dark:text-dark-text mt-0.5">{kpi.value}</div>
+                        <div className="text-sm font-black text-warm-text dark:text-dark-text mt-0.5">{kpi.value}</div>
                         {kpi.sub && <div className="text-[10px] font-bold text-amber-accent dark:text-amber-400 mt-0.5">{kpi.sub}</div>}
                       </div>
                     ))}
@@ -3809,35 +4911,30 @@ function ConversationalAnalytics({ isDark, currentUser }) {
                 )}
 
                 {/* 3. Embedded Inline Mini Chart */}
-                {msg.chart && (
-                  <div className="bg-warm-tableBg dark:bg-zinc-900/80 border border-warm-border/80 dark:border-zinc-700 p-3 rounded-xl shadow-xs mt-2">
-                    <div className="text-xs font-bold text-warm-text dark:text-dark-text mb-1">{msg.chart.title}</div>
-                    <div className="w-full h-[180px]">
-                      <Plot
-                        data={[
-                          {
-                            x: msg.chart.labels,
-                            y: msg.chart.values,
-                            type: msg.chart.type || 'bar',
-                            marker: { color: msg.chart.colors || '#F59E0B' },
-                            text: msg.chart.values.map(v => typeof v === 'number' ? v.toLocaleString() : v),
-                            textposition: 'auto'
-                          }
-                        ]}
-                        layout={{
-                          autosize: true,
-                          margin: { l: 30, r: 15, t: 15, b: 30 },
-                          paper_bgcolor: 'transparent',
-                          plot_bgcolor: 'transparent',
-                          xaxis: { tickfont: { size: 10, color: isDark ? '#cbd5e1' : '#475569' } },
-                          yaxis: { tickfont: { size: 10, color: isDark ? '#cbd5e1' : '#475569' }, showgrid: true, gridcolor: 'rgba(200,200,200,0.1)' }
-                        }}
-                        config={{ responsive: true, displayModeBar: false }}
-                        style={{ width: '100%', height: '100%' }}
-                      />
+                {msg.chart && (() => {
+                  const cfg = buildPlotlyConfig(msg.chart, isDark);
+                  if (!cfg || !cfg.traces || cfg.traces.length === 0) return null;
+                  return (
+                    <div className="bg-warm-tableBg dark:bg-zinc-900/80 border border-warm-border/80 dark:border-zinc-700 p-2.5 rounded-xl shadow-xs mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-xs font-bold text-warm-text dark:text-dark-text">{msg.chart.title}</div>
+                        {cfg.traces.length > 1 && (
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                            Multi-Metric Comparison
+                          </span>
+                        )}
+                      </div>
+                      <div className="w-full h-[220px]">
+                        <Plot
+                          data={cfg.traces}
+                          layout={cfg.layout}
+                          config={{ responsive: true, displayModeBar: false }}
+                          style={{ width: '100%', height: '100%' }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* 4. Embedded Micro Breakdown Table */}
                 {msg.table && (
@@ -3853,9 +4950,9 @@ function ConversationalAnalytics({ isDark, currentUser }) {
                       <tbody className="divide-y divide-warm-border/40 dark:divide-zinc-800 bg-white dark:bg-zinc-900 font-medium">
                         {msg.table.rows.map((row, rIdx) => (
                           <tr key={rIdx} className="hover:bg-black/5 dark:hover:bg-white/5">
-                            {row.map((cell, cIdx) => (
+                            {(Array.isArray(row) ? row : Object.values(row || {})).map((cell, cIdx) => (
                               <td key={cIdx} className={`p-2 ${cIdx > 0 ? 'text-right font-bold' : 'font-semibold text-amber-accent'}`}>
-                                {cell}
+                                {typeof cell === 'number' ? cell.toLocaleString() : String(cell ?? '')}
                               </td>
                             ))}
                           </tr>
@@ -3866,26 +4963,30 @@ function ConversationalAnalytics({ isDark, currentUser }) {
                 )}
 
                 {/* 5. Inline Contextual Follow-up Suggestions */}
-                {msg.suggestedFollowups && msg.suggestedFollowups.length > 0 && (
-                  <div className="pt-3 border-t border-warm-border/60 dark:border-zinc-700/60 mt-3">
-                    <div className="text-[11px] font-bold text-warm-muted dark:text-dark-muted mb-2 flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-amber-accent" />
-                      <span>Suggested Follow-up Questions:</span>
+                {(() => {
+                  const safeFollowups = sanitizeFollowups(msg.suggestedFollowups);
+                  if (!safeFollowups || safeFollowups.length === 0) return null;
+                  return (
+                    <div className="pt-2.5 border-t border-warm-border/60 dark:border-zinc-700/60 mt-2.5">
+                      <div className="text-[11px] font-bold text-warm-muted dark:text-dark-muted mb-1.5 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-accent" />
+                        <span>{(msg.isWelcome || msg.id === 1) ? "I can help you with:" : "Suggested Follow-up Questions:"}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {safeFollowups.map((followupQ, fIdx) => (
+                          <button
+                            key={fIdx}
+                            onClick={() => sendQuery(followupQ)}
+                            className="px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                          >
+                            <span>{followupQ}</span>
+                            <ArrowRight className="h-3 w-3 text-amber-accent" />
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {msg.suggestedFollowups.map((followupQ, fIdx) => (
-                        <button
-                          key={fIdx}
-                          onClick={() => sendQuery(followupQ)}
-                          className="px-3 py-1.5 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                        >
-                          <span>{followupQ}</span>
-                          <ArrowRight className="h-3 w-3 text-amber-accent" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           ))}
@@ -3900,24 +5001,22 @@ function ConversationalAnalytics({ isDark, currentUser }) {
         </div>
 
         {/* Query Input Form */}
-        <form onSubmit={handleSend} className="flex items-center gap-2">
+        <form onSubmit={handleSend} className="flex items-center gap-2 shrink-0 pt-1">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask anything: e.g. How much revenue did iOS generate in last 7 days? Give Main iOS vs Market iOS..."
-            className="flex-1 px-4 py-3 text-sm rounded-xl bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-accent shadow-sm"
+            className="flex-1 px-4 py-2.5 text-xs md:text-sm rounded-xl bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-amber-accent shadow-sm"
           />
           <button
             type="submit"
-            className="px-5 py-3 bg-amber-accent hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+            className="px-4 py-2.5 bg-amber-accent hover:bg-amber-600 text-white font-bold text-xs md:text-sm rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
             <span>Ask</span>
             <Send className="h-4 w-4" />
           </button>
         </form>
-
-
       </div>
     </div>
   );
@@ -4103,48 +5202,65 @@ function FunnelAnalysis({ isDark }) {
 
   // Fetch CSV data
   useEffect(() => {
+    function processFunnelData(dataArray) {
+      if (!dataArray || !Array.isArray(dataArray)) return;
+      const parsed = dataArray.map(row => {
+        const dateStr = String(row.event_date || '').trim();
+        let formattedDateStr = '';
+        if (dateStr.length === 8 && !dateStr.includes('-') && !dateStr.includes('/')) {
+          formattedDateStr = `${dateStr.substring(0,4)}-${dateStr.substring(4,6)}-${dateStr.substring(6,8)}`;
+        } else if (dateStr.includes('-')) {
+          formattedDateStr = dateStr;
+        } else if (dateStr.includes('/')) {
+          const parts = dateStr.split('/');
+          if (parts.length === 3) {
+            formattedDateStr = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+          }
+        }
+        if (!formattedDateStr) return null;
+        
+        return {
+          dateObj: new Date(formattedDateStr),
+          dateStr: formattedDateStr,
+          viewType: row.view_type || 'Overall',
+          platform: String(row.ET_Platform || row.et_platform || row.platform || '').trim(),
+          country: String(row.Country || row.country || 'Overall').trim(),
+          marketingTeam: String(row.Marketing_team || row.marketing_team || row.MarketingTeam || 'Overall').trim(),
+          DAU: parseInt(row.DAU, 10) || 0,
+          paywalling_hits: parseInt(row.paywalling_hits, 10) || 0,
+          Plan_Page_Load: parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load, 10) || 0,
+          Plan_Selected: parseInt(row.Plan_Selected, 10) || 0,
+          Pay_Initiated: parseInt(row.Pay_Initiated, 10) || 0,
+          Purchased: parseInt(row.Purchased, 10) || 0
+        };
+      }).filter(Boolean);
+
+      setRawData(parsed);
+      setLoading(false);
+    }
+
     async function fetchData() {
-      setLoading(true);
+      if (!rawData || rawData.length === 0) setLoading(true);
       try {
         const results = await fetchDatasetCached('funnel', FUNNEL_GSHEET_URL);
-        const parsed = results.data.map(row => {
-          const dateStr = String(row.event_date || '').trim();
-          let formattedDateStr = '';
-          if (dateStr.length === 8 && !dateStr.includes('-') && !dateStr.includes('/')) {
-            formattedDateStr = `${dateStr.substring(0,4)}-${dateStr.substring(4,6)}-${dateStr.substring(6,8)}`;
-          } else if (dateStr.includes('-')) {
-            formattedDateStr = dateStr;
-          } else if (dateStr.includes('/')) {
-            const parts = dateStr.split('/');
-            if (parts.length === 3) {
-              formattedDateStr = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-            }
-          }
-          if (!formattedDateStr) return null;
-          
-          return {
-            dateObj: new Date(formattedDateStr),
-            dateStr: formattedDateStr,
-            viewType: row.view_type || 'Overall',
-            platform: String(row.ET_Platform || row.et_platform || row.platform || '').trim(),
-            country: String(row.Country || row.country || 'Overall').trim(),
-            marketingTeam: String(row.Marketing_team || row.marketing_team || row.MarketingTeam || 'Overall').trim(),
-            DAU: parseInt(row.DAU, 10) || 0,
-            paywalling_hits: parseInt(row.paywalling_hits, 10) || 0,
-            Plan_Page_Load: parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load, 10) || 0,
-            Plan_Selected: parseInt(row.Plan_Selected, 10) || 0,
-            Pay_Initiated: parseInt(row.Pay_Initiated, 10) || 0,
-            Purchased: parseInt(row.Purchased, 10) || 0,
-          };
-        }).filter(row => row && !isNaN(row.dateObj));
-        setRawData(parsed);
-        setLoading(false);
+        if (results && results.data) processFunnelData(results.data);
       } catch (err) {
-        setError("Failed to fetch data.");
+        console.error("Funnel fetch error", err);
+        setError("Failed to load funnel data.");
         setLoading(false);
       }
     }
+
     fetchData();
+
+    const handleDatasetUpdated = (e) => {
+      if (e.detail && e.detail.key === 'funnel' && e.detail.data) {
+        console.log("⚡ [Funnel UI] Background live Google Sheet update received!");
+        processFunnelData(e.detail.data);
+      }
+    };
+    window.addEventListener('dataset-updated', handleDatasetUpdated);
+    return () => window.removeEventListener('dataset-updated', handleDatasetUpdated);
   }, []);
 
   const [trendlineViewMode, setTrendlineViewMode] = useState("Daily"); // "Daily" | "Weekly"
@@ -4442,6 +5558,11 @@ function FunnelAnalysis({ isDark }) {
     // Step Conversion Daily Rates
     const trendDau = dates.map(d => trends[d] ? trends[d].DAU : 0);
     const trendPaywallHits = dates.map(d => trends[d] ? trends[d].paywalling_hits : 0);
+    const trendPageLoads = dates.map(d => trends[d] ? trends[d].Plan_Page_Load : 0);
+    const trendPlanSelected = dates.map(d => trends[d] ? trends[d].Plan_Selected : 0);
+    const trendPayInitiated = dates.map(d => trends[d] ? trends[d].Pay_Initiated : 0);
+    const trendPurchased = dates.map(d => trends[d] ? trends[d].Purchased : 0);
+
     const trendConv = dates.map(d => (trends[d] && trends[d].Plan_Page_Load > 0) ? (trends[d].Purchased / trends[d].Plan_Page_Load) * 100 : 0);
     const trendPaywallRate = dates.map(d => (trends[d] && trends[d].DAU > 0) ? (trends[d].paywalling_hits / trends[d].DAU) * 100 : 0);
 
@@ -4461,6 +5582,10 @@ function FunnelAnalysis({ isDark }) {
         dates, 
         dau: trendDau, 
         paywallHits: trendPaywallHits,
+        pageLoads: trendPageLoads,
+        planSelected: trendPlanSelected,
+        payInitiated: trendPayInitiated,
+        purchased: trendPurchased,
         paywallRate: trendPaywallRate, 
         conv: trendConv, 
         uniqueDays,
@@ -4483,7 +5608,7 @@ function FunnelAnalysis({ isDark }) {
   // Helper to compute weekly grouped step data for trendlines
   const computeWeeklyStepData = useCallback((trendObj, dauMode = "Daily Average") => {
     if (!trendObj || !trendObj.dates || !trendObj.dates.length) {
-      return { dates: [], dau: [], paywallHits: [], step1: [], step2: [], step3: [], step4: [] };
+      return { dates: [], dau: [], paywallHits: [], pageLoads: [], planSelected: [], payInitiated: [], purchased: [], step1: [], step2: [], step3: [], step4: [] };
     }
 
     const weeklyBuckets = {};
@@ -4498,14 +5623,31 @@ function FunnelAnalysis({ isDark }) {
       const weekLabel = weekKey; // Week Start Date (YYYY-MM-DD)
 
       if (!weeklyBuckets[weekKey]) {
-        weeklyBuckets[weekKey] = { label: weekLabel, dauSum: 0, paywallHitsSum: 0, step1Sum: 0, step2Sum: 0, step3Sum: 0, step4Sum: 0, count: 0 };
+        weeklyBuckets[weekKey] = { 
+          label: weekLabel, 
+          dauSum: 0, 
+          paywallHitsSum: 0, 
+          pageLoadsSum: 0,
+          planSelectedSum: 0,
+          payInitiatedSum: 0,
+          purchasedSum: 0,
+          step1Sum: 0, 
+          step2Sum: 0, 
+          step3Sum: 0, 
+          step4Sum: 0, 
+          count: 0 
+        };
       }
-      weeklyBuckets[weekKey].dauSum += trendObj.dau[idx] || 0;
-      weeklyBuckets[weekKey].paywallHitsSum += trendObj.paywallHits[idx] || 0;
-      weeklyBuckets[weekKey].step1Sum += trendObj.step1[idx] || 0;
-      weeklyBuckets[weekKey].step2Sum += trendObj.step2[idx] || 0;
-      weeklyBuckets[weekKey].step3Sum += trendObj.step3[idx] || 0;
-      weeklyBuckets[weekKey].step4Sum += trendObj.step4[idx] || 0;
+      weeklyBuckets[weekKey].dauSum += trendObj.dau ? (trendObj.dau[idx] || 0) : 0;
+      weeklyBuckets[weekKey].paywallHitsSum += trendObj.paywallHits ? (trendObj.paywallHits[idx] || 0) : 0;
+      weeklyBuckets[weekKey].pageLoadsSum += trendObj.pageLoads ? (trendObj.pageLoads[idx] || 0) : 0;
+      weeklyBuckets[weekKey].planSelectedSum += trendObj.planSelected ? (trendObj.planSelected[idx] || 0) : 0;
+      weeklyBuckets[weekKey].payInitiatedSum += trendObj.payInitiated ? (trendObj.payInitiated[idx] || 0) : 0;
+      weeklyBuckets[weekKey].purchasedSum += trendObj.purchased ? (trendObj.purchased[idx] || 0) : 0;
+      weeklyBuckets[weekKey].step1Sum += trendObj.step1 ? (trendObj.step1[idx] || 0) : 0;
+      weeklyBuckets[weekKey].step2Sum += trendObj.step2 ? (trendObj.step2[idx] || 0) : 0;
+      weeklyBuckets[weekKey].step3Sum += trendObj.step3 ? (trendObj.step3[idx] || 0) : 0;
+      weeklyBuckets[weekKey].step4Sum += trendObj.step4 ? (trendObj.step4[idx] || 0) : 0;
       weeklyBuckets[weekKey].count += 1;
     });
 
@@ -4514,6 +5656,10 @@ function FunnelAnalysis({ isDark }) {
       dates: sortedKeys.map(k => weeklyBuckets[k].label),
       dau: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].dauSum : Math.round(weeklyBuckets[k].dauSum / weeklyBuckets[k].count)),
       paywallHits: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].paywallHitsSum : Math.round(weeklyBuckets[k].paywallHitsSum / weeklyBuckets[k].count)),
+      pageLoads: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].pageLoadsSum : Math.round(weeklyBuckets[k].pageLoadsSum / weeklyBuckets[k].count)),
+      planSelected: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].planSelectedSum : Math.round(weeklyBuckets[k].planSelectedSum / weeklyBuckets[k].count)),
+      payInitiated: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].payInitiatedSum : Math.round(weeklyBuckets[k].payInitiatedSum / weeklyBuckets[k].count)),
+      purchased: sortedKeys.map(k => dauMode === "Weekly Sum" ? weeklyBuckets[k].purchasedSum : Math.round(weeklyBuckets[k].purchasedSum / weeklyBuckets[k].count)),
       step1: sortedKeys.map(k => parseFloat((weeklyBuckets[k].step1Sum / weeklyBuckets[k].count).toFixed(1))),
       step2: sortedKeys.map(k => parseFloat((weeklyBuckets[k].step2Sum / weeklyBuckets[k].count).toFixed(1))),
       step3: sortedKeys.map(k => parseFloat((weeklyBuckets[k].step3Sum / weeklyBuckets[k].count).toFixed(1))),
@@ -4530,6 +5676,10 @@ function FunnelAnalysis({ isDark }) {
       dates: primaryFunnel.trendData.dates,
       dau: primaryFunnel.trendData.dau,
       paywallHits: primaryFunnel.trendData.paywallHits,
+      pageLoads: primaryFunnel.trendData.pageLoads,
+      planSelected: primaryFunnel.trendData.planSelected,
+      payInitiated: primaryFunnel.trendData.payInitiated,
+      purchased: primaryFunnel.trendData.purchased,
       step1: primaryFunnel.trendData.step1.map(v => parseFloat(v.toFixed(1))),
       step2: primaryFunnel.trendData.step2.map(v => parseFloat(v.toFixed(1))),
       step3: primaryFunnel.trendData.step3.map(v => parseFloat(v.toFixed(1))),
@@ -4546,6 +5696,10 @@ function FunnelAnalysis({ isDark }) {
       dates: compFunnel.trendData.dates,
       dau: compFunnel.trendData.dau,
       paywallHits: compFunnel.trendData.paywallHits,
+      pageLoads: compFunnel.trendData.pageLoads,
+      planSelected: compFunnel.trendData.planSelected,
+      payInitiated: compFunnel.trendData.payInitiated,
+      purchased: compFunnel.trendData.purchased,
       step1: compFunnel.trendData.step1.map(v => parseFloat(v.toFixed(1))),
       step2: compFunnel.trendData.step2.map(v => parseFloat(v.toFixed(1))),
       step3: compFunnel.trendData.step3.map(v => parseFloat(v.toFixed(1))),
@@ -4555,9 +5709,8 @@ function FunnelAnalysis({ isDark }) {
 
   if (loading) {
     return (
-      <div className="flex h-64 w-full flex-col items-center justify-center text-warm-text dark:text-dark-text">
-        <Loader2 className="h-10 w-10 animate-spin text-amber-accent" />
-        <p className="mt-4 font-semibold tracking-wide">Loading Funnel Data...</p>
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm my-6 p-4">
+        <CleanDashboardLoader title="Loading Funnel Data..." subtitle="Processing conversion stages across channels and marketing teams" />
       </div>
     );
   }
@@ -4577,6 +5730,7 @@ function FunnelAnalysis({ isDark }) {
   const dailyAvgDau = overallAvg.DAU;
 
   const funnelLabels = FUNNEL_STAGES.map(s => s.label);
+  const trendlineColor = isDark ? '#fbbf24' : '#d97706';
 
   // Traces for Plotly Funnel Chart
   const funnelTraces = [];
@@ -4630,9 +5784,9 @@ function FunnelAnalysis({ isDark }) {
   }
 
   const sparklineLayout = {
-    width: 128,
-    height: 64,
-    margin: { l: 0, r: 15, t: 5, b: 5 },
+    autosize: true,
+    height: 48,
+    margin: { l: 2, r: 2, t: 2, b: 2 },
     paper_bgcolor: 'transparent',
     plot_bgcolor: 'transparent',
     xaxis: { visible: false, fixedrange: true },
@@ -4644,8 +5798,8 @@ function FunnelAnalysis({ isDark }) {
   const activePlatforms = Object.keys(primaryFunnel.platformAvg).filter(p => p.toLowerCase() !== 'combined').sort();
 
   // Helper renderer for cell stage metrics
-  const renderStageCell = (val, prevVal, compVal = null, showPerDay = true) => {
-    const dropoff = prevVal > 0 ? ((val / prevVal) * 100).toFixed(1) : null;
+  const renderStageCell = (val, prevVal, compVal = null, showPerDay = true, isFirstStep = false) => {
+    const dropoff = (!isFirstStep && prevVal > 0) ? ((val / prevVal) * 100).toFixed(1) : null;
     let diffPct = null;
     if (compVal !== null && compVal > 0) {
       diffPct = (((val - compVal) / compVal) * 100).toFixed(1);
@@ -4663,13 +5817,15 @@ function FunnelAnalysis({ isDark }) {
             </span>
           )}
           {diffPct !== null && (
-            <span className={`font-extrabold text-[10px] px-1.5 py-0.2 rounded ${
-              parseFloat(diffPct) >= 0 
-                ? 'bg-green-500/10 text-green-600 dark:text-green-400' 
-                : 'bg-red-500/10 text-red-600 dark:text-red-400'
-            }`}>
-              {parseFloat(diffPct) >= 0 ? `+${diffPct}%` : `${diffPct}%`}
-            </span>
+            parseFloat(diffPct) >= 0 ? (
+              <span className="text-xs font-semibold text-green-600 dark:text-green-400 inline-flex items-center gap-0.5">
+                <span className="text-[9px]">▲</span> +{diffPct}%
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-red-600 dark:text-red-400 inline-flex items-center gap-0.5">
+                <span className="text-[9px]">▼</span> {diffPct}%
+              </span>
+            )
           )}
         </div>
       </td>
@@ -4680,7 +5836,7 @@ function FunnelAnalysis({ isDark }) {
     <div className="animate-in fade-in duration-300">
       
       {/* Date Range & Segment Controls Card (Header on Line 1, Filters on Line 2) */}
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3.5 2xl:p-4 shadow-sm mb-6">
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3.5 2xl:p-4 shadow-sm mb-6 relative z-20">
         {/* Header Line */}
         <div className="pb-2.5 mb-3 border-b border-warm-border/60 dark:border-dark-border/60">
           <h2 className="text-sm font-bold text-warm-text dark:text-dark-text tracking-tight">
@@ -4688,76 +5844,79 @@ function FunnelAnalysis({ isDark }) {
           </h2>
         </div>
 
-        {/* Filter Controls Line Below */}
-        <div className="flex items-center justify-between gap-2.5 2xl:gap-3.5 overflow-x-auto custom-scrollbar">
+        {/* Filter Controls Grid (3x2 Matrix Layout like Subscription Report) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 w-full">
           {/* 1. Primary Range Selection */}
-          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
-            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Primary:</span>
-            {datePreset === "Custom range" && (
-              <div className="flex items-center gap-1">
-                <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
-                <span className="text-[11px] text-warm-muted dark:text-dark-muted">to</span>
-                <input type="date" value={endDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
-              </div>
-            )}
-            <select 
-              value={datePreset} 
-              onChange={(e) => setDatePreset(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
-            >
-              <option value="Yesterday">Yesterday</option>
-              <option value="Last 7 days">Last 7 days</option>
-              <option value="Last 30 days">Last 30 days</option>
-              <option value="This month">This month</option>
-              <option value="Last month">Last month</option>
-              <option value="Last 90 days">Last 90 days</option>
-              <option value="All time">All time</option>
-              <option value="Custom range">Custom range</option>
-            </select>
+          <div className="flex flex-col gap-1 w-full">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Primary Period</label>
+            <div className="flex items-center gap-1 w-full bg-warm-tableBg/60 dark:bg-slate-800/60 p-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
+              {datePreset === "Custom range" && (
+                <div className="flex items-center gap-1">
+                  <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                  <span className="text-[10px] text-warm-muted dark:text-dark-muted">to</span>
+                  <input type="date" value={endDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                </div>
+              )}
+              <select 
+                value={datePreset} 
+                onChange={(e) => setDatePreset(e.target.value)}
+                className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
+              >
+                <option value="Yesterday">Yesterday</option>
+                <option value="Last 7 days">Last 7 days</option>
+                <option value="Last 30 days">Last 30 days</option>
+                <option value="This month">This month</option>
+                <option value="Last month">Last month</option>
+                <option value="Last 90 days">Last 90 days</option>
+                <option value="Custom range">Custom range</option>
+              </select>
+            </div>
           </div>
 
           {/* 2. Comparison Period Selector */}
-          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
-            <span className="text-[11px] font-bold text-amber-accent">Compare:</span>
-            {compPreset === "Custom range" && (
-              <div className="flex items-center gap-1">
-                <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
-                <span className="text-[11px] text-warm-muted dark:text-dark-muted">to</span>
-                <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-1.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
-              </div>
-            )}
-            <select 
-              value={compPreset} 
-              onChange={(e) => setCompPreset(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-amber-500/40 text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
-            >
-              <option value="None">No Comparison</option>
-              <option value="Previous period">Previous period</option>
-              <option value="Previous month">Previous month</option>
-              <option value="Custom range">Custom range</option>
-            </select>
+          <div className="flex flex-col gap-1 w-full">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-amber-accent">Comparison Period</label>
+            <div className="flex items-center gap-1 w-full bg-warm-tableBg/60 dark:bg-slate-800/60 p-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
+              {compPreset === "Custom range" && (
+                <div className="flex items-center gap-1">
+                  <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                  <span className="text-[10px] text-warm-muted dark:text-dark-muted">to</span>
+                  <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                </div>
+              )}
+              <select 
+                value={compPreset} 
+                onChange={(e) => setCompPreset(e.target.value)}
+                className="bg-white dark:bg-slate-800 border border-amber-500/40 text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
+              >
+                <option value="None">No Comparison</option>
+                <option value="Previous period">Previous period</option>
+                <option value="Previous month">Previous month</option>
+                <option value="Custom range">Custom range</option>
+              </select>
+            </div>
           </div>
 
           {/* 3. Platform Multi-select Checkbox Popover */}
-          <div className="relative flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40" ref={platformDropdownRef}>
-            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Platform:</span>
+          <div className="relative flex flex-col gap-1 w-full" ref={platformDropdownRef}>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Platform</label>
             <button
               type="button"
               onClick={() => setIsPlatformDropdownOpen(!isPlatformDropdownOpen)}
-              className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="flex items-center justify-between bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
             >
-              <span>
+              <span className="truncate">
                 {selectedPlatforms.length === 0
                   ? 'None Selected'
                   : selectedPlatforms.length === availablePlatforms.length
                   ? 'All Platforms' 
                   : `${selectedPlatforms.length} Selected`}
               </span>
-              <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0" />
+              <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0 ml-1" />
             </button>
 
             {isPlatformDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
+              <div className="absolute left-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
                 <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
                   <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Platforms</span>
                   <button 
@@ -4796,12 +5955,12 @@ function FunnelAnalysis({ isDark }) {
           </div>
 
           {/* 4. Country Filter Selector */}
-          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
-            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Country:</span>
+          <div className="flex flex-col gap-1 w-full">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Country</label>
             <select 
               value={selectedCountry} 
               onChange={(e) => setSelectedCountry(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
             >
               {availableCountries.map(c => (
                 <option key={c} value={c}>{c === 'All' ? 'All Countries' : c}</option>
@@ -4810,12 +5969,12 @@ function FunnelAnalysis({ isDark }) {
           </div>
 
           {/* 5. Marketing Team Filter Selector */}
-          <div className="flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
-            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Marketing Team:</span>
+          <div className="flex flex-col gap-1 w-full">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Marketing Team</label>
             <select 
               value={selectedMarketingTeam} 
               onChange={(e) => setSelectedMarketingTeam(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
             >
               {availableMarketingTeams.map(m => (
                 <option key={m} value={m}>{m === 'All' ? 'All Teams' : m}</option>
@@ -4824,21 +5983,21 @@ function FunnelAnalysis({ isDark }) {
           </div>
 
           {/* 6. Day of Week Multi-select Checkbox Popover */}
-          <div className="relative flex items-center gap-1.5 shrink-0 bg-warm-tableBg/60 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40" ref={dayOfWeekDropdownRef}>
-            <span className="text-[11px] font-bold text-warm-muted dark:text-dark-muted">Day of Week:</span>
+          <div className="relative flex flex-col gap-1 w-full" ref={dayOfWeekDropdownRef}>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Day of Week</label>
             <button
               type="button"
               onClick={() => setIsDayOfWeekDropdownOpen(!isDayOfWeekDropdownOpen)}
-              className="flex items-center gap-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="flex items-center justify-between bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
             >
-              <span>
+              <span className="truncate">
                 {selectedDaysOfWeek.length === 7 
                   ? 'All Days' 
                   : selectedDaysOfWeek.length === 0 
                   ? 'None Selected' 
                   : `${selectedDaysOfWeek.length} Days Selected`}
               </span>
-              <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0" />
+              <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0 ml-1" />
             </button>
 
             {isDayOfWeekDropdownOpen && (
@@ -4882,64 +6041,62 @@ function FunnelAnalysis({ isDark }) {
       </div>
 
       {/* KPI Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 hover:shadow-md transition-shadow flex justify-between items-center">
-          <div>
-            <h3 className="text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Daily Avg DAU</h3>
-            <div className="flex items-end gap-3">
-              <span className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">
+      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 sm:p-5 hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-2 relative overflow-hidden">
+          <div className="shrink-0">
+            <h3 className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-1">Daily Active Users</h3>
+            <div className="flex items-end gap-2">
+              <span className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">
                 {dailyAvgDau.toLocaleString()}
               </span>
             </div>
-            <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Average daily active users</p>
+            <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Daily Active Users</p>
           </div>
           {trendData && (
-            <div className="w-32 h-16">
+            <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
-                data={[{ x: trendData.dates, y: trendData.dau, type: 'scatter', mode: 'lines+markers', marker: { size: 4 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)' }]}
-                layout={sparklineLayout} config={{ displayModeBar: false }} style={{ width: '100%', height: '100%' }}
+                data={[{ x: trendData.dates, y: trendData.dau, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)', hovertext: trendData.dau.map(v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(1)), hovertemplate: '%{hovertext}<extra></extra>' }]}
+                layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
             </div>
           )}
         </div>
 
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 hover:shadow-md transition-shadow flex justify-between items-center">
-          <div>
-            <h3 className="text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Overall Conversion</h3>
-            <div className="flex items-end gap-3">
-              <span className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 sm:p-5 hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-2 relative overflow-hidden">
+          <div className="shrink-0">
+            <h3 className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-1">Overall Conversion</h3>
+            <div className="flex items-end gap-2">
+              <span className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">
                 {overallConversion}%
               </span>
-              <span className="text-xs font-bold text-warm-muted dark:text-dark-muted mb-1">Purchased / Page Load</span>
             </div>
             <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Purchased vs Plan Page Load</p>
           </div>
           {trendData && (
-            <div className="w-32 h-16">
+            <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
-                data={[{ x: trendData.dates, y: trendData.conv, type: 'scatter', mode: 'lines+markers', marker: { size: 4 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)' }]}
-                layout={sparklineLayout} config={{ displayModeBar: false }} style={{ width: '100%', height: '100%' }}
+                data={[{ x: trendData.dates, y: trendData.conv, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)', hovertext: trendData.conv.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
+                layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
             </div>
           )}
         </div>
 
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 hover:shadow-md transition-shadow flex justify-between items-center">
-          <div>
-            <h3 className="text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Paywall Hit Rate</h3>
-            <div className="flex items-end gap-3">
-              <span className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 sm:p-5 hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-2 relative overflow-hidden">
+          <div className="shrink-0">
+            <h3 className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-1">Paywall Hit Rate</h3>
+            <div className="flex items-end gap-2">
+              <span className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">
                 {paywallRate}%
               </span>
-              <span className="text-xs font-bold text-warm-muted dark:text-dark-muted mb-1">Hits / DAU</span>
             </div>
             <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Paywall hits vs DAU</p>
           </div>
           {trendData && (
-            <div className="w-32 h-16">
+            <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
-                data={[{ x: trendData.dates, y: trendData.paywallRate, type: 'scatter', mode: 'lines+markers', marker: { size: 4 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)' }]}
-                layout={sparklineLayout} config={{ displayModeBar: false }} style={{ width: '100%', height: '100%' }}
+                data={[{ x: trendData.dates, y: trendData.paywallRate, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)', hovertext: trendData.paywallRate.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
+                layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
             </div>
           )}
@@ -4996,10 +6153,10 @@ function FunnelAnalysis({ isDark }) {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
-              {/* Sub-toggle for DAU & Paywall Hits in Weekly View */}
+              {/* Sub-toggle for DAU & Funnel Volumes in Weekly View */}
               {trendlineViewMode === "Weekly" && (
                 <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 p-1 rounded-lg border border-amber-200 dark:border-amber-900/50 text-xs">
-                  <span className="text-[11px] font-bold text-amber-900 dark:text-amber-300 px-1">DAU / Paywall:</span>
+                  <span className="text-[11px] font-bold text-amber-900 dark:text-amber-300 px-1">Volume Metrics:</span>
                   <button
                     type="button"
                     onClick={() => setWeeklyDauMode("Daily Average")}
@@ -5053,8 +6210,9 @@ function FunnelAnalysis({ isDark }) {
             </div>
           </div>
 
+          {/* 3x3 Matrix of Trendline Charts (9 Charts Total) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Absolute Chart 1: DAU */}
+            {/* Chart 1: DAU */}
             <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
               <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
                 <span>Daily Active Users (DAU)</span>
@@ -5069,7 +6227,7 @@ function FunnelAnalysis({ isDark }) {
                       type: 'scatter',
                       mode: 'lines+markers',
                       name: `Primary (${startDate} to ${endDate})`,
-                      line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 },
+                      line: { color: trendlineColor, width: 2 },
                       marker: { size: 4 },
                       hovertemplate: '%{x}<br><b>%{y:,.0f} DAU</b><extra></extra>'
                     },
@@ -5100,7 +6258,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
             </div>
 
-            {/* Absolute Chart 2: Paywall Hits */}
+            {/* Chart 2: Paywall Hits */}
             <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
               <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
                 <span>Paywall Hits</span>
@@ -5115,7 +6273,7 @@ function FunnelAnalysis({ isDark }) {
                       type: 'scatter',
                       mode: 'lines+markers',
                       name: `Primary (${startDate} to ${endDate})`,
-                      line: { color: isDark ? '#f59e0b' : '#b45309', width: 2 },
+                      line: { color: trendlineColor, width: 2 },
                       marker: { size: 4 },
                       hovertemplate: '%{x}<br><b>%{y:,.0f} Hits</b><extra></extra>'
                     },
@@ -5146,7 +6304,191 @@ function FunnelAnalysis({ isDark }) {
               </div>
             </div>
 
-            {/* Step 1: Plan Load -> Plan Selected */}
+            {/* Chart 3: Plan Page Loads */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Plan Page Loads</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Volume</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.pageLoads,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: trendlineColor, width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Page Loads</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.pageLoads,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Page Loads</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 55, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Chart 4: Plan Selected */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Plan Selected</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Volume</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.planSelected,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: trendlineColor, width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Plan Selected</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.planSelected,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Plan Selected</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 55, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Chart 5: Pay Initiated */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Pay Initiated</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Volume</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.payInitiated,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: trendlineColor, width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Pay Initiated</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.payInitiated,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Pay Initiated</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 55, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Chart 6: Purchased */}
+            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
+              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
+                <span>Purchased</span>
+                <span className="text-[11px] font-extrabold text-amber-accent">Volume</span>
+              </div>
+              <div className="w-full h-[200px]">
+                <Plot
+                  data={[
+                    {
+                      x: primaryTrendDisplay.dates,
+                      y: primaryTrendDisplay.purchased,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Primary (${startDate} to ${endDate})`,
+                      line: { color: trendlineColor, width: 2 },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Purchased</b><extra></extra>'
+                    },
+                    ...(compTrendDisplay ? [{
+                      x: compTrendDisplay.dates,
+                      y: compTrendDisplay.purchased,
+                      type: 'scatter',
+                      mode: 'lines+markers',
+                      name: `Comparison (${compStartDate} to ${compEndDate})`,
+                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
+                      marker: { size: 4 },
+                      hovertemplate: '%{x}<br><b>%{y:,.0f} Purchased</b><extra></extra>'
+                    }] : [])
+                  ]}
+                  layout={{
+                    autosize: true,
+                    margin: { l: 55, r: 20, t: 20, b: 40 },
+                    paper_bgcolor: 'transparent',
+                    plot_bgcolor: 'transparent',
+                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
+                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    showlegend: isCompActive,
+                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
+                  }}
+                  config={{ responsive: true, displayModeBar: false }}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </div>
+            </div>
+
+            {/* Chart 7: Step 1: Plan Load -> Plan Selected */}
             <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
               <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
                 <span>Plan Page Load &rarr; Plan Selected %</span>
@@ -5161,7 +6503,7 @@ function FunnelAnalysis({ isDark }) {
                       type: 'scatter',
                       mode: 'lines+markers',
                       name: `Primary (${startDate} to ${endDate})`,
-                      line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 },
+                      line: { color: trendlineColor, width: 2 },
                       marker: { size: 4 },
                       hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
                     },
@@ -5192,7 +6534,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
             </div>
 
-            {/* Step 2: Plan Selected -> Pay Initiated */}
+            {/* Chart 8: Step 2: Plan Selected -> Pay Initiated */}
             <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
               <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
                 <span>Plan Selected &rarr; Pay Initiated %</span>
@@ -5207,7 +6549,7 @@ function FunnelAnalysis({ isDark }) {
                       type: 'scatter',
                       mode: 'lines+markers',
                       name: `Primary (${startDate} to ${endDate})`,
-                      line: { color: isDark ? '#f59e0b' : '#b45309', width: 2 },
+                      line: { color: trendlineColor, width: 2 },
                       marker: { size: 4 },
                       hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
                     },
@@ -5238,7 +6580,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
             </div>
 
-            {/* Step 3: Pay Initiated -> Purchased */}
+            {/* Chart 9: Step 3: Pay Initiated -> Purchased */}
             <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
               <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
                 <span>Pay Initiated &rarr; Purchased %</span>
@@ -5253,59 +6595,13 @@ function FunnelAnalysis({ isDark }) {
                       type: 'scatter',
                       mode: 'lines+markers',
                       name: `Primary (${startDate} to ${endDate})`,
-                      line: { color: isDark ? '#10b981' : '#047857', width: 2 },
+                      line: { color: trendlineColor, width: 2 },
                       marker: { size: 4 },
                       hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
                     },
                     ...(compTrendDisplay ? [{
                       x: compTrendDisplay.dates,
                       y: compTrendDisplay.step3,
-                      type: 'scatter',
-                      mode: 'lines+markers',
-                      name: `Comparison (${compStartDate} to ${compEndDate})`,
-                      line: { color: '#3b82f6', width: 2, dash: 'dot' },
-                      marker: { size: 4 },
-                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
-                    }] : [])
-                  ]}
-                  layout={{
-                    autosize: true,
-                    margin: { l: 45, r: 20, t: 20, b: 40 },
-                    paper_bgcolor: 'transparent',
-                    plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
-                    showlegend: isCompActive,
-                    legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
-                  }}
-                  config={{ responsive: true, displayModeBar: false }}
-                  style={{ width: '100%', height: '100%' }}
-                />
-              </div>
-            </div>
-
-            {/* Step 4: Plan Load -> Purchased (Overall Conversion) */}
-            <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
-              <div className="text-xs font-bold mb-2 text-warm-text dark:text-dark-text flex items-center justify-between">
-                <span>Plan Page Load &rarr; Purchased % (Overall Step Conversion)</span>
-                <span className="text-[11px] font-extrabold text-amber-accent">Overall</span>
-              </div>
-              <div className="w-full h-[200px]">
-                <Plot
-                  data={[
-                    {
-                      x: primaryTrendDisplay.dates,
-                      y: primaryTrendDisplay.step4,
-                      type: 'scatter',
-                      mode: 'lines+markers',
-                      name: `Primary (${startDate} to ${endDate})`,
-                      line: { color: isDark ? '#ec4899' : '#be185d', width: 2 },
-                      marker: { size: 4 },
-                      hovertemplate: '%{x}<br><b>%{y:.1f}%</b><extra></extra>'
-                    },
-                    ...(compTrendDisplay ? [{
-                      x: compTrendDisplay.dates,
-                      y: compTrendDisplay.step4,
                       type: 'scatter',
                       mode: 'lines+markers',
                       name: `Comparison (${compStartDate} to ${compEndDate})`,
@@ -5349,14 +6645,19 @@ function FunnelAnalysis({ isDark }) {
           )}
         </div>
 
-        <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-lg custom-scrollbar overflow-x-auto shadow-sm relative">
+        {/* Mobile Touch Swipe Indicator */}
+        <div className="block sm:hidden text-center text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 py-1 px-3 rounded-full mb-2">
+          ← Swipe table left / right to view all stages →
+        </div>
+
+        <div className="overflow-x-auto border border-warm-border dark:border-dark-border rounded-xl bg-white dark:bg-dark-card custom-scrollbar relative">
           <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-            <thead className="sticky top-0 z-20 shadow-sm">
+            <thead className="sticky top-0 z-30">
               {isCompActive ? (
                 <>
                   {/* Level 1 Group Header Row */}
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-extrabold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                    <th rowSpan={2} className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] border-r border-warm-border dark:border-dark-border align-bottom sticky left-0 z-30 shadow-sm">
+                  <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-extrabold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th rowSpan={2} className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-900 dark:text-amber-200 border-r border-amber-500/30 align-middle sticky left-0 top-0 z-50">
                       Platform
                     </th>
                     <th colSpan={6} className="p-2.5 text-center bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 border-b border-r border-amber-500/30 font-black">
@@ -5368,7 +6669,7 @@ function FunnelAnalysis({ isDark }) {
                   </tr>
 
                   {/* Level 2 Funnel Stages Row */}
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
+                  <tr className="relative z-20 text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
                     {/* Primary Stages */}
                     {FUNNEL_STAGES.map(stage => (
                       <th key={`primary-${stage.key}`} className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">
@@ -5384,10 +6685,10 @@ function FunnelAnalysis({ isDark }) {
                   </tr>
                 </>
               ) : (
-                <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                  <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] sticky left-0 z-30">Platform</th>
+                <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                  <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border">Platform</th>
                   {FUNNEL_STAGES.map(stage => (
-                    <th key={stage.key} className="p-3 whitespace-nowrap text-right bg-warm-tableBg dark:bg-[#1E293B]">{stage.label}</th>
+                    <th key={stage.key} className="p-3 whitespace-nowrap text-right bg-white dark:bg-[#1E293B]">{stage.label}</th>
                   ))}
                 </tr>
               )}
@@ -5412,7 +6713,7 @@ function FunnelAnalysis({ isDark }) {
                   <React.Fragment key={rowKey}>
                     {/* Platform Summary Row */}
                     <tr className="border-b border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-semibold text-warm-text dark:text-dark-text">
-                      <td className="p-3 whitespace-nowrap font-bold border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-10 bg-warm-tableBg dark:bg-[#1E293B]">
+                      <td className="p-3 whitespace-nowrap font-bold border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-20 bg-white dark:bg-[#0F172A]">
                         <div 
                           onClick={() => toggleRow(rowKey)}
                           className="flex items-center gap-2 cursor-pointer select-none text-amber-accent dark:text-amber-400 hover:opacity-80"
@@ -5426,7 +6727,7 @@ function FunnelAnalysis({ isDark }) {
                       {FUNNEL_STAGES.map((stage, idx) => {
                         const val = primaryDataObj[stage.key] || 0;
                         const prevVal = idx > 0 ? (primaryDataObj[FUNNEL_STAGES[idx-1].key] || 0) : val;
-                        return renderStageCell(val, prevVal, null, true);
+                        return renderStageCell(val, prevVal, null, true, idx === 0);
                       })}
 
                       {/* Comparison Period Stage Columns */}
@@ -5435,7 +6736,7 @@ function FunnelAnalysis({ isDark }) {
                         const compPrevVal = idx > 0 ? (compDataObj[FUNNEL_STAGES[idx-1].key] || 0) : compVal;
                         const primaryVal = primaryDataObj[stage.key] || 0;
                         
-                        return renderStageCell(compVal, compPrevVal, primaryVal, true);
+                        return renderStageCell(compVal, compPrevVal, primaryVal, true, idx === 0);
                       })}
                     </tr>
 
@@ -5449,7 +6750,7 @@ function FunnelAnalysis({ isDark }) {
 
                       return (
                         <tr key={`${rowKey}-${dateStr}`} className="border-b border-warm-border/30 dark:border-zinc-800/60 bg-black/5 dark:bg-white/5 font-medium text-warm-text dark:text-dark-text text-xs">
-                          <td className="p-2.5 pl-7 whitespace-nowrap font-bold text-warm-muted dark:text-dark-muted border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-10 bg-warm-tableBg dark:bg-[#1E293B]">
+                          <td className="p-2.5 pl-7 whitespace-nowrap font-bold text-warm-muted dark:text-dark-muted border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-20 bg-white dark:bg-[#0F172A]">
                             <div>{dateStr}</div>
                             {isCompActive && compDateStr && (
                               <div className="text-[10px] text-blue-500 font-semibold mt-0.5">vs {compDateStr}</div>
@@ -5460,7 +6761,7 @@ function FunnelAnalysis({ isDark }) {
                           {FUNNEL_STAGES.map((stage, idx) => {
                             const val = pDay[stage.key] || 0;
                             const prevVal = idx > 0 ? (pDay[FUNNEL_STAGES[idx-1].key] || 0) : val;
-                            return renderStageCell(val, prevVal, null, false);
+                            return renderStageCell(val, prevVal, null, false, idx === 0);
                           })}
 
                           {/* Comparison Day Values (Looked up using corresponding comparison date index) */}
@@ -5469,7 +6770,7 @@ function FunnelAnalysis({ isDark }) {
                             const compPrevVal = idx > 0 && cDay ? (cDay[FUNNEL_STAGES[idx-1].key] || 0) : compVal;
                             const primaryVal = pDay[stage.key] || 0;
 
-                            return renderStageCell(compVal, compPrevVal, primaryVal, false);
+                            return renderStageCell(compVal, compPrevVal, primaryVal, false, idx === 0);
                           })}
                         </tr>
                       );
@@ -5491,13 +6792,18 @@ function FunnelAnalysis({ isDark }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto border border-warm-border dark:border-dark-border rounded-xl shadow-xs bg-white dark:bg-dark-card max-h-[500px]">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead className="sticky top-0 z-20 shadow-xs">
+        {/* Mobile Touch Swipe Indicator */}
+        <div className="block sm:hidden text-center text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 py-1 px-3 rounded-full mb-2">
+          ← Swipe table left / right to view all stages →
+        </div>
+
+        <div className="overflow-x-auto border border-warm-border dark:border-dark-border rounded-xl bg-white dark:bg-dark-card max-h-[500px]">
+          <table className="w-full text-xs text-left border-separate border-spacing-0">
+            <thead className="sticky top-0 z-30">
               {isCompActive ? (
                 <>
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
-                    <th rowSpan={2} className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] sticky left-0 z-30 border-r border-warm-border dark:border-dark-border">Marketing Team</th>
+                  <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
+                    <th rowSpan={2} className="p-3 whitespace-nowrap bg-amber-100/90 dark:bg-[#1E293B] text-amber-900 dark:text-amber-200 sticky left-0 top-0 z-50 border-r border-warm-border dark:border-dark-border align-middle">Marketing Team</th>
                     <th colSpan={FUNNEL_STAGES.length} className="p-2 text-center bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-extrabold border-r border-warm-border dark:border-dark-border">
                       Primary ({startDate} to {endDate})
                     </th>
@@ -5505,7 +6811,7 @@ function FunnelAnalysis({ isDark }) {
                       Comparison ({compStartDate} to {compEndDate})
                     </th>
                   </tr>
-                  <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-[10px] tracking-wider border-b border-warm-border dark:border-dark-border">
+                  <tr className="relative z-20 text-warm-muted dark:text-dark-muted uppercase font-bold text-[10px] tracking-wider border-b border-warm-border dark:border-dark-border">
                     {FUNNEL_STAGES.map(stage => (
                       <th key={`mkt-prim-${stage.key}`} className="p-2.5 whitespace-nowrap text-right bg-warm-tableBg dark:bg-[#1E293B]">{stage.label}</th>
                     ))}
@@ -5517,10 +6823,10 @@ function FunnelAnalysis({ isDark }) {
                   </tr>
                 </>
               ) : (
-                <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                  <th className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] sticky left-0 z-30">Marketing Team</th>
+                <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-bold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                  <th className="p-3 whitespace-nowrap bg-white dark:bg-[#1E293B] text-warm-text dark:text-dark-text sticky left-0 top-0 z-40 border-r border-warm-border dark:border-dark-border">Marketing Team</th>
                   {FUNNEL_STAGES.map(stage => (
-                    <th key={stage.key} className="p-3 whitespace-nowrap text-right bg-warm-tableBg dark:bg-[#1E293B]">{stage.label}</th>
+                    <th key={stage.key} className="p-3 whitespace-nowrap text-right bg-white dark:bg-[#1E293B]">{stage.label}</th>
                   ))}
                 </tr>
               )}
@@ -5543,7 +6849,7 @@ function FunnelAnalysis({ isDark }) {
                 return (
                   <React.Fragment key={mktRowKey}>
                     <tr className="border-b border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 transition-colors font-semibold text-warm-text dark:text-dark-text">
-                      <td className="p-3 whitespace-nowrap font-bold border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-10 bg-warm-tableBg dark:bg-[#1E293B]">
+                      <td className="p-3 whitespace-nowrap font-bold border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-20 bg-white dark:bg-[#0F172A]">
                         <div 
                           onClick={() => toggleRow(mktRowKey)}
                           className="flex items-center gap-2 cursor-pointer select-none text-amber-accent dark:text-amber-400 hover:opacity-80"
@@ -5556,7 +6862,7 @@ function FunnelAnalysis({ isDark }) {
                       {FUNNEL_STAGES.map((stage, idx) => {
                         const val = primaryDataObj[stage.key] || 0;
                         const prevVal = idx > 0 ? (primaryDataObj[FUNNEL_STAGES[idx-1].key] || 0) : val;
-                        return renderStageCell(val, prevVal, null, true);
+                        return renderStageCell(val, prevVal, null, true, idx === 0);
                       })}
 
                       {isCompActive && compDataObj && FUNNEL_STAGES.map((stage, idx) => {
@@ -5564,7 +6870,7 @@ function FunnelAnalysis({ isDark }) {
                         const compPrevVal = idx > 0 ? (compDataObj[FUNNEL_STAGES[idx-1].key] || 0) : compVal;
                         const primaryVal = primaryDataObj[stage.key] || 0;
                         
-                        return renderStageCell(compVal, compPrevVal, primaryVal, true);
+                        return renderStageCell(compVal, compPrevVal, primaryVal, true, idx === 0);
                       })}
                     </tr>
 
@@ -5575,7 +6881,7 @@ function FunnelAnalysis({ isDark }) {
 
                       return (
                         <tr key={`${mktRowKey}-${dateStr}`} className="border-b border-warm-border/30 dark:border-zinc-800/60 bg-black/5 dark:bg-white/5 font-medium text-warm-text dark:text-dark-text text-xs">
-                          <td className="p-2.5 pl-7 whitespace-nowrap font-bold text-warm-muted dark:text-dark-muted border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-10 bg-warm-tableBg dark:bg-[#1E293B]">
+                          <td className="p-2.5 pl-7 whitespace-nowrap font-bold text-warm-muted dark:text-dark-muted border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-20 bg-white dark:bg-[#0F172A]">
                             <div>{dateStr}</div>
                             {isCompActive && compDateStr && (
                               <div className="text-[10px] text-blue-500 font-semibold mt-0.5">vs {compDateStr}</div>
@@ -5585,7 +6891,7 @@ function FunnelAnalysis({ isDark }) {
                           {FUNNEL_STAGES.map((stage, idx) => {
                             const val = pDay[stage.key] || 0;
                             const prevVal = idx > 0 ? (pDay[FUNNEL_STAGES[idx-1].key] || 0) : val;
-                            return renderStageCell(val, prevVal, null, false);
+                            return renderStageCell(val, prevVal, null, false, idx === 0);
                           })}
 
                           {isCompActive && FUNNEL_STAGES.map((stage, idx) => {
@@ -5593,7 +6899,7 @@ function FunnelAnalysis({ isDark }) {
                             const compPrevVal = idx > 0 && cDay ? (cDay[FUNNEL_STAGES[idx-1].key] || 0) : compVal;
                             const primaryVal = pDay[stage.key] || 0;
 
-                            return renderStageCell(compVal, compPrevVal, primaryVal, false);
+                            return renderStageCell(compVal, compPrevVal, primaryVal, false, idx === 0);
                           })}
                         </tr>
                       );
@@ -5616,67 +6922,52 @@ function Realtime({ isDark }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [realtimeCompMode, setRealtimeCompMode] = useState("4-Week"); // "4-Week" | "7-Day"
 
-  const loadRealtimeData = async (forceBypassCache = false) => {
-    setLoading(true);
+  const parseRealtimeRows = (rows) => {
+    if (!rows || !Array.isArray(rows)) return [];
+    return rows.map(r => {
+      const rawDate = r.event_date || r.EVENT_DATE || '';
+      const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
+      const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
+      const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
+      const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
+
+      const dateStr = String(rawDate).trim();
+      const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
+      const platform = String(rawPlatform).trim();
+      const event = String(rawEvent).trim();
+      const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
+
+      return { dateStr, hour, platform, event, count };
+    }).filter(r => r.dateStr && !isNaN(r.hour));
+  };
+
+  const loadRealtimeData = async () => {
     try {
-      if (forceBypassCache && isTursoConfigured()) {
-        const tursoResult = await fetchTursoTable('realtime');
-        if (tursoResult && tursoResult.data && tursoResult.data.length > 0) {
-          const data = tursoResult.data.map(r => {
-            const rawDate = r.event_date || r.EVENT_DATE || '';
-            const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
-            const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
-            const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
-            const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
-
-            const dateStr = String(rawDate).trim();
-            const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
-            const platform = String(rawPlatform).trim();
-            const event = String(rawEvent).trim();
-            const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
-
-            return { dateStr, hour, platform, event, count };
-          }).filter(r => r.dateStr && !isNaN(r.hour));
-
-          setRawData(data);
-          setLoading(false);
-          return;
-        }
+      // 1. Instant Load from Turso DB / Cache (<50ms)
+      const cachedOrTurso = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
+      if (cachedOrTurso && cachedOrTurso.data && cachedOrTurso.data.length > 0) {
+        setRawData(parseRealtimeRows(cachedOrTurso.data));
       }
-
-      const results = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
-      const data = results.data.map(r => {
-        const rawDate = r.event_date || r.EVENT_DATE || '';
-        const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
-        const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
-        const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
-        const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
-
-        const dateStr = String(rawDate).trim();
-        const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
-        const platform = String(rawPlatform).trim();
-        const event = String(rawEvent).trim();
-        const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
-
-        return {
-          dateStr,
-          hour,
-          platform,
-          event,
-          count
-        };
-      }).filter(r => r.dateStr && !isNaN(r.hour));
-
-      setRawData(data);
-      setLoading(false);
     } catch (err) {
       console.error("Realtime fetch error", err);
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
     loadRealtimeData();
+
+    // Listen for background live Google Sheet CSV update
+    const handleDatasetUpdated = (e) => {
+      if (e.detail && e.detail.key === 'realtime' && e.detail.data) {
+        console.log("⚡ [Realtime UI] Background live Google Sheet update received!");
+        setRawData(parseRealtimeRows(e.detail.data));
+        setLoading(false);
+      }
+    };
+    window.addEventListener('dataset-updated', handleDatasetUpdated);
+    return () => window.removeEventListener('dataset-updated', handleDatasetUpdated);
   }, []);
 
   const handleManualSync = async () => {
@@ -5867,11 +7158,36 @@ function Realtime({ isDark }) {
     };
   }, [rawData, realtimeCompMode]);
 
-  if (loading) {
+  if (loading && (!rawData || rawData.length === 0)) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-warm-muted dark:text-dark-muted">
-        <Loader2 className="animate-spin mb-4" size={32} />
-        <p className="font-semibold text-base tracking-wide">Fetching realtime data...</p>
+      <div className="animate-in fade-in duration-300 pb-12">
+        {/* Realtime Header Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <div className="h-8 w-64 bg-warm-border/40 dark:bg-zinc-800 rounded-lg animate-pulse mb-2" />
+            <div className="h-4 w-80 bg-warm-border/30 dark:bg-zinc-800/60 rounded-md animate-pulse" />
+          </div>
+          <div className="h-9 w-48 bg-warm-border/30 dark:bg-zinc-800/60 rounded-full animate-pulse self-start sm:self-auto" />
+        </div>
+
+        {/* KPI Cards Skeleton Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white dark:bg-dark-card border border-warm-border/80 dark:border-dark-border rounded-xl p-5 shadow-sm animate-pulse">
+              <div className="h-3 w-28 bg-warm-border/40 dark:bg-zinc-800 rounded mb-3" />
+              <div className="h-8 w-20 bg-warm-border/60 dark:bg-zinc-700 rounded mb-2" />
+              <div className="h-3 w-36 bg-warm-border/30 dark:bg-zinc-800/60 rounded" />
+            </div>
+          ))}
+        </div>
+
+        {/* Main Container Loader with GPU-Accelerated Hardware Spinner */}
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-6 shadow-sm min-h-[380px] flex items-center justify-center">
+          <CleanDashboardLoader 
+            title="Fetching realtime data..." 
+            subtitle="Loading latest platform telemetry & 4-week benchmark data" 
+          />
+        </div>
       </div>
     );
   }
@@ -5908,8 +7224,8 @@ function Realtime({ isDark }) {
         <div>
           <h2 className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight flex items-center gap-2">
             <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
             </span>
             Realtime Live Forecast
           </h2>
@@ -5943,108 +7259,404 @@ function Realtime({ isDark }) {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5">
-          <h3 className="text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Purchases Today (So far)</h3>
-          <span className="text-4xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(todayPurchases).toLocaleString()}</span>
+      {/* KPI Cards (2-Column Grid on Mobile) */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5">
+          <h3 className="text-[10px] md:text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Purchases Today</h3>
+          <span className="text-2xl md:text-4xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(todayPurchases).toLocaleString()}</span>
         </div>
         
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 ring-1 ring-amber-500/30 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-2 opacity-10">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5 ring-1 ring-amber-500/30 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-2 opacity-10 hidden sm:block">
             <Sun size={48} />
           </div>
-          <h3 className="text-[11px] font-bold text-amber-accent dark:text-amber-500 tracking-wider uppercase mb-1">Estimated Today (EOD)</h3>
-          <span className="text-4xl font-black text-amber-accent dark:text-amber-400 tracking-tight">{Math.round(projectedTotal).toLocaleString()}</span>
+          <h3 className="text-[10px] md:text-[11px] font-bold text-amber-accent dark:text-amber-500 tracking-wider uppercase mb-1">Estimated Today (EOD)</h3>
+          <span className="text-2xl md:text-4xl font-black text-amber-accent dark:text-amber-400 tracking-tight">{Math.round(projectedTotal).toLocaleString()}</span>
         </div>
 
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5">
-          <h3 className="text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">{benchmarkTitle}</h3>
-          <div className="flex items-end gap-2">
-            <span className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(benchmarkTotal).toLocaleString()}</span>
-            <span className="text-xs text-warm-muted dark:text-dark-muted pb-1 font-bold">Total EOD</span>
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5">
+          <h3 className="text-[10px] md:text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">{benchmarkTitle}</h3>
+          <div className="flex items-end gap-1.5 md:gap-2">
+            <span className="text-2xl md:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(benchmarkTotal).toLocaleString()}</span>
+            <span className="text-[10px] md:text-xs text-warm-muted dark:text-dark-muted pb-1 font-bold">Total EOD</span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5">
-           <h3 className="text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Pacing vs History</h3>
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5">
+           <h3 className="text-[10px] md:text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Pacing vs History</h3>
            <div className="flex items-end gap-2">
-              <span className={`text-3xl font-black tracking-tight ${todayPurchases >= benchmarkCurrentHour ? 'text-emerald-500' : 'text-red-500'}`}>
+              <span className={`text-2xl md:text-3xl font-black tracking-tight ${todayPurchases >= benchmarkCurrentHour ? 'text-emerald-500' : 'text-red-500'}`}>
                 {benchmarkCurrentHour > 0 ? ((todayPurchases / benchmarkCurrentHour - 1) * 100).toFixed(1) : 0}%
               </span>
            </div>
-           <p className="text-xs font-bold text-warm-muted dark:text-dark-muted mt-1">vs {benchmarkShort} (up to hour {String(currentHour + 1).padStart(2, '0')}:00)</p>
+           <p className="text-[10px] font-bold text-warm-muted dark:text-dark-muted mt-1">vs {benchmarkShort}</p>
         </div>
       </section>
 
-      {/* Hourly Trend Chart */}
-      <section className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 mb-6">
-        <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-4">
-          Hourly Purchase Velocity (Today vs {benchmarkShort})
-        </h3>
-        <div className="w-full h-[300px]">
-          <Plot
-            data={[
-              {
-                x: hours,
-                y: hourlyTrend.map(h => h.today),
-                type: 'scatter',
-                mode: 'lines',
-                name: 'Today',
-                line: { color: isDark ? '#fbbf24' : '#d97706', width: 3, shape: 'spline' },
-                hovertemplate: '  <b>%{y}</b>  <extra></extra>'
-              },
-              {
-                x: hours,
-                y: hourlyTrend.map(h => realtimeCompMode === "4-Week" ? h.past4Avg : h.last7Avg),
-                type: 'scatter',
-                mode: 'lines',
-                name: benchmarkShort,
-                line: { color: isDark ? '#64748B' : '#94A3B8', width: 2, dash: 'dot', shape: 'spline' },
-                hovertemplate: '  <b>%{y:.1f}</b>  <extra></extra>'
-              }
-            ]}
-            layout={{
-              autosize: true,
-              margin: { l: 50, r: 20, t: 20, b: 40 },
-              paper_bgcolor: 'transparent',
-              plot_bgcolor: 'transparent',
-              xaxis: { 
-                title: 'Hour of Day (0-23)',
-                range: [0, 23],
-                zeroline: true,
-                zerolinecolor: isDark ? '#334155' : '#E2E8F0',
-                showgrid: false,
-                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 11, weight: 'bold' },
-                tickmode: 'array',
-                tickvals: [5, 10, 15, 20]
-              },
-              yaxis: { 
-                title: 'Purchases',
-                automargin: true,
-                zeroline: true,
-                zerolinecolor: isDark ? '#334155' : '#E2E8F0',
-                gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
-                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 11, weight: 'bold' }
-              },
-              legend: { orientation: 'h', y: -0.2, font: { color: isDark ? '#94A3B8' : '#64748B', family: 'inherit' } },
-              hovermode: 'x unified'
-            }}
-            config={{ responsive: true, displayModeBar: false }}
-            style={{ width: '100%', height: '100%' }}
-          />
+      {/* Hourly Trend Chart & Today vs History sharing real estate */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-8">
+        {/* Left: Hourly Purchase Velocity Chart */}
+        <div className="lg:col-span-8 xl:col-span-9 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 md:p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-base font-bold text-warm-text dark:text-dark-text">
+              Hourly Purchase Velocity (Today vs {benchmarkShort})
+            </h3>
+          </div>
+          <div className="w-full h-[320px]">
+            <Plot
+              data={[
+                {
+                  x: hours,
+                  y: hourlyTrend.map(h => h.today),
+                  type: 'scatter',
+                  mode: 'lines',
+                  name: 'Today',
+                  line: { color: isDark ? '#fbbf24' : '#d97706', width: 3, shape: 'spline' },
+                  hovertemplate: '  <b>%{y}</b>  <extra></extra>'
+                },
+                {
+                  x: hours,
+                  y: hourlyTrend.map(h => realtimeCompMode === "4-Week" ? h.past4Avg : h.last7Avg),
+                  type: 'scatter',
+                  mode: 'lines',
+                  name: benchmarkShort,
+                  line: { color: isDark ? '#64748B' : '#94A3B8', width: 2, dash: 'dot', shape: 'spline' },
+                  hovertemplate: '  <b>%{y:.1f}</b>  <extra></extra>'
+                }
+              ]}
+              layout={{
+                autosize: true,
+                margin: { l: 50, r: 20, t: 20, b: 40 },
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                xaxis: { 
+                  title: 'Hour of Day (0-23)',
+                  range: [0, 23],
+                  zeroline: true,
+                  zerolinecolor: isDark ? '#334155' : '#E2E8F0',
+                  showgrid: false,
+                  tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 11, weight: 'bold' },
+                  tickmode: 'array',
+                  tickvals: [5, 10, 15, 20]
+                },
+                yaxis: { 
+                  title: 'Purchases',
+                  automargin: true,
+                  zeroline: true,
+                  zerolinecolor: isDark ? '#334155' : '#E2E8F0',
+                  gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
+                  tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 11, weight: 'bold' }
+                },
+                legend: { orientation: 'h', y: 1.18, x: 0, font: { color: isDark ? '#94A3B8' : '#64748B', family: 'inherit', size: 10 } },
+                hovermode: 'x unified'
+              }}
+              config={{ responsive: true, displayModeBar: false }}
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+        </div>
+
+        {/* Right: TODAY VS HISTORY */}
+        <div className="lg:col-span-4 xl:col-span-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 md:p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black uppercase tracking-wider text-warm-text dark:text-dark-text">
+                TODAY VS HISTORY
+              </h3>
+            </div>
+
+            {/* Quick Benchmark Comparison Toggle */}
+            <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-full border border-warm-border/60 dark:border-zinc-700 mb-4">
+              <button
+                onClick={() => setRealtimeCompMode("4-Week")}
+                className={`flex-1 py-1 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
+                  realtimeCompMode === "4-Week"
+                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
+                }`}
+              >
+                Past 4-Week Avg
+              </button>
+              <button
+                onClick={() => setRealtimeCompMode("7-Day")}
+                className={`flex-1 py-1 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
+                  realtimeCompMode === "7-Day"
+                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
+                }`}
+              >
+                Last 7-Days
+              </button>
+            </div>
+          </div>
+
+          {/* Dual Bar Graphic */}
+          <div className="flex flex-col items-center my-auto">
+            {(() => {
+              const maxBarVal = Math.max(projectedTotal, benchmarkTotal, 1);
+              const maxH = 130;
+              const minH = 28;
+              const todayH = Math.max(minH, Math.round((projectedTotal / maxBarVal) * maxH));
+              const benchH = Math.max(minH, Math.round((benchmarkTotal / maxBarVal) * maxH));
+              const diffPctVal = benchmarkTotal > 0 ? ((projectedTotal - benchmarkTotal) / benchmarkTotal) * 100 : 0;
+              const isShortfall = diffPctVal < 0;
+
+              return (
+                <div className="w-full max-w-[200px] flex flex-col items-center">
+                  {/* Bars Container */}
+                  <div className="w-full h-44 flex items-end justify-center gap-3 relative pb-0.5">
+                    {/* Central Vertical Guide Line */}
+                    <div className="absolute top-1 bottom-0 left-1/2 -translate-x-1/2 w-px bg-slate-300 dark:bg-zinc-700 border-l border-dashed border-slate-400 dark:border-zinc-600 z-0" />
+
+                    {/* Bar 1: Estimated Today */}
+                    <div className="flex flex-col items-center z-10 w-14">
+                      <span className="text-[10px] font-extrabold text-warm-muted dark:text-dark-muted text-center leading-tight mb-1">
+                        Estimated Today<br/>
+                        <span className="text-xs font-black text-warm-text dark:text-dark-text">({Math.round(projectedTotal)})</span>
+                      </span>
+                      <div
+                        style={{ height: `${todayH}px` }}
+                        className="w-12 bg-slate-700 dark:bg-slate-500 rounded-t-xs shadow-xs transition-all duration-300"
+                      />
+                    </div>
+
+                    {/* Bar 2: Benchmark (Past 4-Week or Last 7-Days) */}
+                    <div className="flex flex-col items-center z-10 w-14">
+                      <span className="text-[10px] font-extrabold text-warm-muted dark:text-dark-muted text-center leading-tight mb-1">
+                        {realtimeCompMode === "4-Week" ? "Past 4-Week" : "Last 7-Days"}<br/>
+                        <span className="text-xs font-black text-warm-text dark:text-dark-text">({Math.round(benchmarkTotal)})</span>
+                      </span>
+                      <div
+                        style={{ height: `${benchH}px` }}
+                        className="w-12 bg-slate-300 dark:bg-zinc-600 rounded-t-xs shadow-xs transition-all duration-300"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Horizontal Base Plinth in Terracotta/Amber */}
+                  <div className="w-full h-3.5 bg-[#C25E1A] dark:bg-amber-600 rounded-xs shadow-xs" />
+
+                  {/* Variance Metric & Details */}
+                  <div className="text-center mt-3">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-warm-muted dark:text-dark-muted block">
+                      {isShortfall ? "Shortfall" : "Surplus"}
+                    </span>
+                    <span className={`text-3xl sm:text-4xl font-black tracking-tight ${isShortfall ? 'text-[#C25E1A] dark:text-rose-400' : 'text-emerald-500'}`}>
+                      {diffPctVal >= 0 ? "+" : ""}{diffPctVal.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] font-bold text-warm-muted dark:text-dark-muted block mt-0.5">
+                      Original metric vs {benchmarkShort}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </section>
+
+      {/* Visuals: Multi-Platform Funnel Charts (Full Width for 1 Overall + 6 Platforms = 7 Funnels) */}
+      <section className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 md:p-6 mb-8 overflow-hidden">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-base font-black text-warm-text dark:text-dark-text tracking-tight">Multi-Platform Funnel Charts</h3>
+            <p className="text-[11px] font-semibold text-warm-muted dark:text-dark-muted">Today's live conversion progression by platform (Overall + 6 Platforms)</p>
+          </div>
+        </div>
+
+        {/* SVG Multi-Platform Funnel Canvas */}
+        <div className="overflow-x-auto custom-scrollbar w-full py-2">
+          {(() => {
+            const combinedPlat = activePlatforms.filter(p => p.toLowerCase() === 'combined');
+            const otherPlats = activePlatforms.filter(p => p.toLowerCase() !== 'combined');
+            const displayPlatforms = [...(combinedPlat.length ? combinedPlat : ['Combined']), ...otherPlats];
+            const numCols = displayPlatforms.length;
+            const labelColW = 120;
+            const colW = 142;
+            const totalSvgW = labelColW + numCols * colW;
+
+            const getBottomColor = (p) => {
+              const s = p.toLowerCase();
+              if (s.includes('combined')) return '#EA580C';
+              if (s.includes('mkt_android')) return '#EA580C';
+              if (s.includes('mkt_ios')) return '#F97316';
+              if (s.includes('mweb')) return '#DC2626';
+              if (s.includes('main android') || s.includes('main_android')) return '#D97706';
+              if (s.includes('main ios') || s.includes('main_ios')) return '#2563EB';
+              if (s.includes('web')) return '#059669';
+              return '#475569';
+            };
+
+            return (
+              <svg viewBox={`0 0 ${totalSvgW} 330`} className="w-full h-auto min-w-[960px] select-none">
+                {/* Left Stage Labels & Horizontal Ticks */}
+                <g className="font-bold text-[11px]">
+                  <text x="100" y="70" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Plan Page Load</text>
+                  <line x1="104" y1="67" x2="116" y2="67" stroke="#94A3B8" strokeWidth="1.5" />
+
+                  <text x="100" y="146" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Plan Selected</text>
+                  <line x1="104" y1="143" x2="116" y2="143" stroke="#94A3B8" strokeWidth="1.5" />
+
+                  <text x="100" y="214" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Pay Initiated</text>
+                  <line x1="104" y1="211" x2="116" y2="211" stroke="#94A3B8" strokeWidth="1.5" />
+
+                  <text x="100" y="276" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Purchase</text>
+                  <line x1="104" y1="273" x2="116" y2="273" stroke="#94A3B8" strokeWidth="1.5" />
+                </g>
+
+                {/* Flow Curves between adjacent columns */}
+                {displayPlatforms.map((_, cIdx) => {
+                  if (cIdx >= numCols - 1) return null;
+                  const c1 = labelColW + cIdx * colW + colW / 2;
+                  const c2 = labelColW + (cIdx + 1) * colW + colW / 2;
+                  return (
+                    <g key={`flow-${cIdx}`}>
+                      {/* Curve Stage 2 -> Stage 3 */}
+                      <path
+                        d={`M ${c1 + 44} 143 C ${c1 + 78} 150, ${c2 - 62} 170, ${c2 - 31} 178`}
+                        fill="none"
+                        stroke="#94A3B8"
+                        strokeWidth="1.2"
+                        strokeDasharray="2,2"
+                        opacity="0.55"
+                      />
+                      {/* Curve Stage 3 -> Stage 4 */}
+                      <path
+                        d={`M ${c1 + 21} 211 C ${c1 + 52} 220, ${c2 - 48} 235, ${c2 - 20} 243`}
+                        fill="none"
+                        stroke="#94A3B8"
+                        strokeWidth="1.2"
+                        strokeDasharray="2,2"
+                        opacity="0.55"
+                      />
+                    </g>
+                  );
+                })}
+
+                {/* Platform Columns */}
+                {displayPlatforms.map((plat, cIdx) => {
+                  const cCenter = labelColW + cIdx * colW + colW / 2;
+                  const tData = platformToday[plat] || { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
+                  const loads = tData.PlanPageLoaded || 0;
+                  const selected = tData.PlanSelected || 0;
+                  const initiated = tData.PayInitiated || 0;
+                  const purchased = tData.Purchase || 0;
+
+                  const drop1 = loads > 0 ? Math.max(0, Math.round((1 - selected / loads) * 100)) : 0;
+                  const drop2 = selected > 0 ? Math.max(0, Math.round((1 - initiated / selected) * 100)) : 0;
+                  const platDisplay = plat === 'Combined' ? 'Overall (Combined)' : plat;
+                  const bottomColor = getBottomColor(plat);
+
+                  return (
+                    <g key={plat}>
+                      {/* Platform Header */}
+                      <text
+                        x={cCenter}
+                        y="20"
+                        textAnchor="middle"
+                        fontSize="11.5"
+                        fontWeight="800"
+                        className="fill-slate-800 dark:fill-slate-100 uppercase tracking-tight"
+                      >
+                        {platDisplay}
+                      </text>
+
+                      {/* Level 1: Plan Page Load (Trap 1) */}
+                      <polygon
+                        points={`${cCenter - 58},35 ${cCenter + 58},35 ${cCenter + 44},106 ${cCenter - 44},106`}
+                        fill="#1E293B"
+                      />
+                      <text x={cCenter} y="58" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">
+                        {loads.toLocaleString()}
+                      </text>
+                      <text x={cCenter} y="71" textAnchor="middle" fill="#94A3B8" fontSize="8.5" fontWeight="600">
+                        tot Volume
+                      </text>
+                      <text x={cCenter} y="84" textAnchor="middle" fill="#CBD5E1" fontSize="8" fontWeight="500">
+                        Plan Page Load to
+                      </text>
+                      <text x={cCenter} y="95" textAnchor="middle" fill="#CBD5E1" fontSize="8" fontWeight="500">
+                        Plan Selected: {drop1}% drop-off
+                      </text>
+
+                      {/* Level 2: Plan Selected (Trap 2) */}
+                      <polygon
+                        points={`${cCenter - 44},109 ${cCenter + 44},109 ${cCenter + 31},175 ${cCenter - 31},175`}
+                        fill="#334155"
+                      />
+                      <text x={cCenter} y="132" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
+                        {selected.toLocaleString()}
+                      </text>
+                      <text x={cCenter} y="146" textAnchor="middle" fill="#94A3B8" fontSize="8.5" fontWeight="600">
+                        Plan Selected
+                      </text>
+                      <text x={cCenter} y="160" textAnchor="middle" fill="#CBD5E1" fontSize="8" fontWeight="500">
+                        Drop-off: {drop2}% drop-off
+                      </text>
+
+                      {/* Level 3: Pay Initiated (Trap 3) */}
+                      <polygon
+                        points={`${cCenter - 31},178 ${cCenter + 31},178 ${cCenter + 21},240 ${cCenter - 21},240`}
+                        fill="#475569"
+                      />
+                      <text x={cCenter} y="206" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
+                        {initiated.toLocaleString()}
+                      </text>
+                      <text x={cCenter} y="222" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">
+                        Pay Initiated
+                      </text>
+
+                      {/* Level 4: Purchase (Block) */}
+                      <rect
+                        x={cCenter - 20}
+                        y="243"
+                        width="40"
+                        height="58"
+                        rx="3"
+                        fill={bottomColor}
+                      />
+                      <text x={cCenter} y="271" textAnchor="middle" fill="#FFFFFF" fontSize="13.5" fontWeight="900">
+                        {purchased.toLocaleString()}
+                      </text>
+                      <text x={cCenter} y="286" textAnchor="middle" fill="#FFFFFF" fontSize="8.5" fontWeight="700">
+                        Purchase
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Centered Platform Label */}
+                <text
+                  x={labelColW + (numCols * colW) / 2}
+                  y="320"
+                  textAnchor="middle"
+                  fontSize="11"
+                  fontWeight="700"
+                  className="fill-slate-500 dark:fill-slate-400 tracking-wider"
+                >
+                  Platform
+                </text>
+              </svg>
+            );
+          })()}
         </div>
       </section>
 
       {/* Realtime Platform Funnel Table with Multi-level Headers */}
       <section className="mt-8">
         <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Today's Live Platform Breakdown</h3>
-        <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-lg custom-scrollbar overflow-x-auto shadow-sm relative">
-          <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
-            <thead className="sticky top-0 z-10 shadow-sm">
+        
+        {/* Mobile Touch Swipe Indicator */}
+        <div className="block sm:hidden text-center text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 py-1 px-3 rounded-full mb-2">
+          ← Swipe table left / right to view all stages →
+        </div>
+
+        <div className="overflow-x-auto border border-warm-border dark:border-dark-border rounded-xl bg-white dark:bg-dark-card custom-scrollbar relative">
+          <table className="w-full text-sm text-left border-separate border-spacing-0">
+            <thead className="sticky top-0 z-30">
               {/* Level 1 Group Header Row */}
-              <tr className="text-warm-muted dark:text-dark-muted uppercase font-extrabold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                <th rowSpan={2} className="p-3 whitespace-nowrap bg-warm-tableBg dark:bg-[#1E293B] border-r border-warm-border dark:border-dark-border align-bottom">
+              <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-extrabold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+                <th rowSpan={2} className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-900 dark:text-amber-200 border-r border-amber-500/30 align-middle sticky left-0 top-0 z-50">
                   Platform
                 </th>
                 <th colSpan={4} className="p-2.5 text-center bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 border-b border-r border-amber-500/30 font-black">
@@ -6056,7 +7668,7 @@ function Realtime({ isDark }) {
               </tr>
 
               {/* Level 2 Sub-header Row */}
-              <tr className="text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
+              <tr className="relative z-20 text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
                 {/* Today's Columns */}
                 <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Plan Page Load</th>
                 <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Plan Selected</th>
@@ -6085,8 +7697,10 @@ function Realtime({ isDark }) {
                         : 'border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-warm-text dark:text-dark-text'
                     }`}
                   >
-                    <td className={`p-3 whitespace-nowrap border-r border-warm-border/30 dark:border-zinc-800 ${
-                      isCombined ? 'font-black text-amber-700 dark:text-amber-300' : 'font-bold text-amber-accent dark:text-amber-400'
+                    <td className={`p-3 whitespace-nowrap border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-20 ${
+                      isCombined 
+                        ? 'bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-700 dark:text-amber-300' 
+                        : 'bg-white dark:bg-[#0F172A] font-bold text-amber-accent dark:text-amber-400'
                     }`}>
                       {isCombined ? 'Overall (Combined)' : plat}
                     </td>
@@ -6113,19 +7727,21 @@ function Realtime({ isDark }) {
                             {tVal.toLocaleString()}
                             {tStepPct !== null && (
                               <span className="ml-1 text-xs font-semibold text-warm-muted dark:text-dark-muted">
-                                ({tStepPct}%)
+                                ({tStepPct}% of prev)
                               </span>
                             )}
                           </div>
                           {diffPct !== null ? (
                             <div className="flex items-center justify-end mt-0.5">
-                              <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded ${
-                                parseFloat(diffPct) >= 0
-                                  ? 'bg-green-500/10 text-green-600 dark:text-green-400'
-                                  : 'bg-red-500/10 text-red-600 dark:text-red-400'
-                              }`}>
-                                {parseFloat(diffPct) >= 0 ? `+${diffPct}%` : `${diffPct}%`}
-                              </span>
+                              {parseFloat(diffPct) >= 0 ? (
+                                <span className="text-xs font-semibold text-green-600 dark:text-green-400 inline-flex items-center gap-0.5">
+                                  <span className="text-[9px]">▲</span> +{diffPct}%
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold text-red-600 dark:text-red-400 inline-flex items-center gap-0.5">
+                                  <span className="text-[9px]">▼</span> {diffPct}%
+                                </span>
+                              )}
                             </div>
                           ) : (
                             <div className="text-[10px] text-warm-muted dark:text-dark-muted font-medium mt-0.5">-</div>
@@ -6148,7 +7764,7 @@ function Realtime({ isDark }) {
                           <span>{bVal.toLocaleString()}</span>
                           {bStepPct !== null && (
                             <span className="ml-1 text-xs text-warm-muted/75 dark:text-dark-muted/75 font-semibold">
-                              ({bStepPct}%)
+                              ({bStepPct}% of prev)
                             </span>
                           )}
                         </td>
@@ -6314,50 +7930,65 @@ function ArpuReport({ isDark }) {
 
   // Fetch ARPU Data
   useEffect(() => {
+    function processArpuData(dataArray) {
+      if (!dataArray || !Array.isArray(dataArray)) return;
+      const processed = dataArray.map(row => {
+        const rawDate = row.txn_date || row.Date || row.date;
+        const dateStr = formatArpuDate(rawDate);
+        if (!dateStr) return null;
+
+        const platformCode = String(row.platform || '').trim();
+        const platformDisplay = formatArpuPlatform(platformCode);
+        const planCategory = String(row.plan_category || 'UNKNOWN').trim().toUpperCase();
+        const userTxnType = String(row.user_txn_type || 'unknown').trim();
+        const marketingTeam = String(row.marketing_team || 'Others').trim();
+        const offer = String(row.Offer || row.offer || 'Standard').trim();
+        const theme = String(row.Theme || row.theme || 'Regular').trim();
+        const saleStatus = String(row['Sale status'] || row.sale_status || row.SaleStatus || 'Active').trim();
+        const conversion = parseInt(row.conversion, 10) || 0;
+        const revenue = parseFloat(row.revenue) || 0.0;
+
+        return {
+          dateStr,
+          platform: platformDisplay,
+          plan_category: planCategory,
+          user_txn_type: userTxnType,
+          marketing_team: marketingTeam,
+          offer,
+          theme,
+          sale_status: saleStatus,
+          conversion,
+          revenue
+        };
+      }).filter(r => r && r.dateStr);
+
+      setRawData(processed);
+      setLoading(false);
+    }
+
     async function fetchData() {
-      setLoading(true);
+      if (!rawData || rawData.length === 0) setLoading(true);
       setError(null);
       try {
         const results = await fetchDatasetCached('arpu', ARPU_GSHEET_URL);
-        const processed = (results.data || []).map(row => {
-          const rawDate = row.txn_date || row.Date || row.date;
-          const dateStr = formatArpuDate(rawDate);
-          if (!dateStr) return null;
-
-          const platformCode = String(row.platform || '').trim();
-          const platformDisplay = formatArpuPlatform(platformCode);
-          const planCategory = String(row.plan_category || 'UNKNOWN').trim().toUpperCase();
-          const userTxnType = String(row.user_txn_type || 'unknown').trim();
-          const marketingTeam = String(row.marketing_team || 'Others').trim();
-          const offer = String(row.Offer || row.offer || 'Standard').trim();
-          const theme = String(row.Theme || row.theme || 'Regular').trim();
-          const saleStatus = String(row['Sale status'] || row.sale_status || row.SaleStatus || 'Active').trim();
-          const conversion = parseInt(row.conversion, 10) || 0;
-          const revenue = parseFloat(row.revenue) || 0.0;
-
-          return {
-            dateStr,
-            platform: platformDisplay,
-            plan_category: planCategory,
-            user_txn_type: userTxnType,
-            marketing_team: marketingTeam,
-            offer,
-            theme,
-            sale_status: saleStatus,
-            conversion,
-            revenue
-          };
-        }).filter(r => r && r.dateStr);
-
-        setRawData(processed);
-        setLoading(false);
+        if (results && results.data) processArpuData(results.data);
       } catch (err) {
         console.error("Failed to load ARPU data", err);
         setError("Failed to load ARPU data: " + (err.message || String(err)));
         setLoading(false);
       }
     }
+
     fetchData();
+
+    const handleDatasetUpdated = (e) => {
+      if (e.detail && e.detail.key === 'arpu' && e.detail.data) {
+        console.log("⚡ [ARPU UI] Background live Google Sheet update received!");
+        processArpuData(e.detail.data);
+      }
+    };
+    window.addEventListener('dataset-updated', handleDatasetUpdated);
+    return () => window.removeEventListener('dataset-updated', handleDatasetUpdated);
   }, []);
 
   // Unique Filter Options Extractor
@@ -6491,9 +8122,8 @@ function ArpuReport({ isDark }) {
 
   if (loading) {
     return (
-      <div className="flex h-64 w-full flex-col items-center justify-center text-warm-text dark:text-dark-text">
-        <Loader2 className="h-10 w-10 animate-spin text-amber-accent" />
-        <p className="mt-4 font-semibold tracking-wide">Loading ARPU Analytics Data...</p>
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm my-6 p-4">
+        <CleanDashboardLoader title="Loading ARPU Analytics Data..." subtitle="Calculating Average Revenue Per User across plans and platforms" />
       </div>
     );
   }
@@ -6572,7 +8202,7 @@ function ArpuReport({ isDark }) {
       </div>
 
       {/* Executive KPI Cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         
         {/* Card 1: OVERALL ARPU */}
         <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-xs relative overflow-hidden">
@@ -6764,7 +8394,7 @@ function ArpuReport({ isDark }) {
           <table className="w-full text-left text-xs">
             <thead className="bg-warm-tableBg dark:bg-slate-800 text-warm-muted dark:text-dark-muted uppercase font-bold text-[10px] tracking-wider border-b border-warm-border dark:border-dark-border">
               <tr>
-                <th className="p-3">Txn Date</th>
+                <th className="p-3 sticky left-0 top-0 z-40 bg-warm-tableBg dark:bg-slate-800 border-r border-warm-border/40 dark:border-zinc-800">Txn Date</th>
                 <th className="p-3">Platform</th>
                 <th className="p-3">Plan Category</th>
                 <th className="p-3">User Txn Type</th>
@@ -6789,7 +8419,7 @@ function ArpuReport({ isDark }) {
                   const rowArpu = r.conversion > 0 ? Math.round(r.revenue / r.conversion) : 0;
                   return (
                     <tr key={idx} className="hover:bg-amber-500/5 transition-colors">
-                      <td className="p-3 font-semibold whitespace-nowrap">{r.dateStr}</td>
+                      <td className="p-3 font-semibold whitespace-nowrap sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">{r.dateStr}</td>
                       <td className="p-3 whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 font-bold text-[11px]">
                           {r.platform}
