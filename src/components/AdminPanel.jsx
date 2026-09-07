@@ -42,15 +42,23 @@ export default function AdminPanel({ user, isDark }) {
   const handleAddUser = async (e) => {
     e.preventDefault();
     if (!newEmailInput || !newEmailInput.trim()) return;
-    const target = newEmailInput.trim();
+    const target = newEmailInput.trim().toLowerCase();
 
+    if (allowedUsers.some(u => u.toLowerCase().trim() === target)) {
+      setUserMsg({ type: 'error', text: `${target} is already on the allowed list.` });
+      return;
+    }
+
+    // Optimistic UI update
+    setAllowedUsers(prev => Array.from(new Set([...prev, target])));
     const success = await addAllowedUserAsync(target);
     if (success) {
       setUserMsg({ type: 'success', text: `Access successfully granted to ${target}` });
       setNewEmailInput('');
       await refreshData();
     } else {
-      setUserMsg({ type: 'error', text: `${target} is already on the allowed list.` });
+      setUserMsg({ type: 'error', text: `Failed to grant access to ${target}.` });
+      await refreshData();
     }
   };
 
@@ -59,9 +67,15 @@ export default function AdminPanel({ user, isDark }) {
       setUserMsg({ type: 'error', text: "Cannot remove root administrator accounts." });
       return;
     }
-    const success = await removeAllowedUserAsync(emailToRemove);
+    const norm = emailToRemove.toLowerCase().trim();
+    // Optimistically remove from state immediately for instant feedback
+    setAllowedUsers(prev => prev.filter(e => e.toLowerCase().trim() !== norm));
+    const success = await removeAllowedUserAsync(norm);
     if (success) {
       setUserMsg({ type: 'success', text: `Revoked access for ${emailToRemove}` });
+      await refreshData();
+    } else {
+      setUserMsg({ type: 'error', text: `Failed to revoke access for ${emailToRemove}` });
       await refreshData();
     }
   };
@@ -209,10 +223,10 @@ export default function AdminPanel({ user, isDark }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-warm-border/40 dark:divide-zinc-800 bg-white dark:bg-zinc-900 font-medium">
-                  {allowedUsers.map((email, idx) => {
+                  {allowedUsers.map((email) => {
                     const isAdmin = isAdminEmail(email);
                     return (
-                      <tr key={idx} className="hover:bg-black/5 dark:hover:bg-white/5">
+                      <tr key={email} className="hover:bg-black/5 dark:hover:bg-white/5">
                         <td className="p-3 font-bold text-warm-text dark:text-dark-text flex items-center gap-2">
                           <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
                           <span>{email}</span>

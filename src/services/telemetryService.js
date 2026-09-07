@@ -27,7 +27,6 @@ const INITIAL_ALLOWED_USERS = [
   'arpit.prajapati@timesinternet.in',
   'keshavreddy488@gmail.com',
   'nitish.gupta@timesinternet.in',
-  'analyst@timesinternet.in',
   'product.lead@timesinternet.in'
 ];
 
@@ -89,17 +88,28 @@ export function isAdminEmail(email) {
 }
 
 export function getAllowedUsers() {
-  const stored = getStorageJSON(STORAGE_KEYS.ALLOWED_USERS, INITIAL_ALLOWED_USERS);
-  const combined = Array.from(new Set([...ADMIN_EMAILS, ...INITIAL_ALLOWED_USERS, ...stored]));
-  return combined;
+  const stored = getStorageJSON(STORAGE_KEYS.ALLOWED_USERS, null);
+  const userList = stored !== null ? stored : INITIAL_ALLOWED_USERS;
+  return Array.from(new Set([...ADMIN_EMAILS, ...userList]));
 }
 
 export async function getAllowedUsersAsync() {
   if (isTursoConfigured()) {
     try {
       const dbUsers = await fetchAllowedUsersTurso();
-      if (dbUsers && dbUsers.length > 0) {
-        const combined = Array.from(new Set([...ADMIN_EMAILS, ...INITIAL_ALLOWED_USERS, ...dbUsers]));
+      if (dbUsers && Array.isArray(dbUsers)) {
+        if (dbUsers.length === 0) {
+          // If Turso whitelist is brand new and empty, seed it once
+          for (const u of INITIAL_ALLOWED_USERS) {
+            await addAllowedUserTurso(u, 'System');
+          }
+          const seeded = Array.from(new Set([...ADMIN_EMAILS, ...INITIAL_ALLOWED_USERS]));
+          setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, seeded);
+          return seeded;
+        }
+
+        // Turso DB is single source of truth; always ensure root admins are retained
+        const combined = Array.from(new Set([...ADMIN_EMAILS, ...dbUsers]));
         setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, combined);
         return combined;
       }
@@ -138,10 +148,9 @@ export function addAllowedUser(newEmail) {
   if (!newEmail || !newEmail.trim()) return false;
   const norm = newEmail.toLowerCase().trim();
   const current = getAllowedUsers();
-  let updated = current;
 
   if (!current.includes(norm)) {
-    updated = [...current, norm];
+    const updated = [...current, norm];
     setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
   }
 
@@ -157,7 +166,14 @@ export async function addAllowedUserAsync(newEmail) {
   if (!newEmail || !newEmail.trim()) return false;
   const norm = newEmail.toLowerCase().trim();
 
-  addAllowedUser(norm);
+  // 1. Update local storage
+  const current = getAllowedUsers();
+  if (!current.includes(norm)) {
+    const updated = [...current, norm];
+    setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
+  }
+
+  // 2. Persist to Turso DB and await completion
   if (isTursoConfigured()) {
     await addAllowedUserTurso(norm);
   }
@@ -186,7 +202,12 @@ export async function removeAllowedUserAsync(targetEmail) {
   const norm = targetEmail.toLowerCase().trim();
   if (isAdminEmail(norm)) return false;
 
-  removeAllowedUser(norm);
+  // 1. Remove from local storage
+  const current = getAllowedUsers();
+  const updated = current.filter(e => e.toLowerCase().trim() !== norm);
+  setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
+
+  // 2. Remove from Turso DB and await completion
   if (isTursoConfigured()) {
     await removeAllowedUserTurso(norm);
   }

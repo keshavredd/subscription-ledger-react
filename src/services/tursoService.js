@@ -115,7 +115,7 @@ export async function removeAllowedUserTurso(email) {
     const norm = email.toLowerCase().trim();
     const client = getTursoClient();
     await client.execute({
-      sql: `DELETE FROM admin_whitelist WHERE LOWER(email) = ?`,
+      sql: `DELETE FROM admin_whitelist WHERE LOWER(TRIM(email)) = ?`,
       args: [norm]
     });
     return true;
