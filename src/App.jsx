@@ -192,32 +192,63 @@ function formatIndianCurrency(val) {
 
 function CleanDashboardLoader({ title = "Fetching realtime data...", subtitle = "Updating live platform telemetry & 4-week benchmark data" }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-6 w-full text-center animate-in fade-in duration-300">
-      {/* GPU-Accelerated Hardware Composited Dual Ring Spinner */}
-      <div className="relative mb-5 flex items-center justify-center">
-        {/* Soft Ambient Backlight Glow */}
-        <div className="absolute inset-0 rounded-full bg-amber-500/20 blur-xl animate-pulse" />
+    <div className="flex flex-col items-center justify-center py-16 px-6 w-full text-center select-none animate-in fade-in duration-300">
+      {/* Premium Multi-Layered GPU Orbit Loader */}
+      <div className="relative mb-6 flex items-center justify-center">
+        {/* Soft Ambient Breathing Backlight Glow */}
+        <div className="absolute h-20 w-20 rounded-full bg-gradient-to-tr from-amber-500/20 via-orange-500/15 to-rose-500/20 blur-2xl gpu-breathe pointer-events-none" />
         
-        {/* Outer Ring - Hardware Accelerated GPU Spin */}
-        <div className="h-14 w-14 rounded-full border-3 border-amber-500/20 border-t-amber-500 gpu-spin" />
-        
-        {/* Inner Counter-Pulse Icon Core */}
-        <div className="absolute h-7 w-7 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
-          <div className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping opacity-80" />
+        {/* SVG Dash-Offset Smooth Spinner */}
+        <svg className="h-16 w-16" viewBox="0 0 50 50">
+          {/* Subtle Background Track */}
+          <circle
+            className="text-amber-500/15 dark:text-zinc-800"
+            strokeWidth="3.5"
+            stroke="currentColor"
+            fill="transparent"
+            r="20"
+            cx="25"
+            cy="25"
+          />
+          {/* Vibrant Animated Arc */}
+          <circle
+            className="gpu-svg-dash"
+            strokeWidth="3.8"
+            stroke="url(#loaderAmberGradient)"
+            fill="transparent"
+            r="20"
+            cx="25"
+            cy="25"
+          />
+          <defs>
+            <linearGradient id="loaderAmberGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#F59E0B" />
+              <stop offset="50%" stopColor="#FB923C" />
+              <stop offset="100%" stopColor="#ED1C24" />
+            </linearGradient>
+          </defs>
+        </svg>
+
+        {/* Counter-Spinning Subtle Inner Orbit Ring */}
+        <div className="absolute h-9 w-9 rounded-full border border-dashed border-amber-500/30 dark:border-amber-400/25 gpu-counter-spin pointer-events-none" />
+
+        {/* Center Glowing ET Micro-Badge Core */}
+        <div className="absolute h-5 w-5 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-md shadow-amber-500/30 gpu-breathe">
+          <div className="h-1.5 w-1.5 rounded-full bg-white shadow-xs" />
         </div>
       </div>
 
-      {/* Clean Modern Typography */}
-      <h4 className="text-base font-bold text-warm-text dark:text-dark-text tracking-tight mb-1">
+      {/* Typography */}
+      <h4 className="text-sm sm:text-base font-extrabold text-warm-text dark:text-dark-text tracking-tight mb-1">
         {title}
       </h4>
-      <p className="text-xs font-semibold text-warm-muted dark:text-dark-muted tracking-wide max-w-sm">
+      <p className="text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wide max-w-sm leading-relaxed">
         {subtitle}
       </p>
 
-      {/* Animated GPU Shimmer Progress Line */}
-      <div className="w-48 h-1 bg-warm-border/50 dark:bg-zinc-800 rounded-full overflow-hidden mt-4 relative">
-        <div className="absolute inset-y-0 bg-gradient-to-r from-amber-400 via-orange-500 to-amber-400 animate-loading-bar rounded-full" />
+      {/* Pure GPU Compositor Hardware Shimmer Bar */}
+      <div className="w-52 h-1.5 bg-warm-border/60 dark:bg-zinc-800/80 rounded-full overflow-hidden mt-5 relative shadow-inner">
+        <div className="absolute inset-y-0 bg-gradient-to-r from-amber-400 via-rose-500 to-amber-400 gpu-shimmer-progress rounded-full" />
       </div>
     </div>
   );

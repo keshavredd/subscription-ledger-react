@@ -46,20 +46,107 @@ body {
   }
 }
 
-@keyframes loadingBar {
-  0% { left: -50%; width: 50%; }
-  50% { left: 25%; width: 60%; }
-  100% { left: 100%; width: 50%; }
+/* ==========================================================================
+   BUTTERY SMOOTH GPU-ACCELERATED LOADERS (60/120 FPS HARDWARE COMPOSITED)
+   ========================================================================== */
+
+@keyframes smoothGpuSpin {
+  0% {
+    transform: rotate(0deg) translateZ(0);
+  }
+  100% {
+    transform: rotate(360deg) translateZ(0);
+  }
 }
 
-.animate-loading-bar {
-  animation: loadingBar 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  will-change: left, width;
+@keyframes smoothCounterSpin {
+  0% {
+    transform: rotate(360deg) translateZ(0);
+  }
+  100% {
+    transform: rotate(0deg) translateZ(0);
+  }
+}
+
+@keyframes smoothDash {
+  0% {
+    stroke-dasharray: 1, 150;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -35;
+  }
+  100% {
+    stroke-dasharray: 90, 150;
+    stroke-dashoffset: -124;
+  }
+}
+
+@keyframes smoothShimmerBar {
+  0% {
+    transform: translate3d(-100%, 0, 0);
+  }
+  50% {
+    transform: translate3d(20%, 0, 0);
+  }
+  100% {
+    transform: translate3d(200%, 0, 0);
+  }
+}
+
+@keyframes smoothPulseBreath {
+  0%, 100% {
+    transform: scale(0.92) translateZ(0);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.08) translateZ(0);
+    opacity: 0.85;
+  }
+}
+
+.gpu-smooth-spin {
+  animation: smoothGpuSpin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
   transform: translateZ(0);
 }
 
+.gpu-counter-spin {
+  animation: smoothCounterSpin 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.gpu-svg-dash {
+  animation: smoothDash 1.5s ease-in-out infinite, smoothGpuSpin 2s linear infinite;
+  stroke-linecap: round;
+  transform-origin: center;
+  will-change: transform, stroke-dashoffset, stroke-dasharray;
+}
+
+.gpu-shimmer-progress {
+  width: 60%;
+  animation: smoothShimmerBar 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.gpu-breathe {
+  animation: smoothPulseBreath 2s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* Backward-compatibility fallback */
 .gpu-spin {
-  animation: spin 1s linear infinite;
+  animation: smoothGpuSpin 1s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animate-loading-bar {
+  width: 60%;
+  animation: smoothShimmerBar 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   will-change: transform;
   transform: translateZ(0);
 }
