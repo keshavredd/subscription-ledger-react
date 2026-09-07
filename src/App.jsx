@@ -3081,40 +3081,7 @@ function RenewalsAndRecurring({ isDark }) {
             <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">Tracking Renewal Due vs Renewed Performance</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 self-end">
-            <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-1 rounded-lg border border-warm-border dark:border-zinc-700">
-              <button
-                onClick={() => setRenViewLevel("Day")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  renViewLevel === "Day"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
-                }`}
-              >
-                Day Level View
-              </button>
-              <button
-                onClick={() => setRenViewLevel("Week")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  renViewLevel === "Week"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
-                }`}
-              >
-                Week Level View
-              </button>
-              <button
-                onClick={() => setRenViewLevel("Month")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  renViewLevel === "Month"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
-                }`}
-              >
-                Month Level View
-              </button>
-            </div>
-
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-end">
             {renDatePreset === "Custom range" && (
               <div className="flex items-center gap-2">
                 <input type="date" value={renStartDate} onChange={(e) => setRenStartDate(e.target.value)} className="px-2 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-amber-accent" />
@@ -3176,6 +3143,40 @@ function RenewalsAndRecurring({ isDark }) {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              {/* Day / Week / Month Level View Toggle */}
+              <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-lg border border-warm-border dark:border-zinc-700 shadow-xs">
+                <button
+                  onClick={() => setRenViewLevel("Day")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    renViewLevel === "Day"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Day Level View
+                </button>
+                <button
+                  onClick={() => setRenViewLevel("Week")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    renViewLevel === "Week"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Week Level View
+                </button>
+                <button
+                  onClick={() => setRenViewLevel("Month")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    renViewLevel === "Month"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Month Level View
+                </button>
+              </div>
+
               {/* Metric Selector Pills */}
               <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-lg border border-warm-border dark:border-zinc-700 shadow-xs">
                 <button
@@ -3566,41 +3567,7 @@ function RenewalsAndRecurring({ isDark }) {
             <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">Tracking Subscriptions Sold with Auto-Renew Enabled</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 self-end">
-            {/* Day / Week / Month Level View Toggle for Recurring */}
-            <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-1 rounded-lg border border-warm-border dark:border-zinc-700">
-              <button
-                onClick={() => setRecViewLevel("Day")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  recViewLevel === "Day"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
-                }`}
-              >
-                Day Level View
-              </button>
-              <button
-                onClick={() => setRecViewLevel("Week")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  recViewLevel === "Week"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
-                }`}
-              >
-                Week Level View
-              </button>
-              <button
-                onClick={() => setRecViewLevel("Month")}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                  recViewLevel === "Month"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-sm"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
-                }`}
-              >
-                Month Level View
-              </button>
-            </div>
-
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-end">
             {/* Marketing Team Filter */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Marketing Team:</span>
@@ -3680,6 +3647,40 @@ function RenewalsAndRecurring({ isDark }) {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              {/* Day / Week / Month Level View Toggle for Recurring */}
+              <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-lg border border-warm-border dark:border-zinc-700 shadow-xs">
+                <button
+                  onClick={() => setRecViewLevel("Day")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    recViewLevel === "Day"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Day Level View
+                </button>
+                <button
+                  onClick={() => setRecViewLevel("Week")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    recViewLevel === "Week"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Week Level View
+                </button>
+                <button
+                  onClick={() => setRecViewLevel("Month")}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    recViewLevel === "Month"
+                      ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Month Level View
+                </button>
+              </div>
+
               {/* Compare Marketing Teams Dropdown */}
               <div className="relative" ref={recTeamDropdownRef}>
                 <button
