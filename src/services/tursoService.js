@@ -52,10 +52,15 @@ export async function queryTurso(sql, args = []) {
 
 /**
  * Fetches all rows from a Turso dataset table ('subscription', 'funnel', 'realtime', 'renewals', 'arpu').
+ * Uses targeted column projection for 'subscription' to avoid transferring unused columns for 83k rows.
  */
 export async function fetchTursoTable(tableName) {
   try {
-    const rows = await queryTurso(`SELECT * FROM ${tableName}`);
+    let sql = `SELECT * FROM ${tableName}`;
+    if (tableName === 'subscription') {
+      sql = `SELECT txn_date, platform, user_txn_type, country_name, plan_category, auto_renew, channel, conversion, revenue_above_rs_6_txn FROM subscription`;
+    }
+    const rows = await queryTurso(sql);
     return { data: rows, source: 'turso-db' };
   } catch (err) {
     console.warn(`[TursoService] Error fetching table '${tableName}':`, err);

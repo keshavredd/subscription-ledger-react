@@ -32,14 +32,16 @@ const activePromises = {};
 
 /**
  * Fetch and load a dataset using:
- * 1. Instant IndexedDB Cache (<50ms)
- * 2. Turso Database HTTP SQL (<100ms) when configured
- * 3. Live Google Sheets CSV fallback
+ * 1. Instant In-Memory Cache (0ms)
+ * 2. Instant IndexedDB Local Disk Cache (<50ms)
+ * 3. Fast Turso Database HTTP SQL (<1s)
+ * 4. Google Sheets CSV (hourly background sync ONLY for realtime & funnel; fallback for others)
  */
 export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
+  // 1. Instant Memory Cache (0ms)
   if (dataCache[key]) {
-    // Return instant memory cache and trigger background revalidation from Google Sheets
-    if (fallbackUrl || DATASET_URLS[key]) {
+    // Only 'realtime' and 'funnel' sync latest hourly changes in background from Google Sheets
+    if ((key === 'realtime' || key === 'funnel') && (fallbackUrl || DATASET_URLS[key])) {
       syncLiveDatasetInBackground(key, fallbackUrl, parseConfig);
     }
     return Promise.resolve(dataCache[key]);
@@ -50,7 +52,26 @@ export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
   }
 
   activePromises[key] = (async () => {
-    // 1. Turso Database HTTP Fast-Path (<100ms) - Direct live DB query when configured
+    // 2. Instant IndexedDB Local Disk Cache (<50ms)
+    try {
+      const cached = await getCachedParquet(key, 2 * 60 * 60 * 1000, CACHE_VERSION); // 2 hr TTL
+      if (cached && cached.data && cached.data.length > 0) {
+        console.log(`⚡ [Fast-Path] Instant load '${key}' from IndexedDB cache (${cached.data.length} rows)...`);
+        const result = { data: cached.data, source: 'indexeddb-fast' };
+        dataCache[key] = result;
+        
+        // Only 'realtime' and 'funnel' sync latest hourly changes in background from Google Sheets
+        if (key === 'realtime' || key === 'funnel') {
+          syncLiveDatasetInBackground(key, fallbackUrl, parseConfig);
+        }
+
+        return result;
+      }
+    } catch (dbErr) {
+      console.warn(`[Preloader] IndexedDB check failed for ${key}`, dbErr);
+    }
+
+    // 3. Fast Turso Database HTTP SQL
     if (isTursoConfigured()) {
       try {
         console.log(`⚡ [Turso DB] Fetching live dataset '${key}' from Turso Database...`);
@@ -59,35 +80,18 @@ export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
           dataCache[key] = tursoResult;
           setCachedParquet(key, null, { version: CACHE_VERSION, data: tursoResult.data });
           
-          // Trigger background live Google Sheet sync for up-to-date data
-          if (fallbackUrl || DATASET_URLS[key]) {
+          // Only 'realtime' and 'funnel' sync latest hourly changes in background from Google Sheets
+          if (key === 'realtime' || key === 'funnel') {
             syncLiveDatasetInBackground(key, fallbackUrl, parseConfig);
           }
           return tursoResult;
         }
       } catch (tursoErr) {
-        console.warn(`[Preloader] Turso DB fetch failed for '${key}', falling back to cache...`, tursoErr);
+        console.warn(`[Preloader] Turso DB fetch failed for '${key}', falling back...`, tursoErr);
       }
     }
 
-    // 2. IndexedDB Client Cache Fallback (<50ms)
-    try {
-      const cached = await getCachedParquet(key, 15 * 60 * 1000, CACHE_VERSION); // 15 min TTL
-      if (cached && cached.data && cached.data.length > 0) {
-        console.log(`⚡ [Fast-Path] Instant load '${key}' from IndexedDB cache (${cached.data.length} rows)...`);
-        const result = { data: cached.data, source: 'indexeddb-fast' };
-        dataCache[key] = result;
-        
-        // Trigger silent background sync from Google Sheets
-        syncLiveDatasetInBackground(key, fallbackUrl, parseConfig);
-
-        return result;
-      }
-    } catch (dbErr) {
-      console.warn(`[Preloader] IndexedDB check failed for ${key}, fetching live data...`, dbErr);
-    }
-
-    // 3. Google Sheets CSV fetch fallback
+    // 4. Fallback if Turso is unreachable or not configured
     console.log(`[Preloader] Fetching live Google Sheet data for ${key}...`);
     return syncLiveDataset(key, fallbackUrl, parseConfig);
   })();
@@ -133,6 +137,9 @@ async function syncLiveDataset(key, fallbackUrl, parseConfig) {
 }
 
 function syncLiveDatasetInBackground(key, fallbackUrl, parseConfig) {
+  // Only realtime and funnel should ever fetch from Google Sheets
+  if (key !== 'realtime' && key !== 'funnel') return;
+
   setTimeout(async () => {
     syncLiveDataset(key, fallbackUrl, parseConfig)
       .then(() => console.log(`🔄 [Background Sync] '${key}' updated with latest live Google Sheets data`))
@@ -141,14 +148,19 @@ function syncLiveDatasetInBackground(key, fallbackUrl, parseConfig) {
 }
 
 /**
- * Preloads all dashboard datasets in parallel
+ * Preloads dashboard datasets with intelligent priority scheduling:
+ * 1. Priority 1: Active realtime dataset & funnel dataset loaded immediately
+ * 2. Priority 2: Stagger heavy cohort & historical tables by 400ms so initial render is instantaneous
  */
 export function preloadAllDashboardData() {
-  fetchDatasetCached('subscription', DATASET_URLS.subscription);
-  fetchDatasetCached('funnel', DATASET_URLS.funnel);
   fetchDatasetCached('realtime', DATASET_URLS.realtime);
-  fetchDatasetCached('renewals', DATASET_URLS.renewals);
-  fetchDatasetCached('arpu', DATASET_URLS.arpu);
+  fetchDatasetCached('funnel', DATASET_URLS.funnel);
+
+  setTimeout(() => {
+    fetchDatasetCached('renewals', DATASET_URLS.renewals);
+    fetchDatasetCached('arpu', DATASET_URLS.arpu);
+    fetchDatasetCached('subscription', DATASET_URLS.subscription);
+  }, 400);
 }
 
 // Auto-start preloading immediately when script mounts
