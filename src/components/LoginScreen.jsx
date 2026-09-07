@@ -2,25 +2,39 @@
  * LoginScreen.jsx
  * ET Prime Subscription Ledger - Authentication & Access Control Guard
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShieldAlert, LogIn, Lock, ArrowRight, UserCheck, CheckCircle, Mail } from 'lucide-react';
 import { loginWithGoogleSSO } from '../services/googleAuthService';
 import { isUserAuthorizedAsync } from '../services/telemetryService';
+import { auth, onAuthStateChanged } from '../services/firebaseService';
 
 export default function LoginScreen({ onLoginSuccess, isDark }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const processEmailAuth = async (emailStr) => {
-    if (!emailStr || !emailStr.trim()) return;
+    if (!emailStr || !emailStr.trim()) return false;
     const email = emailStr.trim();
     const authorized = await isUserAuthorizedAsync(email);
     if (authorized) {
       onLoginSuccess({ email, displayName: email.split('@')[0] });
+      return true;
     } else {
       setErrorMsg(`Access Denied: Your Google account (${email}) has not been granted access to this dashboard.`);
+      return false;
     }
   };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
+        setIsLoading(true);
+        await processEmailAuth(firebaseUser.email);
+        setIsLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -28,7 +42,7 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
     try {
       const user = await loginWithGoogleSSO();
       if (user && user.email) {
-        processEmailAuth(user.email);
+        await processEmailAuth(user.email);
         return;
       }
       setErrorMsg("Google Sign-In Failed: No email address returned.");

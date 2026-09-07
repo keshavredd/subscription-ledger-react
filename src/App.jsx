@@ -10,8 +10,8 @@ import createPlotlyComponent from 'react-plotly.js/factory';
 
 import LoginScreen from './components/LoginScreen';
 import AdminPanel from './components/AdminPanel';
-import { isAdminEmail, isUserAuthorized, logTabPageView, logChatQuery } from './services/telemetryService';
-import { logoutUser } from './services/firebaseService';
+import { isAdminEmail, isUserAuthorized, isUserAuthorizedAsync, logTabPageView, logChatQuery } from './services/telemetryService';
+import { logoutUser, auth, onAuthStateChanged } from './services/firebaseService';
 import { fetchDatasetCached, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
 import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from './components/RenewalVisuals';
 
@@ -4274,6 +4274,21 @@ export default function App() {
     }
   }, [activeTab, currentUser]);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser?.email && !currentUser) {
+        const authorized = await isUserAuthorizedAsync(firebaseUser.email);
+        if (authorized) {
+          handleSetUser({
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0]
+          });
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
   if (!currentUser) {
     return <LoginScreen onLoginSuccess={handleSetUser} isDark={isDark} />;
   }
@@ -6973,8 +6988,8 @@ function Realtime({ isDark }) {
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      // Trigger netlify function or reload live dataset
-      await fetch('/.netlify/functions/sync-turso').catch(() => {});
+      // Trigger serverless sync on Vercel (/api/sync-turso) or Netlify (/.netlify/functions/sync-turso)
+      await fetch('/api/sync-turso').catch(() => fetch('/.netlify/functions/sync-turso')).catch(() => {});
       await loadRealtimeData(true);
     } catch (e) {
       console.warn("Manual sync error", e);

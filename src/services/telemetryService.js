@@ -23,6 +23,9 @@ const INITIAL_ALLOWED_USERS = [
   'keshavreddy731@gmail.com',
   'keshaveddy731@gmail.com',
   'keshava.reddy@timesinternet.in',
+  'arpit.prajapati1@timesinternet.in',
+  'arpit.prajapati@timesinternet.in',
+  'keshavreddy488@gmail.com',
   'nitish.gupta@timesinternet.in',
   'analyst@timesinternet.in',
   'product.lead@timesinternet.in'
@@ -55,6 +58,26 @@ function setStorageJSON(key, data) {
   }
 }
 
+/**
+ * Helper to match emails flexibly, handling exact matches and corporate email aliases
+ * (e.g., arpit.prajapati1@timesinternet.in vs arpit.prajapati@timesinternet.in)
+ */
+export function isEmailMatching(emailA, emailB) {
+  if (!emailA || !emailB) return false;
+  const a = String(emailA).toLowerCase().trim();
+  const b = String(emailB).toLowerCase().trim();
+  if (a === b) return true;
+
+  const [userA, domainA] = a.split('@');
+  const [userB, domainB] = b.split('@');
+  if (domainA && domainB && domainA === domainB) {
+    const baseA = userA.replace(/\d+$/, '');
+    const baseB = userB.replace(/\d+$/, '');
+    if (baseA === baseB && baseA.length > 2) return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // 1. ACCESS CONTROL & WHITELIST MANAGEMENT
 // ---------------------------------------------------------------------------
@@ -67,7 +90,7 @@ export function isAdminEmail(email) {
 
 export function getAllowedUsers() {
   const stored = getStorageJSON(STORAGE_KEYS.ALLOWED_USERS, INITIAL_ALLOWED_USERS);
-  const combined = Array.from(new Set([...ADMIN_EMAILS, ...stored]));
+  const combined = Array.from(new Set([...ADMIN_EMAILS, ...INITIAL_ALLOWED_USERS, ...stored]));
   return combined;
 }
 
@@ -76,7 +99,7 @@ export async function getAllowedUsersAsync() {
     try {
       const dbUsers = await fetchAllowedUsersTurso();
       if (dbUsers && dbUsers.length > 0) {
-        const combined = Array.from(new Set([...ADMIN_EMAILS, ...dbUsers]));
+        const combined = Array.from(new Set([...ADMIN_EMAILS, ...INITIAL_ALLOWED_USERS, ...dbUsers]));
         setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, combined);
         return combined;
       }
@@ -96,7 +119,7 @@ export function isUserAuthorized(email) {
 
   // 2. Check if in Whitelist
   const allowedList = getAllowedUsers();
-  return allowedList.some(userEmail => userEmail.toLowerCase().trim() === norm);
+  return allowedList.some(userEmail => isEmailMatching(userEmail, norm));
 }
 
 export async function isUserAuthorizedAsync(email) {
@@ -108,7 +131,7 @@ export async function isUserAuthorizedAsync(email) {
 
   // 2. Fetch live Whitelist from Turso DB
   const allowedList = await getAllowedUsersAsync();
-  return allowedList.some(userEmail => userEmail.toLowerCase().trim() === norm);
+  return allowedList.some(userEmail => isEmailMatching(userEmail, norm));
 }
 
 export function addAllowedUser(newEmail) {

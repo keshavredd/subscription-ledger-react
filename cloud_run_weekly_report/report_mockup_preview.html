@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ET Prime - Weekly Performance Review (Mockup Preview)</title>
+  <title>ET Prime - Weekly Performance Review (Executive Visual Mockup)</title>
   <style>
     body {
       margin: 0;
@@ -15,20 +15,20 @@
       -webkit-font-smoothing: antialiased;
     }
     .email-wrapper {
-      max-width: 740px;
+      max-width: 760px;
       margin: 0 auto;
       background: #ffffff;
-      border-radius: 12px;
+      border-radius: 14px;
       border: 1px solid #e2e8f0;
-      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+      box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.09), 0 8px 12px -6px rgba(15, 23, 42, 0.04);
       overflow: hidden;
     }
-    .table-card {
+    .viz-card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03);
-      overflow: hidden;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.05), 0 2px 4px -2px rgba(15, 23, 42, 0.03);
+      padding: 18px 20px;
       margin-bottom: 24px;
     }
     table {
@@ -43,11 +43,11 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      padding: 10px 14px;
+      padding: 10px 12px;
       border-bottom: 1px solid #e2e8f0;
     }
     td {
-      padding: 10px 14px;
+      padding: 10px 12px;
       border-bottom: 1px solid #f1f5f9;
       color: #1e293b;
     }
@@ -61,7 +61,7 @@
       padding: 2px 8px;
       border-radius: 9999px;
       font-weight: 600;
-      font-size: 11.5px;
+      font-size: 11px;
       white-space: nowrap;
     }
     .badge-pos {
@@ -71,7 +71,17 @@
       padding: 2px 8px;
       border-radius: 9999px;
       font-weight: 600;
-      font-size: 11.5px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .badge-neutral {
+      display: inline-block;
+      background-color: #f1f5f9;
+      color: #475569;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 11px;
       white-space: nowrap;
     }
     .kpi-card-box {
@@ -81,18 +91,36 @@
       padding: 14px 16px;
       box-shadow: 0 4px 10px -2px rgba(15, 23, 42, 0.04);
     }
+    .funnel-bar-track {
+      background-color: #f1f5f9;
+      border-radius: 6px;
+      height: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+    .funnel-bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      padding-left: 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #ffffff;
+      transition: width 0.3s ease;
+    }
   </style>
 </head>
 <body>
 
   <div class="email-wrapper">
     
-    <!-- HEADER BAR -->
+    <!-- HEADER BAR WITH ET LOGO -->
     <div style="background-color: #090d16; padding: 24px 28px; color: #ffffff;">
       <table style="width: 100%; border: none;">
         <tr>
           <td style="vertical-align: middle; padding: 0; border: none;">
-            <div style="display: inline-block; background: linear-gradient(135deg, #ED1C24 0%, #B91C1C 100%); color: #ffffff; font-family: Georgia, serif; font-size: 26px; font-weight: 900; line-height: 1; padding: 10px 12px; border-radius: 8px; vertical-align: middle; margin-right: 14px; box-shadow: 0 4px 8px rgba(237, 28, 36, 0.3);">
+            <div style="display: inline-block; background: linear-gradient(135deg, #ED1C24 0%, #B91C1C 100%); color: #ffffff; font-family: Georgia, serif; font-size: 26px; font-weight: 900; line-height: 1; padding: 10px 12px; border-radius: 8px; vertical-align: middle; margin-right: 14px; box-shadow: 0 4px 8px rgba(237, 28, 36, 0.35);">
               ET
             </div>
             <div style="display: inline-block; vertical-align: middle;">
@@ -108,38 +136,41 @@
       </table>
     </div>
 
-    <!-- CRIMSON ACCENT LINE -->
+    <!-- CRIMSON GRADIENT LINE -->
     <div style="height: 3px; background: linear-gradient(90deg, #ED1C24 0%, #F59E0B 50%, #ED1C24 100%);"></div>
 
     <div style="padding: 28px;">
 
-      <!-- COMPARISON WINDOW SUBTITLE (USER REQUESTED FORMAT) -->
+      <!-- COMPARISON WINDOW SUBTITLE -->
       <div style="display: inline-block; background-color: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 20px; padding: 6px 14px; font-size: 12.5px; color: #334155; font-weight: 600; margin-bottom: 22px;">
         📅 Last week (30 Aug 2026 - 05 Sep 2026) Vs Previous 4-Week Average
       </div>
 
-      <!-- KEY HIGHLIGHTS BOX (RENAMED FROM AT A GLANCE) -->
+      <!-- KEY HIGHLIGHTS BOX -->
       <div style="background-color: #f8fafc; border-left: 4px solid #ED1C24; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; border: 1px solid #e2e8f0; border-left-width: 4px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);">
         <div style="font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #ED1C24; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
           ⚡ KEY HIGHLIGHTS
         </div>
         <ul style="margin: 0; padding-left: 18px; color: #1e293b;">
           <li style="margin-bottom: 8px; font-size: 13.5px; line-height: 1.55;">
-            Weekly revenue reached <strong>₹79.89 L</strong>, shifting by <span class="badge-neg" style="font-size: 11px; padding: 1px 6px;">-21.6%</span> against the 4-week benchmark (₹1.02 Cr).
+            <strong>September AOP Target Tracking:</strong> MTD revenue reached <strong>₹57.05 L (11.6% achievement)</strong> against the ₹4.93 Cr target. Current pace is <strong>₹11.41 L/day</strong>; required run-rate is <strong>₹17.44 L/day</strong> for the remaining 25 days (+52.8% acceleration).
           </li>
           <li style="margin-bottom: 8px; font-size: 13.5px; line-height: 1.55;">
-            Daily average run-rate moved to <strong>₹11.41 L/day</strong> (-21.6% DoD run).
+            <strong>Weekly Revenue:</strong> Closed at <strong>₹79.89 L</strong>, pacing at <strong>₹11.41 L/day</strong> (<span class="badge-neg">-21.6%</span> vs 4-week benchmark of ₹1.02 Cr).
           </li>
           <li style="margin-bottom: 8px; font-size: 13.5px; line-height: 1.55;">
-            <strong>ARPU</strong> was recorded at <strong>₹2,417</strong> (-5.7% vs 4-week average).
+            <strong>ARPU:</strong> Settled at <strong>₹2,417</strong> (excluding auto_renewal), lifted by Main Android yield expansion (+8.3% to ₹1,858).
+          </li>
+          <li style="margin-bottom: 8px; font-size: 13.5px; line-height: 1.55;">
+            <strong>Renewals & Recurring:</strong> Retention delivered <strong>42.3%</strong> on 3,481 expiries. Recurring adoption registered at <strong>22.6%</strong> (358 recurring plans of 1,584 total sold, contributing ₹7.93 L).
           </li>
           <li style="margin-bottom: 0; font-size: 13.5px; line-height: 1.55;">
-            Renewal efficiency achieved <strong>42.3%</strong> (-2.7 pp shift) on 3,481 due cohort.
+            <strong>Funnel Performance:</strong> Daily Paywall hits averaged <strong>85,982 /day</strong> (2.4% of DAU), leading to <strong>16,933</strong> plan page loads and <strong>263 daily purchases</strong> (26.1% conversion from Pay Initiated).
           </li>
         </ul>
       </div>
 
-      <!-- 6 EXECUTIVE KPI CARDS (WITH SHADOWS & REFINED LABELS) -->
+      <!-- 6 EXECUTIVE KPI CARDS -->
       <table style="width: 100%; border: none; margin-bottom: 24px;">
         <tr>
           <!-- Card 1: Revenue -->
@@ -161,7 +192,7 @@
           <!-- Card 3: ARPU -->
           <td style="width: 33.3%; padding: 5px; vertical-align: top; border: none;">
             <div class="kpi-card-box" style="border-top: 3px solid #f59e0b;">
-              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px;">ARPU</div>
+              <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px;">ARPU (Excl. Auto-Ren)</div>
               <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0;">₹2,417</div>
               <div style="font-size: 11.5px; margin-top: 4px;"><span class="badge-neg">-5.7%</span> <span style="color: #64748b;">vs 4W Avg</span></div>
             </div>
@@ -173,7 +204,7 @@
             <div class="kpi-card-box" style="border-top: 3px solid #6366f1;">
               <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px;">Renewals Due</div>
               <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0;">3,481</div>
-              <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;"><strong>1,471</strong> renewed</div>
+              <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;"><strong>1,471</strong> renewed (42.3%)</div>
             </div>
           </td>
           <!-- Card 5: Renewal Rate -->
@@ -181,42 +212,107 @@
             <div class="kpi-card-box" style="border-top: 3px solid #8b5cf6;">
               <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px;">Renewal Rate</div>
               <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0;">42.3%</div>
-              <div style="font-size: 11.5px; margin-top: 4px;"><span class="badge-neg">-2.7 pp</span> <span style="color: #64748b;">shift</span></div>
+              <div style="font-size: 11.5px; margin-top: 4px;"><span class="badge-neg">-2.7 pp</span> <span style="color: #64748b;">vs 4W Avg</span></div>
             </div>
           </td>
           <!-- Card 6: Recurring Share -->
           <td style="width: 33.3%; padding: 5px; vertical-align: top; border: none;">
             <div class="kpi-card-box" style="border-top: 3px solid #ec4899;">
               <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px;">Recurring Share</div>
-              <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0;">62.8%</div>
-              <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;"><strong>2,077</strong> plans sold</div>
+              <div style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0;">22.6%</div>
+              <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;"><strong>358</strong> of 1,584 · ₹7.93 L</div>
             </div>
           </td>
         </tr>
       </table>
 
-      <!-- WINS & CONCERNS (POLISHED WITH SUBTLE SHADOWS) -->
+      <!-- MONTHLY TARGET PACING (LIGHT THEME, PLACED BELOW KPI CARDS) -->
+      <div class="viz-card" style="background: #ffffff; border: 1px solid #e2e8f0; margin-bottom: 24px; padding: 18px 20px; box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.05); border-left: 4px solid #ED1C24;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <span style="background-color: #fef2f2; color: #ED1C24; border: 1px solid #fecaca; font-size: 10.5px; font-weight: 800; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.5px;">
+              MONTHLY TARGET PACING
+            </span>
+            <span style="font-size: 14.5px; font-weight: 800; margin-left: 8px; color: #0f172a;">
+              September 2026 AOP Achievement Tracker
+            </span>
+          </div>
+          <div style="font-size: 12px; color: #64748b; font-weight: 600;">
+            Target: <strong style="color: #0f172a; font-size: 13.5px;">₹4.93 Cr</strong> · Day 5 of 30 (16.7% elapsed)
+          </div>
+        </div>
+
+        <!-- VISUAL AOP PROGRESS TRACK -->
+        <div style="background-color: #f1f5f9; height: 12px; border-radius: 6px; overflow: hidden; position: relative; margin-bottom: 14px;">
+          <div style="background: linear-gradient(90deg, #10b981 0%, #059669 100%); width: 11.6%; height: 100%; border-radius: 6px;"></div>
+        </div>
+
+        <!-- 3 AOP PACING METRIC TILES (LIGHT THEME) -->
+        <table style="width: 100%; border: none;">
+          <tr>
+            <td style="width: 33.3%; padding: 0 6px 0 0; vertical-align: top; border: none;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 10.5px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px;">MTD Revenue Achieved</div>
+                <div style="font-size: 19px; font-weight: 800; color: #0f172a; margin: 4px 0 2px 0;">₹57.05 L</div>
+                <div style="font-size: 11px; color: #059669; font-weight: 600;">11.6% AOP Achievement</div>
+              </div>
+            </td>
+            <td style="width: 33.3%; padding: 0 3px; vertical-align: top; border: none;">
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 10.5px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px;">Current Daily Run-Rate</div>
+                <div style="font-size: 19px; font-weight: 800; color: #b45309; margin: 4px 0 2px 0;">₹11.41 L/day</div>
+                <div style="font-size: 11px; color: #64748b;">Current Pacing: ₹3.42 Cr (69.4%)</div>
+              </div>
+            </td>
+            <td style="width: 33.3%; padding: 0 0 0 6px; vertical-align: top; border: none;">
+              <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 10.5px; color: #991b1b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px;">Required Daily Run-Rate</div>
+                <div style="font-size: 19px; font-weight: 800; color: #dc2626; margin: 4px 0 2px 0;">₹17.44 L/day</div>
+                <div style="font-size: 11px; color: #991b1b; font-weight: 600;">Req. for remaining 25 days (+52.8%)</div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- TOP WINS & FOCUS AREA (RENAMED & MINIMAL CONCISE TEXT) -->
       <table style="width: 100%; border: none; margin-bottom: 26px;">
         <tr>
+          <!-- TOP WINS -->
           <td style="width: 50%; padding: 0 6px 0 0; vertical-align: top; border: none;">
-            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 14px 16px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.06);">
-              <div style="font-size: 12px; font-weight: 800; color: #166534; text-transform: uppercase; margin-bottom: 6px;">
-                🚀 Top Wins (Growth Drivers)
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 14px 16px; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.05); height: 100%; box-sizing: border-box;">
+              <div style="font-size: 13px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                Top Wins
               </div>
-              <ul style="margin: 0; padding-left: 16px; font-size: 12.5px; color: #14532d;">
-                <li style="margin-bottom: 4px;">MWeb maintained leadership, contributing ₹29.44 L (36.8% of total volume).</li>
-                <li>Recurring plan adoption settled at 62.8% share with 2,077 automated subscriptions.</li>
+              <ul style="margin: 0; padding-left: 16px; font-size: 12.5px; color: #14532d; line-height: 1.55;">
+                <li style="margin-bottom: 6px;">
+                  <strong>Android Yield:</strong> ARPU grew <strong>+8.3%</strong> (+₹142) to ₹1,858 (+₹94 K yield lift).
+                </li>
+                <li style="margin-bottom: 6px;">
+                  <strong>iOS Recurring:</strong> Main iOS reached <strong>100% recurring</strong> (164 plans, ₹3.97 L).
+                </li>
+                <li>
+                  <strong>Organic Resilience:</strong> Organic share stood strong at <strong>59.9%</strong> (₹47.82 L).
+                </li>
               </ul>
             </div>
           </td>
+          <!-- FOCUS AREA -->
           <td style="width: 50%; padding: 0 0 0 6px; vertical-align: top; border: none;">
-            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px 16px; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.06);">
-              <div style="font-size: 12px; font-weight: 800; color: #991b1b; text-transform: uppercase; margin-bottom: 6px;">
-                ⚠️ Focus Areas (Watchouts)
+            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 16px; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.05); height: 100%; box-sizing: border-box;">
+              <div style="font-size: 13px; font-weight: 800; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                Focus Area
               </div>
-              <ul style="margin: 0; padding-left: 16px; font-size: 12.5px; color: #7f1d1d;">
-                <li style="margin-bottom: 4px;">Monitor lower tenure plan migrations to maintain high renewal cohort momentum.</li>
-                <li>Verify acquisition efficiency on secondary app platforms.</li>
+              <ul style="margin: 0; padding-left: 16px; font-size: 12.5px; color: #7f1d1d; line-height: 1.55;">
+                <li style="margin-bottom: 6px;">
+                  <strong>MWeb Drop:</strong> Fell <strong>-30.4%</strong> (-₹12.84 L vs 4W avg), driving 57% of weekly gap.
+                </li>
+                <li style="margin-bottom: 6px;">
+                  <strong>New Acquisition:</strong> Down <strong>-29.7%</strong> (-₹11.63 L gap) to ₹27.51 L.
+                </li>
+                <li>
+                  <strong>Paid Marketing:</strong> Contracted <strong>-55.0%</strong> (-₹1.06 L gap) to ₹82.1 K.
+                </li>
               </ul>
             </div>
           </td>
@@ -224,111 +320,113 @@
       </table>
 
       <!-- ================================================================= -->
-      <!-- SECTION 1: WEEKLY REVENUE & PLATFORM BREAKDOWN -->
+      <!-- SECTION 1: WEEKLY REVENUE & PLATFORM BREAKDOWN (WITH VISUALIZATIONS) -->
       <!-- ================================================================= -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <h3 style="color: #0f172a; font-size: 15px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.3px;">
-          1. Weekly Revenue & Platform Performance
+          1. Weekly Revenue & Platform Share
         </h3>
       </div>
       <p style="font-size: 12.5px; color: #475569; margin: 0 0 12px 0;">
-        <strong>Revenue Takeaway:</strong> Total revenue closed at ₹79.89 L, paced at ₹11.41 L daily.
+        <strong>Revenue Takeaway:</strong> Total revenue settled at ₹79.89 L. MWeb and Web command 59.6% of total revenue.
       </p>
 
-      <!-- TABLE WITH BORDER SHADOW -->
-      <div class="table-card">
-        <table>
+      <div class="viz-card">
+        <!-- VISUAL 1: MULTI-SEGMENT STACKED REVENUE SHARE BAR -->
+        <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+          Platform Revenue Share Distribution
+        </div>
+        <div style="display: flex; width: 100%; height: 26px; border-radius: 6px; overflow: hidden; margin-bottom: 12px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);">
+          <div style="width: 36.8%; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; font-weight: 700;" title="MWeb: 36.8%">MWeb 36.8%</div>
+          <div style="width: 22.8%; background-color: #0ea5e9; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; font-weight: 700;" title="Web: 22.8%">Web 22.8%</div>
+          <div style="width: 16.3%; background-color: #6366f1; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; font-weight: 700;" title="Main iOS: 16.3%">iOS 16.3%</div>
+          <div style="width: 15.4%; background-color: #10b981; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; font-weight: 700;" title="Main Android: 15.4%">Android 15.4%</div>
+          <div style="width: 6.3%; background-color: #f59e0b; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 10px; font-weight: 700;" title="Market Android: 6.3%">6.3%</div>
+          <div style="width: 2.4%; background-color: #ec4899;" title="Market iOS: 2.4%"></div>
+        </div>
+
+        <!-- REFINED PLATFORM DATA ROWS WITH MINI VISUAL BARS -->
+        <table style="margin-top: 8px;">
           <thead>
             <tr>
               <th style="text-align: left;">Platform</th>
               <th style="text-align: right;">Last Week</th>
               <th style="text-align: right;">4-Wk Avg</th>
-              <th style="text-align: center;">WoW Shift</th>
-              <th style="text-align: left; padding-left: 20px;">Share & Volume Bar</th>
+              <th style="text-align: right;">Net Shift (Abs)</th>
+              <th style="text-align: center;">WoW %</th>
+              <th style="text-align: left; padding-left: 18px;">Contribution Track</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td style="font-weight: 700; color: #0f172a;">MWeb</td>
-              <td style="text-align: right; font-weight: 600;">₹29.44 L</td>
+              <td style="font-weight: 700; color: #0f172a;"><span style="display: inline-block; width: 8px; height: 8px; background-color: #3b82f6; border-radius: 50%; margin-right: 6px;"></span>MWeb</td>
+              <td style="text-align: right; font-weight: 700;">₹29.44 L</td>
               <td style="text-align: right; color: #64748b;">₹42.28 L</td>
+              <td style="text-align: right; color: #dc2626; font-weight: 600;">-₹12.84 L</td>
               <td style="text-align: center;"><span class="badge-neg">-30.4% ▼</span></td>
-              <td style="padding-left: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="min-width: 40px; font-weight: 700; font-size: 12px;">36.8%</span>
-                  <div style="background-color: #f1f5f9; width: 90px; height: 7px; border-radius: 4px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #3b82f6, #2563eb); width: 37%; height: 7px; border-radius: 4px;"></div>
-                  </div>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 110px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background: linear-gradient(90deg, #3b82f6, #2563eb); width: 37%; height: 7px; border-radius: 4px;"></div>
                 </div>
               </td>
             </tr>
             <tr style="background-color: #fafbfc;">
-              <td style="font-weight: 700; color: #0f172a;">Web</td>
-              <td style="text-align: right; font-weight: 600;">₹18.22 L</td>
+              <td style="font-weight: 700; color: #0f172a;"><span style="display: inline-block; width: 8px; height: 8px; background-color: #0ea5e9; border-radius: 50%; margin-right: 6px;"></span>Web</td>
+              <td style="text-align: right; font-weight: 700;">₹18.22 L</td>
               <td style="text-align: right; color: #64748b;">₹23.70 L</td>
+              <td style="text-align: right; color: #dc2626; font-weight: 600;">-₹5.48 L</td>
               <td style="text-align: center;"><span class="badge-neg">-23.1% ▼</span></td>
-              <td style="padding-left: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="min-width: 40px; font-weight: 700; font-size: 12px;">22.8%</span>
-                  <div style="background-color: #f1f5f9; width: 90px; height: 7px; border-radius: 4px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #3b82f6, #2563eb); width: 23%; height: 7px; border-radius: 4px;"></div>
-                  </div>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 110px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background: linear-gradient(90deg, #0ea5e9, #0284c7); width: 23%; height: 7px; border-radius: 4px;"></div>
                 </div>
               </td>
             </tr>
             <tr>
-              <td style="font-weight: 700; color: #0f172a;">Main iOS</td>
-              <td style="text-align: right; font-weight: 600;">₹13.02 L</td>
+              <td style="font-weight: 700; color: #0f172a;"><span style="display: inline-block; width: 8px; height: 8px; background-color: #6366f1; border-radius: 50%; margin-right: 6px;"></span>Main iOS</td>
+              <td style="text-align: right; font-weight: 700;">₹13.02 L</td>
               <td style="text-align: right; color: #64748b;">₹13.38 L</td>
+              <td style="text-align: right; color: #64748b; font-weight: 600;">-₹36.0 K</td>
               <td style="text-align: center;"><span class="badge-neg">-2.7% ▼</span></td>
-              <td style="padding-left: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="min-width: 40px; font-weight: 700; font-size: 12px;">16.3%</span>
-                  <div style="background-color: #f1f5f9; width: 90px; height: 7px; border-radius: 4px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #3b82f6, #2563eb); width: 16%; height: 7px; border-radius: 4px;"></div>
-                  </div>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 110px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background: linear-gradient(90deg, #6366f1, #4f46e5); width: 16%; height: 7px; border-radius: 4px;"></div>
                 </div>
               </td>
             </tr>
             <tr style="background-color: #fafbfc;">
-              <td style="font-weight: 700; color: #0f172a;">Main Android</td>
-              <td style="text-align: right; font-weight: 600;">₹12.32 L</td>
+              <td style="font-weight: 700; color: #0f172a;"><span style="display: inline-block; width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; margin-right: 6px;"></span>Main Android</td>
+              <td style="text-align: right; font-weight: 700;">₹12.32 L</td>
               <td style="text-align: right; color: #64748b;">₹13.75 L</td>
+              <td style="text-align: right; color: #dc2626; font-weight: 600;">-₹1.43 L</td>
               <td style="text-align: center;"><span class="badge-neg">-10.4% ▼</span></td>
-              <td style="padding-left: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="min-width: 40px; font-weight: 700; font-size: 12px;">15.4%</span>
-                  <div style="background-color: #f1f5f9; width: 90px; height: 7px; border-radius: 4px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #3b82f6, #2563eb); width: 15%; height: 7px; border-radius: 4px;"></div>
-                  </div>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 110px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background: linear-gradient(90deg, #10b981, #059669); width: 15%; height: 7px; border-radius: 4px;"></div>
                 </div>
               </td>
             </tr>
             <tr>
-              <td style="font-weight: 700; color: #0f172a;">Market Android</td>
-              <td style="text-align: right; font-weight: 600;">₹5.07 L</td>
+              <td style="font-weight: 700; color: #0f172a;"><span style="display: inline-block; width: 8px; height: 8px; background-color: #f59e0b; border-radius: 50%; margin-right: 6px;"></span>Market Android</td>
+              <td style="text-align: right; font-weight: 700;">₹5.07 L</td>
               <td style="text-align: right; color: #64748b;">₹6.80 L</td>
+              <td style="text-align: right; color: #dc2626; font-weight: 600;">-₹1.73 L</td>
               <td style="text-align: center;"><span class="badge-neg">-25.4% ▼</span></td>
-              <td style="padding-left: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="min-width: 40px; font-weight: 700; font-size: 12px;">6.3%</span>
-                  <div style="background-color: #f1f5f9; width: 90px; height: 7px; border-radius: 4px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #3b82f6, #2563eb); width: 6%; height: 7px; border-radius: 4px;"></div>
-                  </div>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 110px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background: linear-gradient(90deg, #f59e0b, #d97706); width: 6%; height: 7px; border-radius: 4px;"></div>
                 </div>
               </td>
             </tr>
             <tr style="background-color: #fafbfc;">
-              <td style="font-weight: 700; color: #0f172a;">Market iOS</td>
-              <td style="text-align: right; font-weight: 600;">₹1.82 L</td>
+              <td style="font-weight: 700; color: #0f172a;"><span style="display: inline-block; width: 8px; height: 8px; background-color: #ec4899; border-radius: 50%; margin-right: 6px;"></span>Market iOS</td>
+              <td style="text-align: right; font-weight: 700;">₹1.82 L</td>
               <td style="text-align: right; color: #64748b;">₹1.98 L</td>
+              <td style="text-align: right; color: #64748b; font-weight: 600;">-₹16.0 K</td>
               <td style="text-align: center;"><span class="badge-neg">-8.3% ▼</span></td>
-              <td style="padding-left: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="min-width: 40px; font-weight: 700; font-size: 12px;">2.3%</span>
-                  <div style="background-color: #f1f5f9; width: 90px; height: 7px; border-radius: 4px; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #3b82f6, #2563eb); width: 2%; height: 7px; border-radius: 4px;"></div>
-                  </div>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 110px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background: linear-gradient(90deg, #ec4899, #db2777); width: 2%; height: 7px; border-radius: 4px;"></div>
                 </div>
               </td>
             </tr>
@@ -337,130 +435,316 @@
       </div>
 
       <!-- ================================================================= -->
-      <!-- NEW RECOMMENDED METRIC: ACQUISITION VS RETENTION MIX -->
+      <!-- SECTION 2: USER TYPE BREAKDOWN (RENAMED AS REQUESTED) -->
       <!-- ================================================================= -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <h3 style="color: #0f172a; font-size: 15px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.3px;">
-          2. Acquisition vs Retention Dynamics
+          2. User Type Breakdown
         </h3>
       </div>
       <p style="font-size: 12.5px; color: #475569; margin: 0 0 12px 0;">
-        Direct revenue composition split between New Customer Acquisition, Renewals, and Upgrades.
+        Revenue contribution categorized across User Transaction Types and Channel Acquisition Teams.
       </p>
 
-      <table style="width: 100%; border: none; margin-bottom: 24px;">
-        <tr>
-          <!-- User Type Table -->
-          <td style="width: 50%; padding: 0 6px 0 0; vertical-align: top; border: none;">
-            <div class="table-card">
+      <!-- VISUAL 2: USER TYPE PROGRESS COMPOSITION -->
+      <div class="viz-card">
+        <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+          User Type Revenue Mix (Acquisition vs Retention)
+        </div>
+        <div style="display: flex; width: 100%; height: 22px; border-radius: 6px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);">
+          <div style="width: 34.4%; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 10.5px; font-weight: 700;">New 34.4%</div>
+          <div style="width: 30.3%; background-color: #8b5cf6; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 10.5px; font-weight: 700;">Auto-Ren 30.3%</div>
+          <div style="width: 21.5%; background-color: #f59e0b; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 10.5px; font-weight: 700;">Expired 21.5%</div>
+          <div style="width: 9.7%; background-color: #10b981; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 10px; font-weight: 700;">9.7%</div>
+          <div style="width: 4.1%; background-color: #64748b;" title="Upgrade: 4.1%"></div>
+        </div>
+
+        <table style="width: 100%; border: none;">
+          <tr>
+            <!-- User Type Table -->
+            <td style="width: 50%; padding: 0 8px 0 0; vertical-align: top; border: none;">
               <table>
                 <thead>
                   <tr>
                     <th style="text-align: left;">Segment</th>
                     <th style="text-align: right;">Revenue</th>
-                    <th style="text-align: center;">Shift</th>
-                    <th style="text-align: right;">Share</th>
+                    <th style="text-align: right;">Net Shift</th>
+                    <th style="text-align: center;">WoW %</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style="font-weight: 600;">New Subs</td>
-                    <td style="text-align: right; font-weight: 600;">₹27.51 L</td>
+                    <td style="font-weight: 700;"><span style="color: #3b82f6;">●</span> New Subs</td>
+                    <td style="text-align: right; font-weight: 700;">₹27.51 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹11.63 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-29.7%</span></td>
-                    <td style="text-align: right; font-weight: 700;">34.4%</td>
                   </tr>
                   <tr style="background-color: #fafbfc;">
-                    <td style="font-weight: 600;">Auto Renewed</td>
-                    <td style="text-align: right; font-weight: 600;">₹24.17 L</td>
+                    <td style="font-weight: 700;"><span style="color: #8b5cf6;">●</span> Auto Renewed</td>
+                    <td style="text-align: right; font-weight: 700;">₹24.17 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹1.69 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-6.5%</span></td>
-                    <td style="text-align: right; font-weight: 700;">30.3%</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: 600;">Expired / Lapsed</td>
-                    <td style="text-align: right; font-weight: 600;">₹17.18 L</td>
+                    <td style="font-weight: 700;"><span style="color: #f59e0b;">●</span> Expired / Lapsed</td>
+                    <td style="text-align: right; font-weight: 700;">₹17.18 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹3.87 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-18.4%</span></td>
-                    <td style="text-align: right; font-weight: 700;">21.5%</td>
                   </tr>
                   <tr style="background-color: #fafbfc;">
-                    <td style="font-weight: 600;">Manual Renewed</td>
-                    <td style="text-align: right; font-weight: 600;">₹7.75 L</td>
+                    <td style="font-weight: 700;"><span style="color: #10b981;">●</span> Manual Renewed</td>
+                    <td style="text-align: right; font-weight: 700;">₹7.75 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹2.12 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-21.5%</span></td>
-                    <td style="text-align: right; font-weight: 700;">9.7%</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: 600;">Upgrade</td>
-                    <td style="text-align: right; font-weight: 600;">₹3.28 L</td>
+                    <td style="font-weight: 700;"><span style="color: #64748b;">●</span> Upgrade</td>
+                    <td style="text-align: right; font-weight: 700;">₹3.28 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹2.62 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-44.4%</span></td>
-                    <td style="text-align: right; font-weight: 700;">4.1%</td>
                   </tr>
                 </tbody>
               </table>
-            </div>
-          </td>
-          <!-- Marketing Team Table -->
-          <td style="width: 50%; padding: 0 0 0 6px; vertical-align: top; border: none;">
-            <div class="table-card">
+            </td>
+
+            <!-- Marketing Team Table -->
+            <td style="width: 50%; padding: 0 0 0 8px; vertical-align: top; border: none;">
               <table>
                 <thead>
                   <tr>
-                    <th style="text-align: left;">Channel / Team</th>
+                    <th style="text-align: left;">Marketing Channel</th>
                     <th style="text-align: right;">Revenue</th>
-                    <th style="text-align: center;">Shift</th>
-                    <th style="text-align: right;">Share</th>
+                    <th style="text-align: right;">Net Shift</th>
+                    <th style="text-align: center;">WoW %</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td style="font-weight: 600;">Others (Organic)</td>
-                    <td style="text-align: right; font-weight: 600;">₹47.82 L</td>
+                    <td style="font-weight: 700;">Others (Organic)</td>
+                    <td style="text-align: right; font-weight: 700;">₹47.82 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹5.86 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-10.9%</span></td>
-                    <td style="text-align: right; font-weight: 700;">59.9%</td>
                   </tr>
                   <tr style="background-color: #fafbfc;">
-                    <td style="font-weight: 600;">Product Marketing</td>
-                    <td style="text-align: right; font-weight: 600;">₹16.31 L</td>
+                    <td style="font-weight: 700;">Product Marketing</td>
+                    <td style="text-align: right; font-weight: 700;">₹16.31 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹9.33 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-36.4%</span></td>
-                    <td style="text-align: right; font-weight: 700;">20.4%</td>
                   </tr>
                   <tr>
-                    <td style="font-weight: 600;">Telecalling</td>
-                    <td style="text-align: right; font-weight: 600;">₹14.94 L</td>
+                    <td style="font-weight: 700;">Telecalling</td>
+                    <td style="text-align: right; font-weight: 700;">₹14.94 L</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹5.66 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-27.4%</span></td>
-                    <td style="text-align: right; font-weight: 700;">18.7%</td>
                   </tr>
                   <tr style="background-color: #fafbfc;">
-                    <td style="font-weight: 600;">Paid Marketing</td>
-                    <td style="text-align: right; font-weight: 600;">₹82.1 K</td>
+                    <td style="font-weight: 700;">Paid Marketing</td>
+                    <td style="text-align: right; font-weight: 700;">₹82.1 K</td>
+                    <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹1.06 L</td>
                     <td style="text-align: center;"><span class="badge-neg">-55.0%</span></td>
-                    <td style="text-align: right; font-weight: 700;">1.0%</td>
                   </tr>
                 </tbody>
               </table>
-            </div>
-          </td>
-        </tr>
-      </table>
+            </td>
+          </tr>
+        </table>
+      </div>
 
       <!-- ================================================================= -->
-      <!-- SECTION 3: ARPU & YIELD MOVEMENT -->
+      <!-- SECTION 3: FUNNEL ANALYSIS (NEW SECTION REQUESTED BELOW USER TYPE) -->
       <!-- ================================================================= -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <h3 style="color: #0f172a; font-size: 15px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.3px;">
-          3. ARPU & Yield Movement
+          3. Acquisition Funnel Analysis (Daily Average Comparison)
         </h3>
       </div>
       <p style="font-size: 12.5px; color: #475569; margin: 0 0 12px 0;">
-        <strong>ARPU Takeaway:</strong> ARPU settled at ₹2,417, demonstrating healthy transactional value across user platforms.
+        Comparing <strong>Last Week Daily Avg</strong> vs <strong>Previous 4-Week Daily Avg</strong> across all key acquisition conversion stages.
       </p>
 
-      <div class="table-card">
+      <div class="viz-card">
+        <!-- FUNNEL VISUAL CASCADE GRAPHIC -->
+        <div style="margin-bottom: 22px;">
+          <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            Overall Funnel Stage Cascade (Daily Average Flow)
+          </div>
+
+          <!-- Step 1: Overall DAU -->
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; margin-bottom: 2px;">
+              <span>1. Overall DAU (Total Traffic)</span>
+              <span style="color: #0f172a;">3,509,815 /day</span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar-fill" style="width: 100%; background: linear-gradient(90deg, #1e293b, #334155);">100% Base Traffic</div>
+            </div>
+          </div>
+
+          <!-- Step 2: Paywall Hits -->
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; margin-bottom: 2px;">
+              <span>2. Paywall Hits (Paywall Trigger Intent)</span>
+              <span style="color: #0f172a;">85,982 /day <span class="badge-neutral" style="font-size: 10px; padding: 1px 6px;">2.4% of DAU</span></span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar-fill" style="width: 65%; background: linear-gradient(90deg, #f59e0b, #d97706);">85,982 hits/day</div>
+            </div>
+          </div>
+
+          <!-- Step 3: Plan Page Load -->
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; margin-bottom: 2px;">
+              <span>3. Plan Page Load (Paywall Landing)</span>
+              <span style="color: #0f172a;">16,933 /day <span class="badge-neutral" style="font-size: 10px; padding: 1px 6px;">19.7% of Hits</span></span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar-fill" style="width: 45%; background: linear-gradient(90deg, #3b82f6, #2563eb);">16,933 loads/day</div>
+            </div>
+          </div>
+
+          <!-- Step 4: Plan Selected -->
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; margin-bottom: 2px;">
+              <span>4. Plan Selected (Tier Choice)</span>
+              <span style="color: #0f172a;">1,335 /day <span class="badge-neutral" style="font-size: 10px; padding: 1px 6px;">7.9% of Loads</span></span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar-fill" style="width: 30%; background: linear-gradient(90deg, #6366f1, #4f46e5);">1,335/day</div>
+            </div>
+          </div>
+
+          <!-- Step 5: Pay Initiated -->
+          <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; margin-bottom: 2px;">
+              <span>5. Pay Initiated (Gateway Click)</span>
+              <span style="color: #0f172a;">1,009 /day <span class="badge-pos" style="font-size: 10px; padding: 1px 6px;">75.6% of Selected</span></span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar-fill" style="width: 22%; background: linear-gradient(90deg, #8b5cf6, #7c3aed);">1,009/day</div>
+            </div>
+          </div>
+
+          <!-- Step 6: Purchased -->
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 700; margin-bottom: 2px;">
+              <span>6. Purchased (Conversions)</span>
+              <span style="color: #059669; font-weight: 800;">263 /day <span class="badge-pos" style="font-size: 10px; padding: 1px 6px;">26.1% of Initiated</span></span>
+            </div>
+            <div class="funnel-bar-track">
+              <div class="funnel-bar-fill" style="width: 14%; background: linear-gradient(90deg, #10b981, #059669);">263/day</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PLATFORM-WISE FUNNEL BREAKDOWN TABLE (EXACT NUMBERS FROM USER DASHBOARD) -->
+        <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin: 18px 0 8px 0;">
+          Platform-wise Funnel Breakdown (Daily Averages)
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align: left;">Platform</th>
+              <th style="text-align: right;">DAU</th>
+              <th style="text-align: right;">Paywall Hits</th>
+              <th style="text-align: right;">Plan Page Load</th>
+              <th style="text-align: right;">Plan Selected</th>
+              <th style="text-align: right;">Pay Initiated</th>
+              <th style="text-align: right;">Purchased</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background-color: #fefce8; font-weight: 700; border-top: 2px solid #fef08a; border-bottom: 2px solid #fef08a;">
+              <td style="color: #854d0e;">Overall (Combined)</td>
+              <td style="text-align: right; color: #854d0e;">3,509,815</td>
+              <td style="text-align: right; color: #854d0e;">85,982 <span style="font-size: 10px; color: #a16207; display: block;">2.4%</span></td>
+              <td style="text-align: right; color: #854d0e;">16,933 <span style="font-size: 10px; color: #a16207; display: block;">19.7%</span></td>
+              <td style="text-align: right; color: #854d0e;">1,335 <span style="font-size: 10px; color: #a16207; display: block;">7.9%</span></td>
+              <td style="text-align: right; color: #854d0e;">1,009 <span style="font-size: 10px; color: #a16207; display: block;">75.6%</span></td>
+              <td style="text-align: right; color: #15803d; font-weight: 800;">263 <span style="font-size: 10px; color: #15803d; display: block;">26.1%</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700; color: #0f172a;">MWeb</td>
+              <td style="text-align: right;">2,626,570</td>
+              <td style="text-align: right;">27,523 <span style="font-size: 10px; color: #64748b; display: block;">1.0%</span></td>
+              <td style="text-align: right;">9,848 <span style="font-size: 10px; color: #64748b; display: block;">35.8%</span></td>
+              <td style="text-align: right;">574 <span style="font-size: 10px; color: #64748b; display: block;">5.8%</span></td>
+              <td style="text-align: right;">428 <span style="font-size: 10px; color: #64748b; display: block;">74.6%</span></td>
+              <td style="text-align: right; font-weight: 700;">124 <span style="font-size: 10px; color: #059669; display: block;">29.0%</span></td>
+            </tr>
+            <tr style="background-color: #fafbfc;">
+              <td style="font-weight: 700; color: #0f172a;">Web</td>
+              <td style="text-align: right;">699,779</td>
+              <td style="text-align: right;">27,062 <span style="font-size: 10px; color: #64748b; display: block;">3.9%</span></td>
+              <td style="text-align: right;">1,854 <span style="font-size: 10px; color: #64748b; display: block;">6.9%</span></td>
+              <td style="text-align: right;">324 <span style="font-size: 10px; color: #64748b; display: block;">17.5%</span></td>
+              <td style="text-align: right;">273 <span style="font-size: 10px; color: #64748b; display: block;">84.3%</span></td>
+              <td style="text-align: right; font-weight: 700;">64 <span style="font-size: 10px; color: #059669; display: block;">23.4%</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700; color: #0f172a;">Main Android</td>
+              <td style="text-align: right;">65,464</td>
+              <td style="text-align: right;">13,242 <span style="font-size: 10px; color: #64748b; display: block;">20.2%</span></td>
+              <td style="text-align: right;">2,631 <span style="font-size: 10px; color: #64748b; display: block;">19.9%</span></td>
+              <td style="text-align: right;">175 <span style="font-size: 10px; color: #64748b; display: block;">6.7%</span></td>
+              <td style="text-align: right;">117 <span style="font-size: 10px; color: #64748b; display: block;">66.9%</span></td>
+              <td style="text-align: right; font-weight: 700;">29 <span style="font-size: 10px; color: #059669; display: block;">24.8%</span></td>
+            </tr>
+            <tr style="background-color: #fafbfc;">
+              <td style="font-weight: 700; color: #0f172a;">Main iOS</td>
+              <td style="text-align: right;">57,214</td>
+              <td style="text-align: right;">10,331 <span style="font-size: 10px; color: #64748b; display: block;">18.1%</span></td>
+              <td style="text-align: right;">1,454 <span style="font-size: 10px; color: #64748b; display: block;">14.1%</span></td>
+              <td style="text-align: right;">103 <span style="font-size: 10px; color: #64748b; display: block;">7.1%</span></td>
+              <td style="text-align: right;">97 <span style="font-size: 10px; color: #64748b; display: block;">94.2%</span></td>
+              <td style="text-align: right; font-weight: 700;">23 <span style="font-size: 10px; color: #059669; display: block;">23.7%</span></td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700; color: #0f172a;">Market Android</td>
+              <td style="text-align: right;">53,921</td>
+              <td style="text-align: right;">6,667 <span style="font-size: 10px; color: #64748b; display: block;">12.4%</span></td>
+              <td style="text-align: right;">1,075 <span style="font-size: 10px; color: #64748b; display: block;">16.1%</span></td>
+              <td style="text-align: right;">150 <span style="font-size: 10px; color: #64748b; display: block;">14.0%</span></td>
+              <td style="text-align: right;">88 <span style="font-size: 10px; color: #64748b; display: block;">58.7%</span></td>
+              <td style="text-align: right; font-weight: 700;">18 <span style="font-size: 10px; color: #059669; display: block;">20.5%</span></td>
+            </tr>
+            <tr style="background-color: #fafbfc;">
+              <td style="font-weight: 700; color: #0f172a;">Market iOS</td>
+              <td style="text-align: right;">7,483</td>
+              <td style="text-align: right;">1,179 <span style="font-size: 10px; color: #64748b; display: block;">15.8%</span></td>
+              <td style="text-align: right;">238 <span style="font-size: 10px; color: #64748b; display: block;">20.2%</span></td>
+              <td style="text-align: right;">37 <span style="font-size: 10px; color: #64748b; display: block;">15.5%</span></td>
+              <td style="text-align: right;">36 <span style="font-size: 10px; color: #64748b; display: block;">97.3%</span></td>
+              <td style="text-align: right; font-weight: 700;">5 <span style="font-size: 10px; color: #059669; display: block;">13.9%</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- SECTION 4: ARPU & YIELD MOVEMENT (EXCLUDES AUTO-RENEWAL) -->
+      <!-- ================================================================= -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+        <h3 style="color: #0f172a; font-size: 15px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.3px;">
+          4. ARPU & Yield Movement (Excl. Auto-Renewal)
+        </h3>
+        <span style="font-size: 11px; background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; padding: 3px 9px; border-radius: 12px; font-weight: 700;">
+          Excludes auto_renewal
+        </span>
+      </div>
+      <p style="font-size: 12.5px; color: #475569; margin: 0 0 12px 0;">
+        <strong>ARPU Takeaway:</strong> ARPU settled at ₹2,417. <em>Note: Calculation excludes <code>user_txn_type = "auto_renewal"</code> (includes New, Manual Renewal, Expired Winbacks, and Upgrades).</em>
+      </p>
+
+      <div class="viz-card">
         <table>
           <thead>
             <tr>
               <th style="text-align: left;">Platform</th>
               <th style="text-align: right;">Last Week ARPU</th>
-              <th style="text-align: right;">4-Wk Avg ARPU</th>
-              <th style="text-align: center;">Net Shift %</th>
+              <th style="text-align: right;">4-Wk Avg</th>
+              <th style="text-align: right;">Net Shift</th>
+              <th style="text-align: center;">WoW %</th>
+              <th style="text-align: left; padding-left: 18px;">Yield Comparison (LW vs 4W)</th>
             </tr>
           </thead>
           <tbody>
@@ -468,55 +752,91 @@
               <td style="font-weight: 700; color: #0f172a;">MWeb</td>
               <td style="text-align: right; font-weight: 700;">₹3,612</td>
               <td style="text-align: right; color: #64748b;">₹3,688</td>
+              <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹76</td>
               <td style="text-align: center;"><span class="badge-neg">-2.1% ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 120px; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #3b82f6; width: 95%; height: 8px; border-radius: 4px;"></div>
+                </div>
+              </td>
             </tr>
             <tr style="background-color: #fafbfc;">
               <td style="font-weight: 700; color: #0f172a;">Web</td>
               <td style="text-align: right; font-weight: 700;">₹2,633</td>
               <td style="text-align: right; color: #64748b;">₹2,681</td>
+              <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹48</td>
               <td style="text-align: center;"><span class="badge-neg">-1.8% ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 120px; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #3b82f6; width: 70%; height: 8px; border-radius: 4px;"></div>
+                </div>
+              </td>
             </tr>
             <tr>
+              <td style="font-weight: 700; color: #0f172a;">Main Android</td>
+              <td style="text-align: right; font-weight: 700; color: #059669;">₹1,858</td>
+              <td style="text-align: right; color: #64748b;">₹1,716</td>
+              <td style="text-align: right; color: #059669; font-size: 11.5px; font-weight: 700;">+₹142</td>
+              <td style="text-align: center;"><span class="badge-pos">+8.3% ▲</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 120px; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #10b981; width: 50%; height: 8px; border-radius: 4px;"></div>
+                </div>
+              </td>
+            </tr>
+            <tr style="background-color: #fafbfc;">
               <td style="font-weight: 700; color: #0f172a;">Main iOS</td>
               <td style="text-align: right; font-weight: 700;">₹1,755</td>
               <td style="text-align: right; color: #64748b;">₹1,732</td>
+              <td style="text-align: right; color: #059669; font-size: 11.5px;">+₹23</td>
               <td style="text-align: center;"><span class="badge-pos">+1.3% ▲</span></td>
-            </tr>
-            <tr style="background-color: #fafbfc;">
-              <td style="font-weight: 700; color: #0f172a;">Main Android</td>
-              <td style="text-align: right; font-weight: 700;">₹1,858</td>
-              <td style="text-align: right; color: #64748b;">₹1,716</td>
-              <td style="text-align: center;"><span class="badge-pos">+8.3% ▲</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 120px; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #6366f1; width: 48%; height: 8px; border-radius: 4px;"></div>
+                </div>
+              </td>
             </tr>
             <tr>
-              <td style="font-weight: 700; color: #0f172a;">Market Android</td>
-              <td style="text-align: right; font-weight: 700;">₹1,185</td>
-              <td style="text-align: right; color: #64748b;">₹1,447</td>
-              <td style="text-align: center;"><span class="badge-neg">-18.1% ▼</span></td>
-            </tr>
-            <tr style="background-color: #fafbfc;">
               <td style="font-weight: 700; color: #0f172a;">Market iOS</td>
               <td style="text-align: right; font-weight: 700;">₹1,527</td>
               <td style="text-align: right; color: #64748b;">₹1,487</td>
+              <td style="text-align: right; color: #059669; font-size: 11.5px;">+₹40</td>
               <td style="text-align: center;"><span class="badge-pos">+2.7% ▲</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 120px; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #ec4899; width: 41%; height: 8px; border-radius: 4px;"></div>
+                </div>
+              </td>
+            </tr>
+            <tr style="background-color: #fafbfc;">
+              <td style="font-weight: 700; color: #0f172a;">Market Android</td>
+              <td style="text-align: right; font-weight: 700;">₹1,185</td>
+              <td style="text-align: right; color: #64748b;">₹1,447</td>
+              <td style="text-align: right; color: #dc2626; font-size: 11.5px;">-₹262</td>
+              <td style="text-align: center;"><span class="badge-neg">-18.1% ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 120px; height: 8px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #f59e0b; width: 32%; height: 8px; border-radius: 4px;"></div>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <!-- ================================================================= -->
-      <!-- SECTION 4: RENEWALS & RETENTION PERFORMANCE -->
+      <!-- SECTION 5: RENEWALS & RETENTION PERFORMANCE -->
       <!-- ================================================================= -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <h3 style="color: #0f172a; font-size: 15px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.3px;">
-          4. Renewals & Retention Performance
+          5. Renewals & Retention Performance
         </h3>
       </div>
       <p style="font-size: 12.5px; color: #475569; margin: 0 0 12px 0;">
         <strong>Renewals Takeaway:</strong> Cohort renewal execution delivered 42.3% retention on 3,481 active expiries.
       </p>
 
-      <div class="table-card">
+      <div class="viz-card">
         <table>
           <thead>
             <tr>
@@ -526,6 +846,7 @@
               <th style="text-align: right;">Rate (LW)</th>
               <th style="text-align: right;">Rate (4W Avg)</th>
               <th style="text-align: center;">Net Shift</th>
+              <th style="text-align: left; padding-left: 18px;">Retention Gauge</th>
             </tr>
           </thead>
           <tbody>
@@ -533,41 +854,40 @@
               <td style="font-weight: 700; color: #0f172a;">Main iOS</td>
               <td style="text-align: right;">850</td>
               <td style="text-align: right; font-weight: 600;">535</td>
-              <td style="text-align: right; font-weight: 700;">62.9%</td>
+              <td style="text-align: right; font-weight: 700; color: #059669;">62.9%</td>
               <td style="text-align: right; color: #64748b;">65.5%</td>
               <td style="text-align: center;"><span class="badge-neg">-2.6 pp ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 100px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #10b981; width: 63%; height: 7px; border-radius: 4px;"></div>
+                </div>
+              </td>
             </tr>
             <tr style="background-color: #fafbfc;">
+              <td style="font-weight: 700; color: #0f172a;">Market Android</td>
+              <td style="text-align: right;">438</td>
+              <td style="text-align: right; font-weight: 600;">233</td>
+              <td style="text-align: right; font-weight: 700; color: #059669;">53.2%</td>
+              <td style="text-align: right; color: #64748b;">53.8%</td>
+              <td style="text-align: center;"><span class="badge-neg">-0.6 pp ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 100px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #10b981; width: 53%; height: 7px; border-radius: 4px;"></div>
+                </div>
+              </td>
+            </tr>
+            <tr>
               <td style="font-weight: 700; color: #0f172a;">Main Android</td>
               <td style="text-align: right;">735</td>
               <td style="text-align: right; font-weight: 600;">347</td>
               <td style="text-align: right; font-weight: 700;">47.2%</td>
               <td style="text-align: right; color: #64748b;">50.5%</td>
               <td style="text-align: center;"><span class="badge-neg">-3.3 pp ▼</span></td>
-            </tr>
-            <tr>
-              <td style="font-weight: 700; color: #0f172a;">Web</td>
-              <td style="text-align: right;">656</td>
-              <td style="text-align: right; font-weight: 600;">149</td>
-              <td style="text-align: right; font-weight: 700;">22.7%</td>
-              <td style="text-align: right; color: #64748b;">24.4%</td>
-              <td style="text-align: center;"><span class="badge-neg">-1.7 pp ▼</span></td>
-            </tr>
-            <tr style="background-color: #fafbfc;">
-              <td style="font-weight: 700; color: #0f172a;">MWeb</td>
-              <td style="text-align: right;">627</td>
-              <td style="text-align: right; font-weight: 600;">125</td>
-              <td style="text-align: right; font-weight: 700;">19.9%</td>
-              <td style="text-align: right; color: #64748b;">23.0%</td>
-              <td style="text-align: center;"><span class="badge-neg">-3.1 pp ▼</span></td>
-            </tr>
-            <tr>
-              <td style="font-weight: 700; color: #0f172a;">Market Android</td>
-              <td style="text-align: right;">438</td>
-              <td style="text-align: right; font-weight: 600;">233</td>
-              <td style="text-align: right; font-weight: 700;">53.2%</td>
-              <td style="text-align: right; color: #64748b;">53.8%</td>
-              <td style="text-align: center;"><span class="badge-neg">-0.6 pp ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 100px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #3b82f6; width: 47%; height: 7px; border-radius: 4px;"></div>
+                </div>
+              </td>
             </tr>
             <tr style="background-color: #fafbfc;">
               <td style="font-weight: 700; color: #0f172a;">Market iOS</td>
@@ -576,82 +896,161 @@
               <td style="text-align: right; font-weight: 700;">46.7%</td>
               <td style="text-align: right; color: #64748b;">61.0%</td>
               <td style="text-align: center;"><span class="badge-neg">-14.3 pp ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 100px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #3b82f6; width: 47%; height: 7px; border-radius: 4px;"></div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-weight: 700; color: #0f172a;">Web</td>
+              <td style="text-align: right;">656</td>
+              <td style="text-align: right; font-weight: 600;">149</td>
+              <td style="text-align: right; font-weight: 700;">22.7%</td>
+              <td style="text-align: right; color: #64748b;">24.4%</td>
+              <td style="text-align: center;"><span class="badge-neg">-1.7 pp ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 100px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #f59e0b; width: 23%; height: 7px; border-radius: 4px;"></div>
+                </div>
+              </td>
+            </tr>
+            <tr style="background-color: #fafbfc;">
+              <td style="font-weight: 700; color: #0f172a;">MWeb</td>
+              <td style="text-align: right;">627</td>
+              <td style="text-align: right; font-weight: 600;">125</td>
+              <td style="text-align: right; font-weight: 700;">19.9%</td>
+              <td style="text-align: right; color: #64748b;">23.0%</td>
+              <td style="text-align: center;"><span class="badge-neg">-3.1 pp ▼</span></td>
+              <td style="padding-left: 18px;">
+                <div style="background-color: #f1f5f9; width: 100px; height: 7px; border-radius: 4px; overflow: hidden;">
+                  <div style="background-color: #f59e0b; width: 20%; height: 7px; border-radius: 4px;"></div>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
       <!-- ================================================================= -->
-      <!-- SECTION 5: RECURRING SUBSCRIPTIONS & PLATFORM SPLIT -->
+      <!-- SECTION 6: RECURRING SUBSCRIPTIONS & PLATFORM SPLIT (UPDATED REAL METRICS) -->
       <!-- ================================================================= -->
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <h3 style="color: #0f172a; font-size: 15px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.3px;">
-          5. Recurring Subscriptions & Platform Split
+          6. Recurring Subscriptions & Platform Split
         </h3>
       </div>
       <p style="font-size: 12.5px; color: #475569; margin: 0 0 12px 0;">
-        <strong>Recurring Takeaway:</strong> Recurring sales share reached 62.8%, generating ₹32.06 L in recurring revenue.
+        <strong>Recurring Takeaway:</strong> Recurring sales share settled at <strong>22.6%</strong> across 1,584 total transactions, contributing ₹7.93 L.
       </p>
 
-      <div class="table-card">
+      <div class="viz-card">
+        <!-- VISUAL 3: RECURRING VS NON-RECURRING VISUAL SPLIT METER -->
+        <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+          Weekly Recurring Adoption Split
+        </div>
+        <div style="display: flex; width: 100%; height: 24px; border-radius: 6px; overflow: hidden; margin-bottom: 16px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.08);">
+          <div style="width: 22.6%; background: linear-gradient(90deg, #ec4899, #db2777); display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 11px; font-weight: 700;">
+            Recurring 22.6% (358)
+          </div>
+          <div style="width: 77.4%; background-color: #f1f5f9; display: flex; align-items: center; justify-content: center; color: #475569; font-size: 11px; font-weight: 600;">
+            Non-Recurring / One-Time 77.4% (1,226)
+          </div>
+        </div>
+
+        <!-- RECURRING TABLE MATCHING EXACT NUMBERS FROM USER DASHBOARD -->
         <table>
           <thead>
             <tr>
               <th style="text-align: left;">Platform</th>
               <th style="text-align: right;">Total Sold</th>
               <th style="text-align: right;">Recurring Sold</th>
-              <th style="text-align: center;">Recurring %</th>
+              <th style="text-align: right;">Non-Recurring</th>
+              <th style="text-align: center;">Recurring Share %</th>
               <th style="text-align: right;">Recurring Rev</th>
             </tr>
           </thead>
           <tbody>
+            <tr style="background-color: #fefce8; font-weight: 700; border-top: 2px solid #fef08a; border-bottom: 2px solid #fef08a;">
+              <td style="color: #854d0e;">Period Total</td>
+              <td style="text-align: right; color: #854d0e;">1,584</td>
+              <td style="text-align: right; color: #854d0e;">358</td>
+              <td style="text-align: right; color: #854d0e;">1,226</td>
+              <td style="text-align: center;"><span class="badge-neutral" style="background-color: #fef08a; color: #854d0e; font-weight: 800;">22.6%</span></td>
+              <td style="text-align: right; color: #854d0e;">₹7.93 L</td>
+            </tr>
             <tr>
-              <td style="font-weight: 700; color: #0f172a;">Main iOS</td>
-              <td style="text-align: right;">742</td>
-              <td style="text-align: right; font-weight: 600;">742</td>
-              <td style="text-align: center;"><span class="badge-pos" style="background-color: #fef3c7; color: #b45309;">100.0%</span></td>
-              <td style="text-align: right; font-weight: 600;">₹13.02 L</td>
+              <td style="font-weight: 700; color: #0f172a;">Main - iOS</td>
+              <td style="text-align: right;">164</td>
+              <td style="text-align: right; font-weight: 700; color: #059669;">164</td>
+              <td style="text-align: right; color: #64748b;">0</td>
+              <td style="text-align: center;"><span class="badge-pos" style="background-color: #dcfce7; color: #15803d; font-weight: 800;">100.0%</span></td>
+              <td style="text-align: right; font-weight: 700;">₹3.97 L</td>
             </tr>
             <tr style="background-color: #fafbfc;">
-              <td style="font-weight: 700; color: #0f172a;">Main Android</td>
-              <td style="text-align: right;">663</td>
-              <td style="text-align: right; font-weight: 600;">518</td>
-              <td style="text-align: center;"><span class="badge-pos">78.1%</span></td>
-              <td style="text-align: right; font-weight: 600;">₹9.48 L</td>
+              <td style="font-weight: 700; color: #0f172a;">Market - Android</td>
+              <td style="text-align: right;">124</td>
+              <td style="text-align: right; font-weight: 700;">65</td>
+              <td style="text-align: right; color: #64748b;">59</td>
+              <td style="text-align: center;"><span class="badge-pos" style="background-color: #fef3c7; color: #b45309; font-weight: 700;">52.4%</span></td>
+              <td style="text-align: right; font-weight: 600;">₹57.9 K</td>
             </tr>
             <tr>
-              <td style="font-weight: 700; color: #0f172a;">Market Android</td>
-              <td style="text-align: right;">428</td>
-              <td style="text-align: right; font-weight: 600;">384</td>
-              <td style="text-align: center;"><span class="badge-pos">89.7%</span></td>
-              <td style="text-align: right; font-weight: 600;">₹4.48 L</td>
+              <td style="font-weight: 700; color: #0f172a;">WAP (MWeb)</td>
+              <td style="text-align: right;">713</td>
+              <td style="text-align: right; font-weight: 700;">39</td>
+              <td style="text-align: right; color: #64748b;">674</td>
+              <td style="text-align: center;"><span class="badge-neutral">5.5%</span></td>
+              <td style="text-align: right; font-weight: 600;">₹1.08 L</td>
             </tr>
             <tr style="background-color: #fafbfc;">
               <td style="font-weight: 700; color: #0f172a;">Web</td>
-              <td style="text-align: right;">692</td>
-              <td style="text-align: right; font-weight: 600;">177</td>
-              <td style="text-align: center;"><span class="badge-neg" style="background-color: #f1f5f9; color: #475569;">25.6%</span></td>
-              <td style="text-align: right; font-weight: 600;">₹3.01 L</td>
+              <td style="text-align: right;">366</td>
+              <td style="text-align: right; font-weight: 700;">36</td>
+              <td style="text-align: right; color: #64748b;">330</td>
+              <td style="text-align: center;"><span class="badge-neutral">9.8%</span></td>
+              <td style="text-align: right; font-weight: 600;">₹1.11 L</td>
             </tr>
             <tr>
-              <td style="font-weight: 700; color: #0f172a;">MWeb</td>
-              <td style="text-align: right;">815</td>
-              <td style="text-align: right; font-weight: 600;">107</td>
-              <td style="text-align: center;"><span class="badge-neg" style="background-color: #f1f5f9; color: #475569;">13.1%</span></td>
-              <td style="text-align: right; font-weight: 600;">₹1.37 L</td>
+              <td style="font-weight: 700; color: #0f172a;">Market - iOS</td>
+              <td style="text-align: right;">31</td>
+              <td style="text-align: right; font-weight: 700; color: #059669;">31</td>
+              <td style="text-align: right; color: #64748b;">0</td>
+              <td style="text-align: center;"><span class="badge-pos" style="background-color: #dcfce7; color: #15803d; font-weight: 800;">100.0%</span></td>
+              <td style="text-align: right; font-weight: 600;">₹64.1 K</td>
             </tr>
             <tr style="background-color: #fafbfc;">
-              <td style="font-weight: 700; color: #0f172a;">Market iOS</td>
-              <td style="text-align: right;">119</td>
-              <td style="text-align: right; font-weight: 600;">119</td>
-              <td style="text-align: center;"><span class="badge-pos" style="background-color: #fef3c7; color: #b45309;">100.0%</span></td>
-              <td style="text-align: right; font-weight: 600;">₹1.82 L</td>
+              <td style="font-weight: 700; color: #0f172a;">Main - Android</td>
+              <td style="text-align: right;">186</td>
+              <td style="text-align: right; font-weight: 700;">23</td>
+              <td style="text-align: right; color: #64748b;">163</td>
+              <td style="text-align: center;"><span class="badge-neutral">12.4%</span></td>
+              <td style="text-align: right; font-weight: 600;">₹55.2 K</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- FOOTER & PDF ATTACHMENT NOTICE (BUTTON REMOVED, USER REQUESTED SIGNATURE) -->
+      <!-- INTERACTIVE DASHBOARD CTA BANNER -->
+      <table style="width: 100%; border: none; background: linear-gradient(135deg, #090d16 0%, #1e293b 100%); border-radius: 12px; margin: 28px 0 24px 0; box-shadow: 0 8px 22px -4px rgba(15, 23, 42, 0.16); border-collapse: separate; overflow: hidden;">
+        <tr>
+          <td style="padding: 22px 24px; vertical-align: middle; border: none;">
+            <div style="font-size: 15px; font-weight: 800; color: #ffffff; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+              <span>📊</span> Live Subscription Ledger Dashboard
+            </div>
+            <div style="font-size: 12.5px; color: #94a3b8; line-height: 1.45;">
+              Explore interactive cohort drilldowns, daily trends, channel splits, and full raw transaction data in real time.
+            </div>
+          </td>
+          <td style="padding: 22px 24px; vertical-align: middle; text-align: right; border: none; white-space: nowrap;">
+            <a href="https://et-subscription-ledger.netlify.app/" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #ED1C24 0%, #b91c1c 100%); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 700; padding: 11px 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(237, 28, 36, 0.4); text-align: center;">
+              Open Dashboard ↗
+            </a>
+          </td>
+        </tr>
+      </table>
+
+      <!-- FOOTER & PDF ATTACHMENT NOTICE (CLEAN SIGNATURE AS REQUESTED) -->
       <div style="border-top: 1px solid #e2e8f0; padding-top: 18px; font-size: 12px; color: #64748b;">
         <p style="margin: 0 0 16px 0; color: #64748b; font-size: 12.5px;">
           📎 <strong>Attachment:</strong> Complete Multi-Page Executive Briefing PDF (with comprehensive breakdown tables) is attached to this email.
