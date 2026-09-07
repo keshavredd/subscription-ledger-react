@@ -4136,7 +4136,9 @@ function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, i
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const displayName = currentUser.displayName || currentUser.email.split('@')[0];
+  if (!currentUser) return null;
+
+  const displayName = currentUser.displayName || currentUser.email?.split('@')[0] || 'User';
   const photoUrl = currentUser.photoURL;
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -4274,26 +4276,29 @@ export default function App() {
     }
   }, [activeTab, currentUser]);
 
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser?.email && !currentUser) {
-        const authorized = await isUserAuthorizedAsync(firebaseUser.email);
-        if (authorized) {
-          handleSetUser({
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0]
-          });
+      if (firebaseUser?.email) {
+        if (!currentUserRef.current) {
+          const authorized = await isUserAuthorizedAsync(firebaseUser.email);
+          if (authorized) {
+            handleSetUser({
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0]
+            });
+          }
         }
       }
     });
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [handleSetUser]);
 
-  if (!currentUser) {
-    return <LoginScreen onLoginSuccess={handleSetUser} isDark={isDark} />;
-  }
-
-  const isAdmin = isAdminEmail(currentUser.email);
+  const isAdmin = isAdminEmail(currentUser?.email);
   const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU'];
   const navTabs = isAdmin ? [...baseTabs, 'Conversational Analytics'] : baseTabs;
 
@@ -4302,6 +4307,10 @@ export default function App() {
       setActiveTab('Realtime');
     }
   }, [isAdmin, activeTab]);
+
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={handleSetUser} isDark={isDark} />;
+  }
 
   return (
     <div className={`min-h-screen ${isDark ? 'dark bg-[#0F172A] text-[#f8fafc]' : 'bg-[#F8FAFC] text-[#0F172A]'}`}>

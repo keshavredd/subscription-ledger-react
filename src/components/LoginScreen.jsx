@@ -2,11 +2,10 @@
  * LoginScreen.jsx
  * ET Prime Subscription Ledger - Authentication & Access Control Guard
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ShieldAlert, LogIn, Lock, ArrowRight, UserCheck, CheckCircle, Mail } from 'lucide-react';
 import { loginWithGoogleSSO } from '../services/googleAuthService';
 import { isUserAuthorizedAsync } from '../services/telemetryService';
-import { auth, onAuthStateChanged } from '../services/firebaseService';
 
 export default function LoginScreen({ onLoginSuccess, isDark }) {
   const [errorMsg, setErrorMsg] = useState(null);
@@ -24,17 +23,6 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
       return false;
     }
   };
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser && firebaseUser.email) {
-        setIsLoading(true);
-        await processEmailAuth(firebaseUser.email);
-        setIsLoading(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
