@@ -61,7 +61,7 @@ SPREADSHEET_URL = os.environ.get(
 
 # Target & Dashboard Configuration
 SEPTEMBER_AOP_TARGET = float(os.environ.get("SEPTEMBER_AOP_TARGET", "49300000.0"))  # ₹4.93 Cr
-DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "https://et-subscription-ledger.netlify.app/")
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "https://subscription-ledger-react.vercel.app/")
 
 # CSV Fallback URLs (in case service account doesn't have direct spreadsheet access)
 CSV_FALLBACK_URLS = {
