@@ -4,7 +4,12 @@
  * Supports Firebase Auth (signInWithPopup) & Google Identity Services (GIS)
  */
 
-import { loginWithGoogle } from './firebaseService';
+import {
+  loginWithGoogle,
+  loginWithGoogleRedirect,
+  prefersRedirectSignIn,
+  isPopupFailure
+} from './firebaseService';
 
 // Dynamically load Google Identity Services SDK if needed
 let gsiPromise = null;
@@ -26,15 +31,30 @@ export function loadGsiScript() {
 }
 
 /**
- * Triggers official Google SSO Popup Authentication.
- * Uses Firebase signInWithPopup if VITE_FIREBASE_API_KEY is configured,
- * or Google Identity Services if VITE_GOOGLE_CLIENT_ID is provided.
+ * Triggers official Google SSO Authentication.
+ *
+ * Uses Firebase if VITE_FIREBASE_API_KEY is configured, or Google Identity
+ * Services if VITE_GOOGLE_CLIENT_ID is provided.
+ *
+ * Firebase sign-in picks its mechanism per environment. Popups are unusable on
+ * iOS/iPadOS (Safari blocks pop-ups by default), inside in-app webviews, and on
+ * desktop Safari (ITP blocks the cross-origin popup handshake), so those get a
+ * full-page redirect instead. Everywhere else keeps the popup — it preserves
+ * app state — and falls back to redirect if the popup turns out to be blocked.
+ *
+ * Returns { email, displayName } on success, or { redirecting: true } when the
+ * browser is navigating away to complete a redirect sign-in.
  */
 export async function loginWithGoogleSSO() {
   const firebaseApiKey = import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyD507aw8ZwCLi_3n8feESQIor3s2PDRozQ";
 
-  // 1. Primary: Firebase Google Sign-In Popup
+  // 1. Primary: Firebase Google Sign-In
   if (firebaseApiKey && !firebaseApiKey.includes('demo_key') && !firebaseApiKey.includes('placeholder')) {
+    if (prefersRedirectSignIn()) {
+      await loginWithGoogleRedirect();
+      return { redirecting: true };
+    }
+
     try {
       const firebaseUser = await loginWithGoogle();
       if (firebaseUser && firebaseUser.email) {
@@ -44,7 +64,12 @@ export async function loginWithGoogleSSO() {
         };
       }
     } catch (err) {
-      console.error("Firebase Auth Popup Error:", err);
+      if (isPopupFailure(err)) {
+        console.warn(`Popup sign-in unavailable (${err.code}) — retrying via redirect.`);
+        await loginWithGoogleRedirect();
+        return { redirecting: true };
+      }
+      console.error("Firebase Auth Error:", err);
       throw err;
     }
   }

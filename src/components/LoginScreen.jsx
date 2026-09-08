@@ -2,14 +2,41 @@
  * LoginScreen.jsx
  * ET Prime Subscription Ledger - Authentication & Access Control Guard
  */
-import React, { useState } from 'react';
-import { ShieldAlert, LogIn, Lock, ArrowRight, UserCheck, CheckCircle, Mail } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ShieldAlert, LogIn, Lock, ArrowRight, UserCheck, CheckCircle, Mail, Loader2 } from 'lucide-react';
 import { loginWithGoogleSSO } from '../services/googleAuthService';
+import { completeRedirectSignIn, isRedirectPending } from '../services/firebaseService';
 import { isUserAuthorizedAsync } from '../services/telemetryService';
+
+/** Maps Firebase auth error codes to something a user can act on. */
+function describeAuthError(err) {
+  switch (err?.code) {
+    case 'auth/popup-blocked':
+      return "Your browser blocked the sign-in window. Please allow pop-ups for this site, or try again to be redirected instead.";
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return "Sign-in was cancelled before it completed. Please try again.";
+    case 'auth/unauthorized-domain':
+      return "This site's domain is not authorized in Firebase Authentication. An administrator needs to add it under Authentication → Settings → Authorized domains.";
+    case 'auth/operation-not-supported-in-this-environment':
+    case 'auth/web-storage-unsupported':
+      return "This browser is blocking the storage that sign-in requires. If you are in Private Browsing or an in-app browser, please open the dashboard in Safari or Chrome directly.";
+    case 'auth/network-request-failed':
+      return "Could not reach Google's sign-in service. Please check your network connection and try again.";
+    default:
+      return err?.message || "Google SSO failed. Please try again.";
+  }
+}
 
 export default function LoginScreen({ onLoginSuccess, isDark }) {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  // True while returning from a full-page redirect, so we show a "finishing"
+  // state instead of flashing the sign-in button at a user who already signed in.
+  const [isCompletingRedirect, setIsCompletingRedirect] = useState(() => isRedirectPending());
+  const isMountedRef = useRef(true);
+
+  useEffect(() => () => { isMountedRef.current = false; }, []);
 
   const processEmailAuth = async (emailStr) => {
     if (!emailStr || !emailStr.trim()) return false;
@@ -24,21 +51,49 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
     }
   };
 
+  // Consume a pending redirect sign-in on load. Runs on every mount so the
+  // redirect result is always collected, even if the "pending" flag was lost
+  // (e.g. sessionStorage blocked in a locked-down browser).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const user = await completeRedirectSignIn();
+        if (cancelled || !isMountedRef.current) return;
+        if (user?.email) {
+          await processEmailAuth(user.email);
+        }
+      } catch (err) {
+        console.error("Google SSO redirect error:", err);
+        if (!cancelled && isMountedRef.current) setErrorMsg(describeAuthError(err));
+      } finally {
+        if (!cancelled && isMountedRef.current) setIsCompletingRedirect(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
       const user = await loginWithGoogleSSO();
+      // Redirect flow: the browser is navigating away to Google. Show the
+      // "redirecting" state rather than reporting a missing email.
+      if (user?.redirecting) {
+        setIsCompletingRedirect(true);
+        return;
+      }
       if (user && user.email) {
         await processEmailAuth(user.email);
         return;
       }
       setErrorMsg("Google Sign-In Failed: No email address returned.");
     } catch (err) {
-      console.error("Google OAuth Popup Error:", err);
-      setErrorMsg(err?.message || "Google SSO popup failed or was closed.");
+      console.error("Google OAuth Error:", err);
+      setErrorMsg(describeAuthError(err));
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) setIsLoading(false);
     }
   };
 
@@ -89,11 +144,19 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
           {/* Primary Action: Sign In with Google */}
           <button
             onClick={handleGoogleSignIn}
-            disabled={isLoading}
+            disabled={isLoading || isCompletingRedirect}
             className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs bg-black dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all flex items-center justify-center gap-3 shadow-md hover:shadow-lg cursor-pointer disabled:opacity-50"
           >
-            <LogIn className="h-4 w-4 text-amber-accent" />
-            <span>{isLoading ? "Signing in with Google SSO..." : "Sign in with Google SSO"}</span>
+            {isLoading || isCompletingRedirect
+              ? <Loader2 className="h-4 w-4 text-amber-accent animate-spin" />
+              : <LogIn className="h-4 w-4 text-amber-accent" />}
+            <span>
+              {isCompletingRedirect
+                ? "Completing Google sign-in..."
+                : isLoading
+                  ? "Signing in with Google SSO..."
+                  : "Sign in with Google SSO"}
+            </span>
           </button>
 
         </div>
