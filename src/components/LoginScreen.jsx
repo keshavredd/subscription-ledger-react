@@ -10,6 +10,12 @@ import { isUserAuthorizedAsync } from '../services/telemetryService';
 
 /** Maps Firebase auth error codes to something a user can act on. */
 function describeAuthError(err) {
+  // Not a coded error: Firebase's IndexedDB persistence throws this bare
+  // message once it has torn its database down on pagehide/visibilitychange.
+  if (/Database is closing/i.test(err?.message || '')) {
+    return "Sign-in was interrupted while the page was navigating. Please try again — keep this tab in the foreground while it completes.";
+  }
+
   switch (err?.code) {
     case 'auth/popup-blocked':
       return "Your browser blocked the sign-in window. Please allow pop-ups for this site, or try again to be redirected instead.";

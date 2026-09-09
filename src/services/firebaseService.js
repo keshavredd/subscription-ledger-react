@@ -39,18 +39,24 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 /**
- * Safari in Private Browsing (and locked-down iOS webviews) can have IndexedDB
- * present but unusable, which makes Firebase's default persistence throw and
- * surfaces to the user as "unable to log in". Walk the persistence options from
- * most to least durable and keep the first one that actually initializes.
+ * Chooses an auth persistence backend and keeps the first one that initializes.
+ *
+ * IndexedDB is deliberately NOT first on the redirect path. Firebase's
+ * indexedDBLocalPersistence listens for pagehide/visibilitychange and closes
+ * its database, after which any access throws "Database is closing/hidden".
+ * signInWithRedirect has to persist the pending-redirect record while the page
+ * is navigating away — exactly when that teardown fires — so on WebKit the
+ * write loses the race and sign-in dies. localStorage has no open/close
+ * lifecycle, so the failure cannot occur there.
+ *
+ * Safari in Private Browsing (and locked-down webviews) can also expose an
+ * IndexedDB that is present but unusable, hence the remaining fallbacks.
  */
 export const persistenceReady = (async () => {
-  const tiers = [
-    indexedDBLocalPersistence,
-    browserLocalPersistence,
-    browserSessionPersistence,
-    inMemoryPersistence
-  ];
+  const tiers = prefersRedirectSignIn()
+    ? [browserLocalPersistence, indexedDBLocalPersistence, browserSessionPersistence, inMemoryPersistence]
+    : [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence];
+
   for (const tier of tiers) {
     try {
       await setPersistence(auth, tier);
