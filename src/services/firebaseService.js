@@ -4,12 +4,13 @@
  */
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
+  initializeAuth,
   getAuth,
+  browserPopupRedirectResolver,
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  setPersistence,
   indexedDBLocalPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
@@ -31,42 +32,42 @@ const firebaseConfig = {
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
+
+/**
+ * Auth persistence must be decided at CREATION, not patched afterwards with
+ * setPersistence. getAuth() initializes with Firebase's default stack —
+ * IndexedDB first — and that class registers pagehide/visibilitychange
+ * handlers that close its database, after which every access throws
+ * "Database is closing/hidden". Safari can begin loading the page returning
+ * from an OAuth redirect while it is still hidden, so auth initialization
+ * itself hits that teardown and getRedirectResult dies before a later
+ * setPersistence call could change anything.
+ *
+ * On the redirect path (iOS, webviews, desktop Safari) IndexedDB is therefore
+ * excluded from the list entirely — never instantiated, never able to throw.
+ * localStorage/sessionStorage have no open/close lifecycle. Popup-path
+ * browsers keep Firebase's default order. The first AVAILABLE entry wins, so
+ * Safari Private Browsing (unusable storage) still falls through safely.
+ */
+function createAuth() {
+  const persistence = prefersRedirectSignIn()
+    ? [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence]
+    : [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence];
+  try {
+    return initializeAuth(app, { persistence, popupRedirectResolver: browserPopupRedirectResolver });
+  } catch {
+    // Auth already initialized for this app (e.g. Vite HMR re-running this
+    // module) — reuse the existing instance.
+    return getAuth(app);
+  }
+}
+
+export const auth = createAuth();
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Always let the user pick an account rather than silently reusing one.
 googleProvider.setCustomParameters({ prompt: 'select_account' });
-
-/**
- * Chooses an auth persistence backend and keeps the first one that initializes.
- *
- * IndexedDB is deliberately NOT first on the redirect path. Firebase's
- * indexedDBLocalPersistence listens for pagehide/visibilitychange and closes
- * its database, after which any access throws "Database is closing/hidden".
- * signInWithRedirect has to persist the pending-redirect record while the page
- * is navigating away — exactly when that teardown fires — so on WebKit the
- * write loses the race and sign-in dies. localStorage has no open/close
- * lifecycle, so the failure cannot occur there.
- *
- * Safari in Private Browsing (and locked-down webviews) can also expose an
- * IndexedDB that is present but unusable, hence the remaining fallbacks.
- */
-export const persistenceReady = (async () => {
-  const tiers = prefersRedirectSignIn()
-    ? [browserLocalPersistence, indexedDBLocalPersistence, browserSessionPersistence, inMemoryPersistence]
-    : [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence];
-
-  for (const tier of tiers) {
-    try {
-      await setPersistence(auth, tier);
-      return tier;
-    } catch {
-      // Try the next, less capable storage mechanism.
-    }
-  }
-  return null;
-})();
 
 const REDIRECT_PENDING_KEY = 'et_sso_redirect_pending';
 
@@ -113,7 +114,6 @@ export async function loginWithGoogle() {
  * navigates away and the result is picked up by completeRedirectSignIn().
  */
 export async function loginWithGoogleRedirect() {
-  await persistenceReady;
   markRedirectPending(true);
   try {
     await signInWithRedirect(auth, googleProvider);
@@ -128,7 +128,6 @@ export async function loginWithGoogleRedirect() {
  * redirect, or null on a normal page load.
  */
 export async function completeRedirectSignIn() {
-  await persistenceReady;
   try {
     const result = await getRedirectResult(auth);
     return result?.user ?? null;
