@@ -48,6 +48,17 @@ html {
   color-scheme: dark;
 }
 
+/* Smooth appearance for lines in the combined trendlines chart: Plotly
+   redraws its traces when the metric selection changes, so freshly drawn
+   paths fade+rise in. */
+.combined-trend-chart .scatterlayer path.js-line {
+  animation: plotly-line-in 0.5s ease-out;
+}
+@keyframes plotly-line-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Checkbox accents follow the theme: amber in light, blue in dark */
 input[type='checkbox'] {
   accent-color: #d97706;

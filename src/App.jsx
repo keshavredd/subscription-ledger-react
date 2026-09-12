@@ -5,7 +5,7 @@ import { getStoredLlamaConfig, setStoredLlamaConfig } from './services/llamaServ
 import { buildPlotlyConfig } from './utils/chartHelper';
 import { themedColorMap, themedColorList } from './utils/themePalettes';
 import Papa from 'papaparse';
-import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X } from 'lucide-react';
+import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X, Download } from 'lucide-react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 
@@ -5232,8 +5232,8 @@ function ConversationalAnalytics({ isDark, currentUser }) {
 
 function formatMetric(num) {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-  return num.toString();
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return Math.round(num).toLocaleString();
 }
 
 function getPlanTenureCategory(planCat) {
@@ -5510,6 +5510,19 @@ function FunnelAnalysis({ isDark }) {
 
   const [trendlineViewMode, setTrendlineViewMode] = useState("Daily"); // "Daily" | "Weekly"
   const [weeklyDauMode, setWeeklyDauMode] = useState("Daily Average"); // "Daily Average" | "Weekly Sum"
+
+  // Trendlines: one combined multi-metric chart (default) or the 3x3 grid
+  const [trendChartMode, setTrendChartMode] = useState("Combined"); // "Combined" | "Individual"
+  const [selectedTrendMetrics, setSelectedTrendMetrics] = useState(['DAU', 'Paywall Hits', 'Purchased']);
+  const toggleTrendMetric = (name) => {
+    setSelectedTrendMetrics(prev => {
+      if (prev.includes(name)) {
+        if (prev.length === 1) return prev; // keep at least one metric
+        return prev.filter(m => m !== name);
+      }
+      return [...prev, name];
+    });
+  };
 
   // Process data for a given date range, segment filters, day of week list, and platforms list
   const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeams = [], daysOfWeekFilter = [], platformsFilter = []) => {
@@ -5854,6 +5867,68 @@ function FunnelAnalysis({ isDark }) {
     return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedTeams, selectedDaysOfWeek, selectedPlatforms);
   }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedTeams, selectedDaysOfWeek, selectedPlatforms]);
 
+  // CSV export of a breakdown table: every entity's daily-average row PLUS
+  // all its day-level rows (entity + Date columns), regardless of which rows
+  // are expanded on screen. Opens cleanly in Google Sheets.
+  const exportBreakdownCsv = ({ entityHeader, rowEntries, filename }) => {
+    const esc = (v) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const header = [entityHeader, 'Date'];
+    FUNNEL_STAGES.forEach((st, i) => {
+      header.push(st.label);
+      if (i > 0) header.push(`${st.label} % of prev`);
+    });
+    const rows = [header];
+
+    const pushRow = (entityName, dateLabel, data) => {
+      const cells = [entityName, dateLabel];
+      FUNNEL_STAGES.forEach((st, i) => {
+        const v = data[st.key] || 0;
+        cells.push(Math.round(v));
+        if (i > 0) {
+          const prev = data[FUNNEL_STAGES[i - 1].key] || 0;
+          cells.push(prev > 0 ? `${((v / prev) * 100).toFixed(1)}%` : '');
+        }
+      });
+      rows.push(cells);
+    };
+
+    rowEntries.forEach(({ title, obj }) => {
+      pushRow(title, 'Daily Avg', obj);
+      const daily = obj.daily || {};
+      Object.keys(daily).sort((a, b) => b.localeCompare(a)).forEach(d => pushRow(title, d, daily[d]));
+    });
+
+    const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPlatformBreakdownCsv = () => exportBreakdownCsv({
+    entityHeader: 'Platform',
+    rowEntries: ['overall', ...activePlatforms].map(k => ({
+      title: k === 'overall' ? 'Overall' : k,
+      obj: k === 'overall' ? primaryFunnel.overallAvg : (primaryFunnel.platformAvg[k] || {})
+    })),
+    filename: `funnel_platform_breakdown_${startDate}_to_${endDate}.csv`
+  });
+
+  const exportTeamBreakdownCsv = () => exportBreakdownCsv({
+    entityHeader: 'Marketing Team',
+    rowEntries: ['overall', ...Object.keys(primaryFunnel.marketingTeamAvg || {}).sort()].map(k => ({
+      title: k === 'overall' ? 'Overall (All Teams)' : k,
+      obj: k === 'overall' ? primaryFunnel.overallAvg : (primaryFunnel.marketingTeamAvg[k] || {})
+    })),
+    filename: `funnel_team_breakdown_${startDate}_to_${endDate}.csv`
+  });
+
   // Helper to compute weekly grouped step data for trendlines
   const computeWeeklyStepData = useCallback((trendObj, dauMode = "Daily Average") => {
     if (!trendObj || !trendObj.dates || !trendObj.dates.length) {
@@ -6056,8 +6131,8 @@ function FunnelAnalysis({ isDark }) {
 
     return (
       <td key={Math.random()} className="p-3 whitespace-nowrap text-right">
-        <div className="font-bold text-[13px]">
-          {val.toLocaleString()}{showPerDay && <span className="text-[10px] text-warm-muted dark:text-dark-muted font-medium">/day</span>}
+        <div className="font-bold text-[13px]" title={Math.round(val).toLocaleString()}>
+          {formatMetric(val)}{showPerDay && <span className="text-[10px] text-warm-muted dark:text-dark-muted font-medium">/day</span>}
         </div>
         <div className="flex items-center justify-end gap-1.5 mt-0.5 text-[11px]">
           {dropoff !== null && (
@@ -6389,7 +6464,7 @@ function FunnelAnalysis({ isDark }) {
             <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Daily Active Users</p>
           </div>
           {trendData && (
-            <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
+            <div className="w-full sm:w-32 lg:w-40 h-16 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
                 data={[{ x: trendData.dates, y: trendData.dau, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.dau.map(v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(1)), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
@@ -6409,7 +6484,7 @@ function FunnelAnalysis({ isDark }) {
             <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Purchased vs Plan Page Load</p>
           </div>
           {trendData && (
-            <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
+            <div className="w-full sm:w-32 lg:w-40 h-16 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
                 data={[{ x: trendData.dates, y: trendData.conv, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.conv.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
@@ -6429,7 +6504,7 @@ function FunnelAnalysis({ isDark }) {
             <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Paywall hits vs DAU</p>
           </div>
           {trendData && (
-            <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
+            <div className="w-full sm:w-32 lg:w-40 h-16 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
                 data={[{ x: trendData.dates, y: trendData.paywallRate, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.paywallRate.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
@@ -6504,10 +6579,129 @@ function FunnelAnalysis({ isDark }) {
                   Weekly View
                 </button>
               </div>
+
+              {/* Combined / Individual chart mode toggle */}
+              <div className="flex items-center gap-1 bg-warm-bg dark:bg-zinc-800 p-1 rounded-lg border border-warm-border dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={() => setTrendChartMode("Combined")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    trendChartMode === "Combined"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Combined
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTrendChartMode("Individual")}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    trendChartMode === "Individual"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text"
+                  }`}
+                >
+                  Individual
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* 3x3 Matrix of Trendline Charts (9 Charts Total) */}
+          {/* Combined view: one chart, metric pills top-left, % metrics on right axis */}
+          {trendChartMode === 'Combined' && (() => {
+            const activeMetrics = TREND_METRICS.filter(m => selectedTrendMetrics.includes(m.name));
+            const hasY2 = activeMetrics.some(m => m.axis === 'y2');
+            const traces = activeMetrics.flatMap(m => {
+              const base = {
+                x: primaryTrendDisplay.dates,
+                y: primaryTrendDisplay[m.key],
+                type: 'scatter',
+                mode: 'lines',
+                name: m.name,
+                line: { color: m.color, width: 2.5, shape: 'spline' },
+                yaxis: m.axis === 'y2' ? 'y2' : undefined,
+                hovertemplate: m.axis === 'y2' ? `<b>${m.name}</b>: %{y:.1f}%<extra></extra>` : `<b>${m.name}</b>: %{y:,.0f}<extra></extra>`
+              };
+              const out = [base];
+              if (compTrendDisplay) {
+                out.push({
+                  ...base,
+                  x: compTrendDisplay.dates,
+                  y: compTrendDisplay[m.key],
+                  name: `${m.name} (Comparison)`,
+                  line: { color: m.color, width: 2, dash: 'dot', shape: 'spline' }
+                });
+              }
+              return out;
+            });
+
+            return (
+              <div>
+                {/* Metric pills */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  {TREND_METRICS.map(m => {
+                    const active = selectedTrendMetrics.includes(m.name);
+                    return (
+                      <button
+                        key={m.name}
+                        type="button"
+                        onClick={() => toggleTrendMetric(m.name)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
+                          active
+                            ? 'bg-black/5 dark:bg-white/10 border-warm-border dark:border-slate-600 text-warm-text dark:text-dark-text'
+                            : 'border-warm-border/50 dark:border-zinc-800 text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: active ? m.color : 'transparent', border: active ? 'none' : `1.5px solid ${m.color}` }} />
+                        {m.name}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="w-full h-[420px] combined-trend-chart">
+                  <Plot
+                    data={traces}
+                    layout={{
+                      autosize: true,
+                      margin: { l: 55, r: hasY2 ? 55 : 20, t: 10, b: 40 },
+                      paper_bgcolor: 'transparent',
+                      plot_bgcolor: 'transparent',
+                      hovermode: 'x unified',
+                      xaxis: {
+                        tickfont: { size: 10, color: '#94a3b8' },
+                        gridcolor: 'rgba(148,163,184,0.25)',
+                        zerolinecolor: 'rgba(148,163,184,0.4)',
+                        // Weekly points are week-start dates: pin the ticks to the
+                        // actual data dates so labels always match hover values
+                        ...(trendlineViewMode === 'Weekly' ? { tickmode: 'array', tickvals: primaryTrendDisplay.dates, tickangle: -30 } : {})
+                      },
+                      yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', tickformat: '~s', rangemode: 'tozero' },
+                      ...(hasY2 ? {
+                        yaxis2: {
+                          overlaying: 'y',
+                          side: 'right',
+                          tickfont: { size: 10, color: '#94a3b8' },
+                          ticksuffix: '%',
+                          tickformat: '.1f',
+                          showgrid: false,
+                          rangemode: 'tozero'
+                        }
+                      } : {}),
+                      showlegend: true,
+                      legend: { orientation: 'h', y: -0.18, x: 0, font: { size: 11, color: '#94a3b8' } }
+                    }}
+                    config={{ responsive: true, displayModeBar: false }}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Individual view: 3x3 Matrix of Trendline Charts (9 Charts Total) */}
+          {trendChartMode === 'Individual' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Chart 1: DAU */}
             <div className="bg-warm-bg/40 dark:bg-zinc-900/40 p-4 rounded-xl border border-warm-border/60 dark:border-zinc-800">
@@ -6544,8 +6738,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 55, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', tickformat: ',d' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6590,8 +6784,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 55, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', tickformat: ',d' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6636,8 +6830,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 55, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', tickformat: ',d' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6682,8 +6876,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 55, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', tickformat: ',d' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6728,8 +6922,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 55, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', tickformat: ',d' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6774,8 +6968,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 55, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, tickformat: ',d' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', tickformat: ',d' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6820,8 +7014,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 45, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', ticksuffix: '%', tickformat: '.1f' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6866,8 +7060,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 45, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', ticksuffix: '%', tickformat: '.1f' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6912,8 +7106,8 @@ function FunnelAnalysis({ isDark }) {
                     margin: { l: 45, r: 20, t: 20, b: 40 },
                     paper_bgcolor: 'transparent',
                     plot_bgcolor: 'transparent',
-                    xaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' } },
-                    yaxis: { tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }, ticksuffix: '%', tickformat: '.1f' },
+                    xaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)' },
+                    yaxis: { tickfont: { size: 10, color: '#94a3b8' }, gridcolor: 'rgba(148,163,184,0.25)', zerolinecolor: 'rgba(148,163,184,0.4)', ticksuffix: '%', tickformat: '.1f' },
                     showlegend: isCompActive,
                     legend: { orientation: 'h', y: 1.15, font: { size: 10 } }
                   }}
@@ -6923,23 +7117,36 @@ function FunnelAnalysis({ isDark }) {
               </div>
             </div>
           </div>
+          )}
         </section>
       )}
 
       {/* Platform Breakdown Table Section with COLUMN comparison & FIXED STICKY HEADERS */}
-      <section className="mt-8">
+      <section className="mt-8 group">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 px-1 gap-2">
           <div>
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Platform-wise Funnel Breakdown</h3>
             <p className="text-xs text-warm-muted dark:text-dark-muted font-medium">Daily average metrics per platform (click row chevron to reveal day-level data)</p>
           </div>
-          {isCompActive && (
-            <div className="flex items-center gap-2 text-xs font-bold">
-              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">Primary Period</span>
-              <span className="text-warm-muted">vs</span>
-              <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30">Comparison Period</span>
-            </div>
-          )}
+          <div className="flex items-center gap-3 self-start sm:self-auto">
+            {isCompActive && (
+              <div className="flex items-center gap-2 text-xs font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">Primary Period</span>
+                <span className="text-warm-muted">vs</span>
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30">Comparison Period</span>
+              </div>
+            )}
+            {/* Appears on table hover: CSV export incl. Platform + Date columns */}
+            <button
+              type="button"
+              onClick={exportPlatformBreakdownCsv}
+              title="Download as CSV (import into Google Sheets)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text shadow-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer hover:text-amber-accent"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          </div>
         </div>
 
         {/* Mobile Touch Swipe Indicator */}
@@ -7081,12 +7288,22 @@ function FunnelAnalysis({ isDark }) {
       </section>
 
       {/* Marketing Team-wise Funnel Breakdown Table Section */}
-      <section className="mt-8 pb-10">
+      <section className="mt-8 pb-10 group/team">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 px-1 gap-2">
           <div>
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Marketing Team-wise Funnel Breakdown</h3>
             <p className="text-xs text-warm-muted dark:text-dark-muted font-medium">Daily average metrics per marketing team (click row chevron to reveal day-level data)</p>
           </div>
+          {/* Appears on table hover: CSV export incl. Team + Date columns */}
+          <button
+            type="button"
+            onClick={exportTeamBreakdownCsv}
+            title="Download as CSV (import into Google Sheets)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text shadow-xs opacity-0 group-hover/team:opacity-100 focus:opacity-100 transition-opacity cursor-pointer hover:text-amber-accent self-start sm:self-auto"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </button>
         </div>
 
         {/* Mobile Touch Swipe Indicator */}
@@ -7908,6 +8125,23 @@ function Realtime({ isDark }) {
 const EMPTY_FUNNEL = { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
 
 /**
+ * Metrics available in the combined funnel-trendlines chart. Fixed identity
+ * colors (stable across themes and selections); % metrics plot on the right
+ * axis (y2), volumes on the left.
+ */
+const TREND_METRICS = [
+  { name: 'DAU', key: 'dau', axis: 'y', color: '#3B82F6' },
+  { name: 'Paywall Hits', key: 'paywallHits', axis: 'y', color: '#10B981' },
+  { name: 'Plan Page Loads', key: 'pageLoads', axis: 'y', color: '#8B5CF6' },
+  { name: 'Plan Selected', key: 'planSelected', axis: 'y', color: '#EC4899' },
+  { name: 'Pay Initiated', key: 'payInitiated', axis: 'y', color: '#06B6D4' },
+  { name: 'Purchased', key: 'purchased', axis: 'y', color: '#F59E0B' },
+  { name: 'Plan Selection %', key: 'step1', axis: 'y2', color: '#EF4444' },
+  { name: 'Pay Initiation %', key: 'step2', axis: 'y2', color: '#EAB308' },
+  { name: 'Purchase %', key: 'step3', axis: 'y2', color: '#14B8A6' },
+];
+
+/**
  * Horizontal bar funnel: one row per stage with a log-scaled bar (funnel
  * volumes span ~4 orders of magnitude — linear bars would vanish), the
  * daily-average value and the drop-off to the next stage. With a comparison
@@ -7941,7 +8175,7 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {stages.map((s, i) => {
           const drop = dropOf(vals, i);
           const cDrop = compVals ? dropOf(compVals, i) : null;
@@ -7950,7 +8184,7 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
               <div className="w-28 sm:w-32 shrink-0 text-right text-xs font-bold text-warm-text dark:text-dark-text">{s.label}</div>
               <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-center gap-2">
-                  <div className="h-5 rounded-md transition-all duration-500" style={{ width: `${widthPct(vals[i])}%`, background: primColor, minWidth: 6 }} />
+                  <div className="h-8 rounded-md transition-all duration-500" style={{ width: `${widthPct(vals[i])}%`, background: primColor, minWidth: 6 }} />
                   <span className="text-xs font-extrabold text-warm-text dark:text-dark-text whitespace-nowrap">{fmt(vals[i])}/day</span>
                   {drop !== null && (
                     <span className="text-[11px] font-semibold text-red-600/90 dark:text-red-400/90 whitespace-nowrap hidden sm:inline">
@@ -7960,7 +8194,7 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
                 </div>
                 {compVals && (
                   <div className="flex items-center gap-2">
-                    <div className="h-5 rounded-md transition-all duration-500" style={{ width: `${widthPct(compVals[i])}%`, background: compColor, minWidth: 6 }} />
+                    <div className="h-8 rounded-md transition-all duration-500" style={{ width: `${widthPct(compVals[i])}%`, background: compColor, minWidth: 6 }} />
                     <span className="text-xs font-bold text-warm-muted dark:text-dark-muted whitespace-nowrap">{fmt(compVals[i])}/day</span>
                     {cDrop !== null && (
                       <span className="text-[11px] font-semibold text-warm-muted dark:text-dark-muted whitespace-nowrap hidden sm:inline">
@@ -7975,9 +8209,6 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
         })}
       </div>
 
-      <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-3 pl-1">
-        Bar lengths are log-scaled for readability — funnel volumes span several orders of magnitude.
-      </p>
     </div>
   );
 }
