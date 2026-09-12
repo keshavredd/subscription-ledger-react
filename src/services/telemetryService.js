@@ -1,17 +1,17 @@
 /**
  * telemetryService.js
  * Access Whitelisting, Pageview Telemetry, and Conversational Chat Audit Logging Service
- * Hybrid Persistence: Turso Database (shared across all devices) + Local Storage Fallback
+ * Hybrid Persistence: Cloud Firestore (shared across all devices) + Local Storage Fallback
  */
-import { 
-  isTursoConfigured, 
-  fetchAllowedUsersTurso, 
-  addAllowedUserTurso, 
-  removeAllowedUserTurso, 
-  logTabPageViewTurso, 
-  logChatQueryTurso, 
-  getTelemetryStatsTurso 
-} from './tursoService';
+import {
+  isFirestoreAvailable,
+  fetchAllowedUsersFS,
+  addAllowedUserFS,
+  removeAllowedUserFS,
+  logTabPageViewFS,
+  logChatQueryFS,
+  getTelemetryStatsFS
+} from './firestoreService';
 
 const ADMIN_EMAILS = [
   'keshavreddy731@gmail.com',
@@ -94,27 +94,27 @@ export function getAllowedUsers() {
 }
 
 export async function getAllowedUsersAsync() {
-  if (isTursoConfigured()) {
+  if (isFirestoreAvailable()) {
     try {
-      const dbUsers = await fetchAllowedUsersTurso();
+      const dbUsers = await fetchAllowedUsersFS();
       if (dbUsers && Array.isArray(dbUsers)) {
         if (dbUsers.length === 0) {
-          // If Turso whitelist is brand new and empty, seed it once
+          // If Firestore whitelist is brand new and empty, seed it once
           for (const u of INITIAL_ALLOWED_USERS) {
-            await addAllowedUserTurso(u, 'System');
+            await addAllowedUserFS(u, 'System');
           }
           const seeded = Array.from(new Set([...ADMIN_EMAILS, ...INITIAL_ALLOWED_USERS]));
           setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, seeded);
           return seeded;
         }
 
-        // Turso DB is single source of truth; always ensure root admins are retained
+        // Firestore is single source of truth; always ensure root admins are retained
         const combined = Array.from(new Set([...ADMIN_EMAILS, ...dbUsers]));
         setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, combined);
         return combined;
       }
     } catch (err) {
-      console.warn('[Telemetry] Error fetching async whitelist from Turso:', err);
+      console.warn('[Telemetry] Error fetching async whitelist from Firestore:', err);
     }
   }
   return getAllowedUsers();
@@ -139,7 +139,7 @@ export async function isUserAuthorizedAsync(email) {
   // 1. Check if Admin
   if (isAdminEmail(norm)) return true;
 
-  // 2. Fetch live Whitelist from Turso DB
+  // 2. Fetch live Whitelist from Firestore
   const allowedList = await getAllowedUsersAsync();
   return allowedList.some(userEmail => isEmailMatching(userEmail, norm));
 }
@@ -154,9 +154,9 @@ export function addAllowedUser(newEmail) {
     setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
   }
 
-  // Persist to Turso DB asynchronously
-  if (isTursoConfigured()) {
-    addAllowedUserTurso(norm).catch(err => console.warn('[Telemetry] Error syncing user add to Turso:', err));
+  // Persist to Firestore asynchronously
+  if (isFirestoreAvailable()) {
+    addAllowedUserFS(norm).catch(err => console.warn('[Telemetry] Error syncing user add to Firestore:', err));
   }
 
   return true;
@@ -173,9 +173,9 @@ export async function addAllowedUserAsync(newEmail) {
     setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
   }
 
-  // 2. Persist to Turso DB and await completion
-  if (isTursoConfigured()) {
-    await addAllowedUserTurso(norm);
+  // 2. Persist to Firestore and await completion
+  if (isFirestoreAvailable()) {
+    await addAllowedUserFS(norm);
   }
   return true;
 }
@@ -189,9 +189,9 @@ export function removeAllowedUser(targetEmail) {
   const updated = current.filter(e => e.toLowerCase().trim() !== norm);
   setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
 
-  // Remove from Turso DB asynchronously
-  if (isTursoConfigured()) {
-    removeAllowedUserTurso(norm).catch(err => console.warn('[Telemetry] Error syncing user removal to Turso:', err));
+  // Remove from Firestore asynchronously
+  if (isFirestoreAvailable()) {
+    removeAllowedUserFS(norm).catch(err => console.warn('[Telemetry] Error syncing user removal to Firestore:', err));
   }
 
   return true;
@@ -207,9 +207,9 @@ export async function removeAllowedUserAsync(targetEmail) {
   const updated = current.filter(e => e.toLowerCase().trim() !== norm);
   setStorageJSON(STORAGE_KEYS.ALLOWED_USERS, updated);
 
-  // 2. Remove from Turso DB and await completion
-  if (isTursoConfigured()) {
-    await removeAllowedUserTurso(norm);
+  // 2. Remove from Firestore and await completion
+  if (isFirestoreAvailable()) {
+    await removeAllowedUserFS(norm);
   }
   return true;
 }
@@ -256,10 +256,10 @@ export function logTabPageView(userEmail, tabName) {
   }
   setStorageJSON(STORAGE_KEYS.USER_SESSIONS, sessions);
 
-  // Log to Turso DB asynchronously
-  if (isTursoConfigured()) {
-    logTabPageViewTurso(normEmail, tabName, isAdminEmail(normEmail) ? 'Admin' : 'User')
-      .catch(err => console.warn('[Telemetry] Error logging view to Turso:', err));
+  // Log to Firestore asynchronously
+  if (isFirestoreAvailable()) {
+    logTabPageViewFS(normEmail, tabName, isAdminEmail(normEmail) ? 'Admin' : 'User')
+      .catch(err => console.warn('[Telemetry] Error logging view to Firestore:', err));
   }
 }
 
@@ -279,10 +279,10 @@ export function logChatQuery(userEmail, queryText, engineUsed = 'Local React Eng
   const updated = [newLog, ...logs].slice(0, 100);
   setStorageJSON(STORAGE_KEYS.CHAT_LOGS, updated);
 
-  // Log to Turso DB asynchronously
-  if (isTursoConfigured()) {
-    logChatQueryTurso(userEmail, queryText, engineUsed)
-      .catch(err => console.warn('[Telemetry] Error logging chat query to Turso:', err));
+  // Log to Firestore asynchronously
+  if (isFirestoreAvailable()) {
+    logChatQueryFS(userEmail, queryText, engineUsed)
+      .catch(err => console.warn('[Telemetry] Error logging chat query to Firestore:', err));
   }
 }
 
@@ -313,12 +313,12 @@ export function getTelemetryStats() {
 }
 
 export async function getTelemetryStatsAsync() {
-  if (isTursoConfigured()) {
+  if (isFirestoreAvailable()) {
     try {
-      const stats = await getTelemetryStatsTurso();
+      const stats = await getTelemetryStatsFS();
       if (stats) return stats;
     } catch (err) {
-      console.warn('[Telemetry] Error fetching telemetry stats from Turso:', err);
+      console.warn('[Telemetry] Error fetching telemetry stats from Firestore:', err);
     }
   }
   return getTelemetryStats();

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — ET Prime Subscription Dashboard</title>
+  <style>
+    body { font-family: Georgia, 'Times New Roman', serif; max-width: 760px; margin: 0 auto; padding: 48px 24px; color: #1a1a1a; line-height: 1.7; background: #fffdf9; }
+    h1 { font-size: 1.7rem; border-bottom: 2px solid #b91c1c; padding-bottom: 12px; }
+    h2 { font-size: 1.2rem; margin-top: 36px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+    th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; vertical-align: top; }
+    th { background: #f7f3ec; }
+    footer { margin-top: 48px; font-size: 0.85rem; color: #666; border-top: 1px solid #ddd; padding-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p><em>ET Prime Subscription Dashboard</em> (<a href="https://subscription-ledger-react.vercel.app">subscription-ledger-react.vercel.app</a>) — last updated 12 September 2026.</p>
+
+  <h2>What this application is</h2>
+  <p>The ET Prime Subscription Dashboard is a private, internal business-intelligence tool used by a small editorial/analytics team to visualize subscription performance data (signups, conversion funnels, renewals, and revenue reports). It is not a consumer product: access is restricted to a whitelist of named team members, and the underlying business data contains no information about you as a visitor.</p>
+
+  <h2>Information we collect and why</h2>
+  <table>
+    <tr><th>Data</th><th>Source</th><th>Purpose</th></tr>
+    <tr>
+      <td>Name, email address, profile picture</td>
+      <td>Google Sign-In (OAuth scopes: <code>openid</code>, <code>email</code>, <code>profile</code>)</td>
+      <td>Verifying your identity against the access whitelist, and attributing activity inside the dashboard to a user. These are the only Google account scopes we request; we cannot see your password, contacts, files, or any other Google data.</td>
+    </tr>
+    <tr>
+      <td>Usage telemetry</td>
+      <td>Generated while you use the dashboard</td>
+      <td>Which report tabs are viewed, per-user visit counts, last-active timestamps, and queries typed into the built-in analytics assistant. Used solely by the dashboard's administrators to understand usage of this internal tool.</td>
+    </tr>
+    <tr>
+      <td>Locally cached data</td>
+      <td>Your own browser (localStorage / IndexedDB)</td>
+      <td>Caching dashboard datasets and session preferences on your device so the dashboard loads quickly. This data never leaves your browser.</td>
+    </tr>
+  </table>
+
+  <h2>How your data is stored and protected</h2>
+  <p>Whitelist entries and usage telemetry are stored in Google Cloud Firestore (Google Firebase), protected by security rules that deny all access except to users signed in with a Google account. Authentication is handled by Firebase Authentication; we never receive or store passwords. Data is transmitted over HTTPS only.</p>
+
+  <h2>What we do NOT do</h2>
+  <ul>
+    <li>We do not sell, rent, or share your personal information with any third party.</li>
+    <li>We do not use your information for advertising or profiling.</li>
+    <li>We do not use third-party analytics trackers or advertising cookies on this site.</li>
+    <li>We do not transfer Google user data to anyone; it is used only inside this application, consistent with the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements.</li>
+  </ul>
+
+  <h2>Data retention and deletion</h2>
+  <p>Sign-in records and telemetry are kept while you remain an authorized user of the dashboard. When a user is removed from the whitelist, their access ends immediately. To request removal of your whitelist entry and any associated telemetry, or to ask any question about this policy, email the dashboard administrator at <a href="mailto:keshavreddy731@gmail.com">keshavreddy731@gmail.com</a> — requests are honored within 7 days. You can also revoke this application's access to your Google account at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the "last updated" date above will be revised. Material changes will be communicated to the team directly, since all users are known to the administrator.</p>
+
+  <footer>ET Prime Subscription Dashboard · Internal enterprise tool · Contact: <a href="mailto:keshavreddy731@gmail.com">keshavreddy731@gmail.com</a></footer>
+</body>
+</html>

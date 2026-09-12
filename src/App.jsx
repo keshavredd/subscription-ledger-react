@@ -12,7 +12,7 @@ import LoginScreen from './components/LoginScreen';
 import AdminPanel from './components/AdminPanel';
 import { isAdminEmail, isUserAuthorized, isUserAuthorizedAsync, logTabPageView, logChatQuery } from './services/telemetryService';
 import { logoutUser, auth, onAuthStateChanged } from './services/firebaseService';
-import { fetchDatasetCached, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
+import { fetchDatasetCached, refreshDataset, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
 import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from './components/RenewalVisuals';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -6999,10 +6999,10 @@ function Realtime({ isDark }) {
 
   const loadRealtimeData = async () => {
     try {
-      // 1. Instant Load from Turso DB / Cache (<50ms)
-      const cachedOrTurso = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
-      if (cachedOrTurso && cachedOrTurso.data && cachedOrTurso.data.length > 0) {
-        setRawData(parseRealtimeRows(cachedOrTurso.data));
+      // 1. Instant Load from Cache / Live Google Sheet
+      const cachedOrLive = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
+      if (cachedOrLive && cachedOrLive.data && cachedOrLive.data.length > 0) {
+        setRawData(parseRealtimeRows(cachedOrLive.data));
       }
     } catch (err) {
       console.error("Realtime fetch error", err);
@@ -7029,8 +7029,8 @@ function Realtime({ isDark }) {
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      // Trigger serverless sync on Vercel (/api/sync-turso) or Netlify (/.netlify/functions/sync-turso)
-      await fetch('/api/sync-turso').catch(() => fetch('/.netlify/functions/sync-turso')).catch(() => {});
+      // Google Sheets IS the backend now — just re-fetch the live sheet
+      await refreshDataset('realtime', REALTIME_GSHEET_URL);
       await loadRealtimeData(true);
     } catch (e) {
       console.warn("Manual sync error", e);

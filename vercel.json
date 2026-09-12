@@ -4,8 +4,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/__/auth/:path*", "destination": "https://subscription-ledger-849a8.firebaseapp.com/__/auth/:path*" },
-    { "source": "/.netlify/functions/sync-turso", "destination": "/api/sync-turso" },
-    { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

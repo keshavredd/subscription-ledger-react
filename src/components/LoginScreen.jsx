@@ -115,7 +115,14 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
             </div>
             <span className="text-2xl font-extrabold tracking-tight">Prime</span>
           </div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-amber-accent">Subscription Ledger</p>
+          {/* Must match the OAuth consent screen app name exactly (Google brand verification) */}
+          <h1 className="text-sm font-semibold uppercase tracking-widest text-amber-accent">ET Prime Subscription Dashboard</h1>
+          <p className="text-xs text-warm-muted dark:text-dark-muted mt-3 leading-relaxed max-w-sm mx-auto">
+            An internal business-intelligence tool for the ET Prime team that visualizes
+            subscription performance — realtime signups, conversion funnels, renewals and
+            revenue reports. Sign-in with Google verifies your identity against the team's
+            access whitelist; access is limited to authorized team members.
+          </p>
         </div>
 
         {/* Login Card */}
@@ -169,7 +176,8 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
 
         {/* Footer */}
         <p className="text-[11px] text-center text-warm-muted dark:text-dark-muted mt-6 font-medium">
-          ET Prime Subscription Ledger &bull; Internal Enterprise Tool
+          ET Prime Subscription Dashboard &bull; Internal Enterprise Tool &bull;{' '}
+          <a href="/privacy.html" className="underline hover:text-amber-accent">Privacy Policy</a>
         </p>
 
       </div>

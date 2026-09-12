@@ -8,9 +8,8 @@
 import Papa from 'papaparse';
 import { getCachedParquet, setCachedParquet } from './indexedDbService';
 import { registerParquetTable } from './duckdbService';
-import { isTursoConfigured, fetchTursoTable } from './tursoService';
 
-export const CACHE_VERSION = 'v9_realtime_828';
+export const CACHE_VERSION = 'v11_gsheets';
 
 export const DATASET_URLS = {
   subscription: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=598826199",
@@ -34,8 +33,8 @@ const activePromises = {};
  * Fetch and load a dataset using:
  * 1. Instant In-Memory Cache (0ms)
  * 2. Instant IndexedDB Local Disk Cache (<50ms)
- * 3. Fast Turso Database HTTP SQL (<1s)
- * 4. Google Sheets CSV (hourly background sync ONLY for realtime & funnel; fallback for others)
+ * 3. Live Google Sheets CSV — the backend of record
+ *    (realtime & funnel also re-sync hourly in the background)
  */
 export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
   // 1. Instant Memory Cache (0ms)
@@ -71,27 +70,7 @@ export async function fetchDatasetCached(key, fallbackUrl, parseConfig = {}) {
       console.warn(`[Preloader] IndexedDB check failed for ${key}`, dbErr);
     }
 
-    // 3. Fast Turso Database HTTP SQL
-    if (isTursoConfigured()) {
-      try {
-        console.log(`⚡ [Turso DB] Fetching live dataset '${key}' from Turso Database...`);
-        const tursoResult = await fetchTursoTable(key);
-        if (tursoResult && tursoResult.data && tursoResult.data.length > 0) {
-          dataCache[key] = tursoResult;
-          setCachedParquet(key, null, { version: CACHE_VERSION, data: tursoResult.data });
-          
-          // Only 'realtime' and 'funnel' sync latest hourly changes in background from Google Sheets
-          if (key === 'realtime' || key === 'funnel') {
-            syncLiveDatasetInBackground(key, fallbackUrl, parseConfig);
-          }
-          return tursoResult;
-        }
-      } catch (tursoErr) {
-        console.warn(`[Preloader] Turso DB fetch failed for '${key}', falling back...`, tursoErr);
-      }
-    }
-
-    // 4. Fallback if Turso is unreachable or not configured
+    // 3. Live Google Sheets CSV (the primary backend)
     console.log(`[Preloader] Fetching live Google Sheet data for ${key}...`);
     return syncLiveDataset(key, fallbackUrl, parseConfig);
   })();
@@ -134,6 +113,14 @@ async function syncLiveDataset(key, fallbackUrl, parseConfig) {
     console.warn(`[Preloader] Live fetch error for ${key}:`, err.message);
     return dataCache[key] || { data: [], source: 'fallback-empty' };
   }
+}
+
+/**
+ * Forces a fresh fetch from the live Google Sheet, bypassing all caches.
+ * Used by the manual "Sync" button; the 'dataset-updated' event notifies the UI.
+ */
+export async function refreshDataset(key, fallbackUrl) {
+  return syncLiveDataset(key, fallbackUrl, {});
 }
 
 function syncLiveDatasetInBackground(key, fallbackUrl, parseConfig) {
