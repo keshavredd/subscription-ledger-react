@@ -8,7 +8,9 @@ import {
   loginWithGoogle,
   loginWithGoogleRedirect,
   prefersRedirectSignIn,
-  isPopupFailure
+  isPopupFailure,
+  isPopupUnreliable,
+  markPopupUnreliable
 } from './firebaseService';
 
 // Dynamically load Google Identity Services SDK if needed
@@ -50,7 +52,9 @@ export async function loginWithGoogleSSO() {
 
   // 1. Primary: Firebase Google Sign-In
   if (firebaseApiKey && !firebaseApiKey.includes('demo_key') && !firebaseApiKey.includes('placeholder')) {
-    if (prefersRedirectSignIn()) {
+    // Redirect-first browsers (iOS, webviews, desktop Safari), plus any tab
+    // where a previous popup attempt died (blocker killed it after opening).
+    if (prefersRedirectSignIn() || isPopupUnreliable()) {
       await loginWithGoogleRedirect();
       return { redirecting: true };
     }
@@ -66,8 +70,15 @@ export async function loginWithGoogleSSO() {
     } catch (err) {
       if (isPopupFailure(err)) {
         console.warn(`Popup sign-in unavailable (${err.code}) — retrying via redirect.`);
+        markPopupUnreliable();
         await loginWithGoogleRedirect();
         return { redirecting: true };
+      }
+      if (err?.code === 'auth/popup-closed-by-user') {
+        // Could be the user closing it — or a blocker that killed it. Don't
+        // hijack this attempt with a surprise navigation; route the NEXT
+        // click through the redirect flow instead.
+        markPopupUnreliable();
       }
       console.error("Firebase Auth Error:", err);
       throw err;

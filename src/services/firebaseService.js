@@ -76,6 +76,7 @@ export { prefersRedirectSignIn };
 /** Firebase error codes that mean "the popup never worked" — safe to retry via redirect. */
 const POPUP_FAILURE_CODES = new Set([
   'auth/popup-blocked',
+  'auth/cancelled-popup-request',
   'auth/operation-not-supported-in-this-environment',
   'auth/web-storage-unsupported',
   'auth/internal-error'
@@ -83,6 +84,24 @@ const POPUP_FAILURE_CODES = new Set([
 
 export function isPopupFailure(error) {
   return !!error?.code && POPUP_FAILURE_CODES.has(error.code);
+}
+
+/**
+ * Some popup blockers and browser extensions (common on macOS) don't refuse
+ * the popup — they let it open and instantly kill it. Firebase then reports
+ * auth/popup-closed-by-user, indistinguishable from a deliberate close, and
+ * retrying the popup loops forever. So after one closed popup we mark the
+ * popup path unreliable for this tab: the NEXT attempt goes straight to the
+ * full-page redirect, which nothing can block.
+ */
+const POPUP_UNRELIABLE_KEY = 'et_sso_popup_unreliable';
+
+export function markPopupUnreliable() {
+  try { sessionStorage.setItem(POPUP_UNRELIABLE_KEY, '1'); } catch { /* flow still works */ }
+}
+
+export function isPopupUnreliable() {
+  try { return sessionStorage.getItem(POPUP_UNRELIABLE_KEY) === '1'; } catch { return false; }
 }
 
 /** True once a redirect has been kicked off, so the UI can show a "completing" state. */

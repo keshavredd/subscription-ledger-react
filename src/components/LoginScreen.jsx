@@ -20,6 +20,7 @@ function describeAuthError(err) {
     case 'auth/popup-blocked':
       return "Your browser blocked the sign-in window. Please allow pop-ups for this site, or try again to be redirected instead.";
     case 'auth/popup-closed-by-user':
+      return "The sign-in window closed before completing. Click the button again — you'll be taken through Google's full-page sign-in instead.";
     case 'auth/cancelled-popup-request':
       return "Sign-in was cancelled before it completed. Please try again.";
     case 'auth/unauthorized-domain':
@@ -115,14 +116,7 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
             </div>
             <span className="text-2xl font-extrabold tracking-tight">Prime</span>
           </div>
-          {/* Must match the OAuth consent screen app name exactly (Google brand verification) */}
-          <h1 className="text-sm font-semibold uppercase tracking-widest text-amber-accent">ET Prime Subscription Dashboard</h1>
-          <p className="text-xs text-warm-muted dark:text-dark-muted mt-3 leading-relaxed max-w-sm mx-auto">
-            An internal business-intelligence tool for the ET Prime team that visualizes
-            subscription performance — realtime signups, conversion funnels, renewals and
-            revenue reports. Sign-in with Google verifies your identity against the team's
-            access whitelist; access is limited to authorized team members.
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-amber-accent">Subscription Ledger</p>
         </div>
 
         {/* Login Card */}
@@ -174,7 +168,8 @@ export default function LoginScreen({ onLoginSuccess, isDark }) {
 
         </div>
 
-        {/* Footer */}
+        {/* Footer — the app name + privacy link here are load-bearing for Google
+            OAuth brand verification (name match + policy visible without login) */}
         <p className="text-[11px] text-center text-warm-muted dark:text-dark-muted mt-6 font-medium">
           ET Prime Subscription Dashboard &bull; Internal Enterprise Tool &bull;{' '}
           <a href="/privacy.html" className="underline hover:text-amber-accent">Privacy Policy</a>
