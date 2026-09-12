@@ -529,6 +529,14 @@ const DONUT_PALETTE = [
   '#06B6D4'  // Cyan
 ];
 
+// Dark mode: the orange top slot goes blue-family (sky-400) — still separable
+// from the navy and blue slots that follow it.
+const DARK_DONUT_PALETTE = ['#38BDF8', ...DONUT_PALETTE.slice(1)];
+
+function donutPalette(isDark) {
+  return isDark ? DARK_DONUT_PALETTE : DONUT_PALETTE;
+}
+
 /**
  * Reusable Donut Chart Card matching reference image
  */
@@ -538,7 +546,7 @@ export function RecurringDonutCard({ title, items = [], totalCount = 0, isDark =
 
     const labels = items.map(d => d.label);
     const values = items.map(d => d.count);
-    const colors = items.map((_, idx) => DONUT_PALETTE[idx % DONUT_PALETTE.length]);
+    const colors = items.map((_, idx) => donutPalette(isDark)[idx % DONUT_PALETTE.length]);
 
     const trace = {
       type: 'pie',
@@ -603,7 +611,7 @@ export function RecurringDonutCard({ title, items = [], totalCount = 0, isDark =
           {/* Right-hand Legend List matching reference */}
           <div className="flex-1 min-w-0 w-full flex flex-col justify-center space-y-1.5 pl-1 pr-1">
             {items.map((item, idx) => {
-              const color = chartData.colors ? chartData.colors[idx] : DONUT_PALETTE[idx % DONUT_PALETTE.length];
+              const color = chartData.colors ? chartData.colors[idx] : donutPalette(isDark)[idx % DONUT_PALETTE.length];
               return (
                 <div key={item.label} className="flex items-center justify-between text-xs py-0.5 gap-2">
                   <div className="flex items-center gap-2 min-w-0">

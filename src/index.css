@@ -2,8 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme accent scale (consumed by tailwind.config.js as `amber-*` classes).
+ * Light mode: Tailwind's amber ramp — unchanged, pixel-identical to before.
+ * Dark mode: Tailwind's blue ramp — the navy/blue treatment from the
+ * Marketing dashboard. RGB triplets so Tailwind can apply /alpha modifiers.
+ */
+:root {
+  --accent-50: 255 251 235;
+  --accent-100: 254 243 199;
+  --accent-200: 253 230 138;
+  --accent-300: 252 211 77;
+  --accent-400: 251 191 36;
+  --accent-500: 245 158 11;
+  --accent-600: 217 119 6;
+  --accent-700: 180 83 9;
+  --accent-800: 146 64 14;
+  --accent-900: 120 53 15;
+  --accent-950: 69 26 3;
+  --accent-base: 217 119 6; /* amber-600 — the `amber-accent` token */
+}
+
+.dark {
+  --accent-50: 239 246 255;
+  --accent-100: 219 234 254;
+  --accent-200: 191 219 254;
+  --accent-300: 147 197 253;
+  --accent-400: 96 165 250;
+  --accent-500: 59 130 246;
+  --accent-600: 37 99 235;
+  --accent-700: 29 78 216;
+  --accent-800: 30 64 175;
+  --accent-900: 30 58 138;
+  --accent-950: 23 37 84;
+  --accent-base: 96 165 250; /* blue-400 — readable accent on navy surfaces */
+}
+
 html {
   font-size: 14px;
+}
+
+/* Native <select> popup lists follow the control's color-scheme, not CSS —
+   without this, dark mode can render a white list with near-white text. */
+.dark select {
+  color-scheme: dark;
+}
+
+/* Scrolled state: the header+filter block casts one shadow at its bottom
+   edge so it reads as a single floating element over the content. */
+.app-scrolled .app-filter-bar {
+  box-shadow: 0 10px 18px -14px rgba(0, 0, 0, 0.55);
 }
 
 body {

@@ -3,8 +3,9 @@ import { processConversationalQuery, processConversationalQueryAsync } from './u
 import { getStoredApiKey, setStoredApiKey } from './services/geminiService';
 import { getStoredLlamaConfig, setStoredLlamaConfig } from './services/llamaService';
 import { buildPlotlyConfig } from './utils/chartHelper';
+import { themedColorMap, themedColorList } from './utils/themePalettes';
 import Papa from 'papaparse';
-import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck } from 'lucide-react';
+import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X } from 'lucide-react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 
@@ -303,12 +304,12 @@ function AovMatrixTable({ aovData, isDark }) {
               ))}
             </tr>
             <tr className="period-total-row text-warm-totalText dark:text-dark-totalText font-bold border-b border-warm-border dark:border-dark-border">
-              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
               {platforms.map(pl => {
                 const { rev, conv } = platformTotals[pl];
                 const arpu = conv > 0 ? rev / conv : 0;
                 return (
-                  <td key={pl} className="p-3 font-extrabold text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>
+                  <td key={pl} className="p-3 font-extrabold text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>
                     {conv > 0 ? formatIndianCurrency(arpu) : '-'}
                   </td>
                 );
@@ -328,7 +329,7 @@ function AovMatrixTable({ aovData, isDark }) {
                     const aov = conv > 0 ? rev / conv : 0;
                     
                     const intensity = maxAov > 0 ? aov / maxAov : 0;
-                    const bgStyle = intensity > 0 ? { backgroundColor: isDark ? `rgba(245, 158, 11, ${intensity * 0.35})` : `rgba(217, 119, 6, ${intensity * 0.25})` } : {};
+                    const bgStyle = intensity > 0 ? { backgroundColor: isDark ? `rgba(96, 165, 250, ${intensity * 0.35})` : `rgba(217, 119, 6, ${intensity * 0.25})` } : {};
 
                     return (
                       <td key={pl} className="p-3 font-medium" style={bgStyle}>
@@ -399,11 +400,12 @@ function GeoDistributionChart({ geoData, isDark }) {
     text: hoverText,
     hoverinfo: 'text',
     colorscale: isDark ? [
+      // Sequential blues on navy: brighter = more revenue
       [0, '#1e293b'],
-      [0.2, '#fef08a'],
-      [0.5, '#f59e0b'],
-      [0.8, '#d97706'],
-      [1.0, '#991b1b']
+      [0.2, '#1e40af'],
+      [0.5, '#2563eb'],
+      [0.8, '#60a5fa'],
+      [1.0, '#bfdbfe']
     ] : [
       [0, '#f8fafc'],
       [0.2, '#fde68a'],
@@ -490,6 +492,9 @@ export function SubscriptionReport({ isDark }) {
   const channelRef = useRef(null);
   const planRef = useRef(null);
   const txnRef = useRef(null);
+
+  // "+ More" reveals the remaining filters inline; scrolling collapses them
+  const [areFiltersExpanded, setFiltersExpanded] = useCollapsibleFilters();
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -972,10 +977,10 @@ export function SubscriptionReport({ isDark }) {
             return 'top center';
           }),
           cliponaxis: false,
-          textfont: { family: "DM Sans, sans-serif", size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
-          line: { color: '#f59e0b', width: 2.5, shape: 'spline' },
+          textfont: { family: "DM Sans, sans-serif", size: 10, color: isDark ? '#60a5fa' : '#d97706', weight: 'bold' },
+          line: { color: isDark ? '#60a5fa' : '#f59e0b', width: 2.5, shape: 'spline' },
           fill: 'tozeroy',
-          fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+          fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
           hovertemplate: "<b>%{x}</b><br>Overall Weekly Revenue: ₹%{y:,.2f}<extra></extra>"
         }];
       }
@@ -1052,10 +1057,10 @@ export function SubscriptionReport({ isDark }) {
           return 'top center';
         }),
         cliponaxis: false,
-        textfont: { family: "DM Sans, sans-serif", size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
-        line: { color: '#f59e0b', width: 2.5, shape: 'spline' },
+        textfont: { family: "DM Sans, sans-serif", size: 10, color: isDark ? '#60a5fa' : '#d97706', weight: 'bold' },
+        line: { color: isDark ? '#60a5fa' : '#f59e0b', width: 2.5, shape: 'spline' },
         fill: 'tozeroy',
-        fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+        fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
         hovertemplate: "<b>%{x}</b><br>Overall Revenue: ₹%{y:,.2f}<extra></extra>"
       }];
     }
@@ -1127,12 +1132,19 @@ export function SubscriptionReport({ isDark }) {
     );
   }
 
+  // Non-default state among the "+ More" (hidden) filters — badge + chips
+  const hiddenFiltersActiveCount =
+    (allCountryOptions.length > 0 && selectedCountries.length !== allCountryOptions.length ? 1 : 0) +
+    (allPlanOptions.length > 0 && selectedPlans.length !== allPlanOptions.length ? 1 : 0) +
+    (allTxnOptions.length > 0 && selectedTxnTypes.length !== allTxnOptions.length ? 1 : 0) +
+    (tableMetricMode !== 'Revenue (₹)' ? 1 : 0);
+
   return (
     <div className="w-full animate-in fade-in duration-300">
-      
-      {/* Date Range Selector Bar (Header & Dropdown Inline for More Screen Real Estate) */}
-      <div className="flex flex-row items-center justify-between flex-wrap gap-2 mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
+
+      {/* Sticky compact filter bar: title left, self-labeled pill filters right */}
+      <StickyFilterBar>
+        <div className="flex items-center gap-2 flex-wrap mr-auto">
           <h2 className="text-base sm:text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">Subscription Performance Report</h2>
           <span className="text-xs text-warm-muted dark:text-dark-muted font-medium hidden sm:inline">• {dateRangeStr}</span>
         </div>
@@ -1149,7 +1161,7 @@ export function SubscriptionReport({ isDark }) {
             <select 
               value={datePreset} 
               onChange={(e) => setDatePreset(e.target.value)}
-              className="appearance-none bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg pl-3 pr-7 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className="appearance-none bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-full pl-3 pr-7 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               <option value="Yesterday">Yesterday</option>
               <option value="Last 7 days">Last 7 days</option>
@@ -1165,20 +1177,15 @@ export function SubscriptionReport({ isDark }) {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* 6 Equal Width Symmetrical Filters Header */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 p-4 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm w-full">
-        
         {/* 1. Platform Filter */}
-        <div ref={platformRef} className="relative flex flex-col gap-1 w-full">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Platform</label>
-          <button onClick={() => setPlatformOpen(!platformOpen)} className="flex items-center justify-between px-3 py-2 bg-warm-totalBg dark:bg-slate-800 rounded-lg border border-warm-border dark:border-dark-border text-xs font-semibold focus:outline-none w-full">
-            <span className="truncate">{selectedPlatforms.length === allPlatformOptions.length && allPlatformOptions.length > 0 ? `All Platforms` : selectedPlatforms.length === 0 ? 'No Platforms' : `${selectedPlatforms.length} Platforms`}</span>
+        <div ref={platformRef} className="relative shrink-0">
+          <button onClick={() => setPlatformOpen(!platformOpen)} className={FILTER_PILL_CLS}>
+            <span className="truncate"><span className="text-warm-muted dark:text-dark-muted font-semibold">Platform: </span>{selectedPlatforms.length === allPlatformOptions.length && allPlatformOptions.length > 0 ? 'All' : selectedPlatforms.length === 0 ? 'None' : `${selectedPlatforms.length} Selected`}</span>
             <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0 text-warm-muted dark:text-dark-muted" />
           </button>
           {platformOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+            <div className="absolute top-full right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
               <div className="px-3 py-2 border-b border-warm-border dark:border-dark-border hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-xs font-bold" onClick={() => setSelectedPlatforms(selectedPlatforms.length === allPlatformOptions.length ? [] : allPlatformOptions)}>
                 {selectedPlatforms.length === allPlatformOptions.length ? 'Deselect All' : 'Select All'}
               </div>
@@ -1192,15 +1199,15 @@ export function SubscriptionReport({ isDark }) {
           )}
         </div>
 
-        {/* 2. Country Name Filter */}
-        <div ref={countryRef} className="relative flex flex-col gap-1 w-full">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Country Name</label>
-          <button onClick={() => setCountryOpen(!countryOpen)} className="flex items-center justify-between px-3 py-2 bg-warm-totalBg dark:bg-slate-800 rounded-lg border border-warm-border dark:border-dark-border text-xs font-semibold focus:outline-none w-full">
-            <span className="truncate">{selectedCountries.length === allCountryOptions.length && allCountryOptions.length > 0 ? `All Countries` : selectedCountries.length === 0 ? 'No Countries' : `${selectedCountries.length} Countries`}</span>
+        {/* 2. Country Name Filter — expanded only */}
+        <ExpandedFilters expanded={areFiltersExpanded}>
+        <div ref={countryRef} className="relative shrink-0">
+          <button onClick={() => setCountryOpen(!countryOpen)} className={FILTER_PILL_CLS}>
+            <span className="truncate"><span className="text-warm-muted dark:text-dark-muted font-semibold">Country: </span>{selectedCountries.length === allCountryOptions.length && allCountryOptions.length > 0 ? 'All' : selectedCountries.length === 0 ? 'None' : `${selectedCountries.length} Selected`}</span>
             <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0 text-warm-muted dark:text-dark-muted" />
           </button>
           {countryOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+            <div className="absolute top-full right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
               <div className="px-3 py-2 border-b border-warm-border dark:border-dark-border hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-xs font-bold" onClick={() => setSelectedCountries(selectedCountries.length === allCountryOptions.length ? [] : allCountryOptions)}>
                 {selectedCountries.length === allCountryOptions.length ? 'Deselect All' : 'Select All'}
               </div>
@@ -1213,16 +1220,16 @@ export function SubscriptionReport({ isDark }) {
             </div>
           )}
         </div>
+        </ExpandedFilters>
 
         {/* 3. Channel Filter */}
-        <div ref={channelRef} className="relative flex flex-col gap-1 w-full">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Channel</label>
-          <button onClick={() => setChannelOpen(!channelOpen)} className="flex items-center justify-between px-3 py-2 bg-warm-totalBg dark:bg-slate-800 rounded-lg border border-warm-border dark:border-dark-border text-xs font-semibold focus:outline-none w-full">
-            <span className="truncate">{selectedChannels.length === allChannelOptions.length && allChannelOptions.length > 0 ? `All Channels` : selectedChannels.length === 0 ? 'No Channels' : `${selectedChannels.length} Channels`}</span>
+        <div ref={channelRef} className="relative shrink-0">
+          <button onClick={() => setChannelOpen(!channelOpen)} className={FILTER_PILL_CLS}>
+            <span className="truncate"><span className="text-warm-muted dark:text-dark-muted font-semibold">Channel: </span>{selectedChannels.length === allChannelOptions.length && allChannelOptions.length > 0 ? 'All' : selectedChannels.length === 0 ? 'None' : `${selectedChannels.length} Selected`}</span>
             <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0 text-warm-muted dark:text-dark-muted" />
           </button>
           {channelOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+            <div className="absolute top-full right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
               <div className="px-3 py-2 border-b border-warm-border dark:border-dark-border hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-xs font-bold" onClick={() => setSelectedChannels(selectedChannels.length === allChannelOptions.length ? [] : allChannelOptions)}>
                 {selectedChannels.length === allChannelOptions.length ? 'Deselect All' : 'Select All'}
               </div>
@@ -1236,15 +1243,15 @@ export function SubscriptionReport({ isDark }) {
           )}
         </div>
 
+        <ExpandedFilters expanded={areFiltersExpanded}>
         {/* 4. Plan Filter */}
-        <div ref={planRef} className="relative flex flex-col gap-1 w-full">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Plan</label>
-          <button onClick={() => setPlanOpen(!planOpen)} className="flex items-center justify-between px-3 py-2 bg-warm-totalBg dark:bg-slate-800 rounded-lg border border-warm-border dark:border-dark-border text-xs font-semibold focus:outline-none w-full">
-            <span className="truncate">{selectedPlans.length === allPlanOptions.length && allPlanOptions.length > 0 ? `All Plans` : selectedPlans.length === 0 ? 'No Plans' : `${selectedPlans.length} Plans`}</span>
+        <div ref={planRef} className="relative shrink-0">
+          <button onClick={() => setPlanOpen(!planOpen)} className={FILTER_PILL_CLS}>
+            <span className="truncate"><span className="text-warm-muted dark:text-dark-muted font-semibold">Plan: </span>{selectedPlans.length === allPlanOptions.length && allPlanOptions.length > 0 ? 'All' : selectedPlans.length === 0 ? 'None' : `${selectedPlans.length} Selected`}</span>
             <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0 text-warm-muted dark:text-dark-muted" />
           </button>
           {planOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+            <div className="absolute top-full right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
               <div className="px-3 py-2 border-b border-warm-border dark:border-dark-border hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-xs font-bold" onClick={() => setSelectedPlans(selectedPlans.length === allPlanOptions.length ? [] : allPlanOptions)}>
                 {selectedPlans.length === allPlanOptions.length ? 'Deselect All' : 'Select All'}
               </div>
@@ -1259,14 +1266,13 @@ export function SubscriptionReport({ isDark }) {
         </div>
 
         {/* 5. TXN Type Filter */}
-        <div ref={txnRef} className="relative flex flex-col gap-1 w-full">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">TXN Type</label>
-          <button onClick={() => setTxnOpen(!txnOpen)} className="flex items-center justify-between px-3 py-2 bg-warm-totalBg dark:bg-slate-800 rounded-lg border border-warm-border dark:border-dark-border text-xs font-semibold focus:outline-none w-full">
-            <span className="truncate">{selectedTxnTypes.length === allTxnOptions.length && allTxnOptions.length > 0 ? `All Txns` : selectedTxnTypes.length === 0 ? 'No Txns' : `${selectedTxnTypes.length} Txns`}</span>
+        <div ref={txnRef} className="relative shrink-0">
+          <button onClick={() => setTxnOpen(!txnOpen)} className={FILTER_PILL_CLS}>
+            <span className="truncate"><span className="text-warm-muted dark:text-dark-muted font-semibold">Txn Type: </span>{selectedTxnTypes.length === allTxnOptions.length && allTxnOptions.length > 0 ? 'All' : selectedTxnTypes.length === 0 ? 'None' : `${selectedTxnTypes.length} Selected`}</span>
             <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0 text-warm-muted dark:text-dark-muted" />
           </button>
           {txnOpen && (
-            <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
+            <div className="absolute top-full right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto">
               <div className="px-3 py-2 border-b border-warm-border dark:border-dark-border hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer text-xs font-bold" onClick={() => setSelectedTxnTypes(selectedTxnTypes.length === allTxnOptions.length ? [] : allTxnOptions)}>
                 {selectedTxnTypes.length === allTxnOptions.length ? 'Deselect All' : 'Select All'}
               </div>
@@ -1281,20 +1287,46 @@ export function SubscriptionReport({ isDark }) {
         </div>
 
         {/* 6. Table Metrics View Select */}
-        <div className="flex flex-col gap-1 w-full">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Table Metrics View</label>
+        <div className="shrink-0">
           <select 
             value={tableMetricMode}
             onChange={(e) => setTableMetricMode(e.target.value)}
-            className="px-3 py-2 text-xs font-semibold rounded-lg bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text focus:outline-none focus:ring-1 focus:ring-amber-accent cursor-pointer w-full"
+            className={FILTER_PILL_SELECT_CLS}
           >
             <option value="Revenue (₹)">Revenue (₹)</option>
             <option value="Conversions (#)">Conversions (#)</option>
             <option value="Combined (Revenue & Conversions)">Combined (Rev & Conv)</option>
           </select>
         </div>
+        </ExpandedFilters>
 
-      </div>
+        {/* More / Less toggle */}
+        <button
+          type="button"
+          onClick={() => setFiltersExpanded(!areFiltersExpanded)}
+          className={FILTER_PILL_CLS}
+        >
+          <span>{areFiltersExpanded ? '− Less' : `+ More${hiddenFiltersActiveCount > 0 ? ` (${hiddenFiltersActiveCount})` : ''}`}</span>
+        </button>
+
+        {/* Chips: when collapsed, non-default hidden filters stay visible */}
+        {!areFiltersExpanded && (
+          <>
+            {allCountryOptions.length > 0 && selectedCountries.length !== allCountryOptions.length && (
+              <FilterChip label={`Country: ${selectedCountries.length === 0 ? 'None' : `${selectedCountries.length} Selected`}`} onClear={() => setSelectedCountries(allCountryOptions)} />
+            )}
+            {allPlanOptions.length > 0 && selectedPlans.length !== allPlanOptions.length && (
+              <FilterChip label={`Plan: ${selectedPlans.length === 0 ? 'None' : `${selectedPlans.length} Selected`}`} onClear={() => setSelectedPlans(allPlanOptions)} />
+            )}
+            {allTxnOptions.length > 0 && selectedTxnTypes.length !== allTxnOptions.length && (
+              <FilterChip label={`Txn Type: ${selectedTxnTypes.length === 0 ? 'None' : `${selectedTxnTypes.length} Selected`}`} onClear={() => setSelectedTxnTypes(allTxnOptions)} />
+            )}
+            {tableMetricMode !== 'Revenue (₹)' && (
+              <FilterChip label={`View: ${tableMetricMode === 'Combined (Revenue & Conversions)' ? 'Combined' : tableMetricMode}`} onClear={() => setTableMetricMode('Revenue (₹)')} />
+            )}
+          </>
+        )}
+      </StickyFilterBar>
 
       {/* KPI Cards */}
       <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
@@ -1600,6 +1632,76 @@ export function SubscriptionReport({ isDark }) {
   );
 }
 
+/**
+ * Slim filter row that docks beneath the sticky app header while scrolling.
+ * Children are compact self-labeled pill controls (Option A filter layout).
+ */
+function StickyFilterBar({ children }) {
+  return (
+    <div
+      className="app-filter-bar sticky z-[90] bg-[#F8FAFC] dark:bg-[#0F172A] flex items-center justify-end flex-wrap gap-2 py-2 mb-4 border-b border-warm-border/60 dark:border-dark-border/60 transition-[padding,box-shadow] duration-300"
+      style={{ top: 'calc(var(--app-header-h, 90px) - 1px)' }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Expand/collapse state for a filter bar's "+ More" section. Expanding reveals
+ * the hidden filters inline (they unfold to the left in the right-aligned
+ * bar); scrolling the page auto-collapses back to the compact view.
+ */
+function useCollapsibleFilters() {
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const startY = window.scrollY;
+    const onScroll = () => {
+      if (Math.abs(window.scrollY - startY) > 40) setExpanded(false);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [expanded]);
+  return [expanded, setExpanded];
+}
+
+/**
+ * Removable chip showing a non-default filter that lives inside the "+ More"
+ * popover — keeps hidden filter state visible in the bar (Option C layout).
+ */
+function FilterChip({ label, onClear }) {
+  return (
+    <span className="flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-bold shrink-0">
+      {label}
+      <button type="button" onClick={onClear} title="Clear filter" className="hover:bg-amber-500/20 rounded-full p-0.5 cursor-pointer">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
+/** Shared classes for compact pill-style filter triggers (selects & dropdown buttons). */
+const FILTER_PILL_CLS = "flex items-center gap-1 pl-3 pr-2 py-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-full text-xs font-semibold text-warm-text dark:text-dark-text shadow-xs focus:outline-none focus:ring-1 focus:ring-amber-accent cursor-pointer whitespace-nowrap";
+const FILTER_PILL_SELECT_CLS = "appearance-none px-3 py-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-full text-xs font-semibold text-warm-text dark:text-dark-text shadow-xs focus:outline-none focus:ring-1 focus:ring-amber-accent cursor-pointer [color-scheme:light] dark:[color-scheme:dark]";
+
+/**
+ * Always-mounted wrapper for the "+ More" filters: animates open/closed via
+ * max-width + opacity so both expansion and contraction are smooth. -ml-2
+ * when collapsed cancels the flex gap the zero-width element would leave.
+ */
+function ExpandedFilters({ expanded, children }) {
+  return (
+    <div
+      className={`flex items-center gap-2 flex-nowrap overflow-hidden transition-all duration-300 ease-in-out ${
+        expanded ? 'max-w-[1400px] opacity-100' : 'max-w-0 opacity-0 -ml-2 pointer-events-none'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
 function PivotTable({ pivotData, title, metricMode, isDark }) {
   const { categories, dailyRows, categoryGrandTotals, finalGrandTotalRev, finalGrandTotalConv } = pivotData;
 
@@ -1662,13 +1764,13 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
               <th className="p-3 bg-white dark:bg-[#1E293B] text-right whitespace-nowrap">Total</th>
             </tr>
             <tr className="period-total-row font-bold text-amber-accent border-b border-warm-border dark:border-dark-border">
-              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+              <td className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
               {categories.map(cat => (
-                <td key={cat} className="p-3 text-right bg-[#FEF3C7] dark:bg-[#1E293B] font-extrabold text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>
+                <td key={cat} className="p-3 text-right bg-[#FEF3C7] dark:bg-[#1E293B] font-extrabold text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>
                   {getMetricCell(categoryGrandTotals[cat].rev, categoryGrandTotals[cat].conv)}
                 </td>
               ))}
-              <td className="p-3 text-right bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>
+              <td className="p-3 text-right bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>
                 {getMetricCell(finalGrandTotalRev, finalGrandTotalConv)}
               </td>
             </tr>
@@ -1689,7 +1791,7 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
                   const intensity = maxMetricValue > 0 && val > 0 ? val / maxMetricValue : 0;
                   const heatmapStyle = intensity > 0 ? {
                     backgroundColor: isDark 
-                      ? `rgba(245, 158, 11, ${Math.min(0.4, intensity * 0.35)})` 
+                      ? `rgba(96, 165, 250, ${Math.min(0.4, intensity * 0.35)})` 
                       : `rgba(217, 119, 6, ${Math.min(0.3, intensity * 0.22)})`
                   } : {};
 
@@ -1711,9 +1813,12 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
   );
 }
  
-function StackedAreaTrendChart({ pivotData, title, colorMap, defaultColors, isDark }) {
+function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defaultColors: defaultColorsProp, isDark }) {
   const [viewMode, setViewMode] = useState('percent'); // 'percent' | 'value'
   const { categories, dailyRows } = pivotData;
+  // Warm identity colors flip to their blue equivalents in dark mode
+  const colorMap = themedColorMap(colorMapProp, isDark);
+  const defaultColors = themedColorList(defaultColorsProp, isDark);
 
   const chartData = useMemo(() => {
     if (!dailyRows || !categories || dailyRows.length === 0) return [];
@@ -1729,7 +1834,7 @@ function StackedAreaTrendChart({ pivotData, title, colorMap, defaultColors, isDa
       return r.dateStr;
     });
 
-    const colors = defaultColors || ['#C2410C', '#EA580C', '#9A3412', '#D97706', '#F59E0B', '#FEF08A', '#FBBF24', '#78350F'];
+    const colors = defaultColors || themedColorList(['#C2410C', '#EA580C', '#9A3412', '#D97706', '#F59E0B', '#FEF08A', '#FBBF24', '#78350F'], isDark);
 
     return categories.map((cat, idx) => {
       const color = colorMap?.[cat] || colorMap?.[cat.toLowerCase()] || colors[idx % colors.length];
@@ -1832,7 +1937,10 @@ function StackedAreaTrendChart({ pivotData, title, colorMap, defaultColors, isDa
   );
 }
 
-function StackedColumnTrendChart({ pivotData, title, colorMap, defaultColors, isDark, initialMetric = "Revenue (₹)" }) {
+function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, defaultColors: defaultColorsProp, isDark, initialMetric = "Revenue (₹)" }) {
+  // Warm identity colors flip to their blue equivalents in dark mode
+  const colorMap = themedColorMap(colorMapProp, isDark);
+  const defaultColors = themedColorList(defaultColorsProp, isDark);
   const [metricMode, setMetricMode] = useState(initialMetric);
   const { categories, dailyRows } = pivotData;
 
@@ -1850,7 +1958,7 @@ function StackedColumnTrendChart({ pivotData, title, colorMap, defaultColors, is
       return r.dateStr;
     });
 
-    const colors = defaultColors || ['#059669', '#D97706', '#EA580C', '#B45309', '#F59E0B', '#10B981', '#78350F', '#854D0E'];
+    const colors = defaultColors || themedColorList(['#059669', '#D97706', '#EA580C', '#B45309', '#F59E0B', '#10B981', '#78350F', '#854D0E'], isDark);
 
     return categories.map((cat, idx) => {
       const color = colorMap?.[cat] || colors[idx % colors.length];
@@ -2022,7 +2130,7 @@ function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions"
               textposition: 'middle center',
               hoverinfo: 'label+value+percent root',
               marker: {
-                colors: treemapItems.warmColors,
+                colors: themedColorList(treemapItems.warmColors, isDark),
                 line: { width: 2, color: isDark ? '#1E293B' : '#FFFFFF' }
               }
             }]}
@@ -2405,11 +2513,11 @@ function RenewalsAndRecurring({ isDark }) {
           text: renTrendData.map(d => d.due.toLocaleString()),
           textposition: 'top center',
           cliponaxis: false,
-          textfont: { size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
-          line: { color: '#f59e0b', width: 2.5, shape: 'spline' },
-          marker: { size: 6, color: '#f59e0b' },
+          textfont: { size: 10, color: isDark ? '#60a5fa' : '#d97706', weight: 'bold' },
+          line: { color: isDark ? '#60a5fa' : '#f59e0b', width: 2.5, shape: 'spline' },
+          marker: { size: 6, color: isDark ? '#60a5fa' : '#f59e0b' },
           fill: 'tozeroy',
-          fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+          fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
           hovertemplate: "<b>Renewal Due</b><br>%{x}<br>Due: <b>%{y:,.0f}</b><extra></extra>"
         },
         {
@@ -2436,7 +2544,7 @@ function RenewalsAndRecurring({ isDark }) {
     let mainY = [];
     let mainName = '';
     let mainText = [];
-    let mainColor = '#f59e0b';
+    let mainColor = isDark ? '#60a5fa' : '#f59e0b';
     let hoverLabel = '';
 
     if (renTrendMetric === "due") {
@@ -2471,7 +2579,7 @@ function RenewalsAndRecurring({ isDark }) {
         line: { color: mainColor, width: 3, shape: 'spline' },
         marker: { size: 6, color: mainColor },
         fill: 'tozeroy',
-        fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+        fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
         hovertemplate: `<b>Overall</b><br>%{x}<br>${hoverLabel}: <b>${renTrendMetric === 'rate' ? '%{y:.2f}%' : '%{y:,.0f}'}</b><extra></extra>`
       }
     ];
@@ -2763,11 +2871,11 @@ function RenewalsAndRecurring({ isDark }) {
         text: recTrendData.map(d => `${d.rate.toFixed(1)}%`),
         textposition: 'top center',
         cliponaxis: false,
-        textfont: { size: 10, color: isDark ? '#fbbf24' : '#d97706', weight: 'bold' },
-        line: { color: '#f59e0b', width: 3, shape: 'spline' },
-        marker: { size: 6, color: '#f59e0b' },
+        textfont: { size: 10, color: isDark ? '#60a5fa' : '#d97706', weight: 'bold' },
+        line: { color: isDark ? '#60a5fa' : '#f59e0b', width: 3, shape: 'spline' },
+        marker: { size: 6, color: isDark ? '#60a5fa' : '#f59e0b' },
         fill: 'tozeroy',
-        fillcolor: isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(217, 119, 6, 0.06)',
+        fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
         hovertemplate: "<b>Overall Recurring</b><br>%{x}<br>Recurring Share: <b>%{y:.2f}%</b><extra></extra>"
       }
     ];
@@ -3407,10 +3515,10 @@ function RenewalsAndRecurring({ isDark }) {
                     <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewal Rate</th>
                   </tr>
                   <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalDue.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalRenewed.toLocaleString()}</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renOverallRate.toFixed(1)}%</td>
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalDue.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalRenewed.toLocaleString()}</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{renOverallRate.toFixed(1)}%</td>
                   </tr>
                 </thead>
                 <tbody>
@@ -3486,10 +3594,10 @@ function RenewalsAndRecurring({ isDark }) {
                     <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Renewal Rate</th>
                   </tr>
                   <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalDue.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalRenewed.toLocaleString()}</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{renOverallRate.toFixed(1)}%</td>
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalDue.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{renTotalRenewed.toLocaleString()}</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{renOverallRate.toFixed(1)}%</td>
                   </tr>
                 </thead>
                 <tbody>
@@ -3896,12 +4004,12 @@ function RenewalsAndRecurring({ isDark }) {
                     <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Revenue</th>
                   </tr>
                   <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringShare.toFixed(1)}%</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{formatIndianCurrency(recRecurringRev)}</td>
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringShare.toFixed(1)}%</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{formatIndianCurrency(recRecurringRev)}</td>
                   </tr>
                 </thead>
                 <tbody>
@@ -3985,12 +4093,12 @@ function RenewalsAndRecurring({ isDark }) {
                     <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Revenue</th>
                   </tr>
                   <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringShare.toFixed(1)}%</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{formatIndianCurrency(recRecurringRev)}</td>
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringShare.toFixed(1)}%</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{formatIndianCurrency(recRecurringRev)}</td>
                   </tr>
                 </thead>
                 <tbody>
@@ -4074,12 +4182,12 @@ function RenewalsAndRecurring({ isDark }) {
                     <th className="p-3 text-right whitespace-nowrap bg-white dark:bg-[#1E293B]">Recurring Revenue</th>
                   </tr>
                   <tr className="font-bold border-b border-warm-border dark:border-dark-border text-amber-accent">
-                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringShare.toFixed(1)}%</td>
-                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #f59e0b' : 'inset 0 -3px 0 0 #d97706' }}>{formatIndianCurrency(recRecurringRev)}</td>
+                    <td className="p-3 whitespace-nowrap font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 sticky left-0 z-40 border-r border-warm-border dark:border-dark-border" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>Period total</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recTotalConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-extrabold bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recNonRecurringConv.toLocaleString()}</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{recRecurringShare.toFixed(1)}%</td>
+                    <td className="p-3 text-right font-black bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400" style={{ boxShadow: isDark ? 'inset 0 -3px 0 0 #60a5fa' : 'inset 0 -3px 0 0 #d97706' }}>{formatIndianCurrency(recRecurringRev)}</td>
                   </tr>
                 </thead>
                 <tbody>
@@ -4261,6 +4369,34 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('Realtime');
   const isDark = theme === 'dark';
 
+  // Publish the sticky header's live height as a CSS var so per-tab sticky
+  // filter bars can dock exactly beneath it at any viewport width.
+  const headerRef = useRef(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const setH = () => document.documentElement.style.setProperty('--app-header-h', `${el.offsetHeight}px`);
+    setH();
+    const ro = new ResizeObserver(setH);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // While scrolled, the sticky filter bar visually merges with the header
+  // into one block (see .app-scrolled rules in index.css). The header height
+  // is re-published here too: ResizeObserver alone can go stale across
+  // hot-reloads, and scrolling is exactly when the docking offset matters.
+  useEffect(() => {
+    const onScroll = () => {
+      document.documentElement.classList.toggle('app-scrolled', window.scrollY > 40);
+      const el = headerRef.current;
+      if (el) document.documentElement.style.setProperty('--app-header-h', `${el.offsetHeight}px`);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem('et_ledger_current_user');
@@ -4348,7 +4484,11 @@ export default function App() {
     <div className={`min-h-screen ${isDark ? 'dark bg-[#0F172A] text-[#f8fafc]' : 'bg-[#F8FAFC] text-[#0F172A]'}`}>
       <div className="w-full px-6 py-5 md:px-10 lg:px-12">
         {/* Main Header */}
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-warm-border dark:border-dark-border pb-5 mb-5">
+        {/* Sticky: tabs stay reachable while scrolling. Solid bg matches the page
+            so content slides underneath; z above the tables' sticky cells. */}
+        {/* No bottom border/margin: the filter bar docks flush beneath and its
+            border is the single bottom edge of the combined header block */}
+        <header ref={headerRef} className="app-header sticky top-0 z-[100] bg-[#F8FAFC] dark:bg-[#0F172A] flex flex-col xl:flex-row xl:items-center justify-between gap-4 pt-2 pb-1 mb-0">
           <div className="flex items-center justify-between w-full xl:w-auto">
             <div className="flex items-center gap-3">
               <div className="bg-[#ED1C24] text-white font-serif font-black text-[32px] leading-none h-[54px] w-[54px] rounded-lg shadow-md flex items-center justify-center tracking-tighter shrink-0">
@@ -5132,10 +5272,12 @@ function FunnelAnalysis({ isDark }) {
 
   const platformDropdownRef = useRef(null);
   const dayOfWeekDropdownRef = useRef(null);
+  const [isDayOfWeekDropdownOpen, setIsDayOfWeekDropdownOpen] = useState(false);
+  // "+ More" reveals the remaining filters inline; scrolling collapses them
+  const [areFiltersExpanded, setFiltersExpanded] = useCollapsibleFilters();
 
   const DAYS_LIST = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const [selectedDaysOfWeek, setSelectedDaysOfWeek] = useState([...DAYS_LIST]);
-  const [isDayOfWeekDropdownOpen, setIsDayOfWeekDropdownOpen] = useState(false);
 
   const toggleDayOfWeek = (day) => {
     if (selectedDaysOfWeek.includes(day)) {
@@ -5144,6 +5286,21 @@ function FunnelAnalysis({ isDark }) {
     } else {
       setSelectedDaysOfWeek(prev => [...prev, day]);
     }
+  };
+
+  // How many "+ More" filters are set away from their defaults (drives the
+  // badge on the More pill and the visibility of the Reset link)
+  const moreActiveCount =
+    (compPreset !== 'None' ? 1 : 0) +
+    (selectedCountry !== 'All' ? 1 : 0) +
+    (selectedMarketingTeam !== 'All' ? 1 : 0) +
+    (selectedDaysOfWeek.length !== DAYS_LIST.length ? 1 : 0);
+
+  const resetMoreFilters = () => {
+    setCompPreset('None');
+    setSelectedCountry('All');
+    setSelectedMarketingTeam('All');
+    setSelectedDaysOfWeek([...DAYS_LIST]);
   };
 
   const availablePlatforms = useMemo(() => {
@@ -5786,7 +5943,7 @@ function FunnelAnalysis({ isDark }) {
   const dailyAvgDau = overallAvg.DAU;
 
   const funnelLabels = FUNNEL_STAGES.map(s => s.label);
-  const trendlineColor = isDark ? '#fbbf24' : '#d97706';
+  const trendlineColor = isDark ? '#60a5fa' : '#d97706';
 
   // Traces for Plotly Funnel Chart
   const funnelTraces = [];
@@ -5891,21 +6048,11 @@ function FunnelAnalysis({ isDark }) {
   return (
     <div className="animate-in fade-in duration-300">
       
-      {/* Date Range & Segment Controls Card (Header on Line 1, Filters on Line 2) */}
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl p-3.5 2xl:p-4 shadow-sm mb-6 relative z-20">
-        {/* Header Line */}
-        <div className="pb-2.5 mb-3 border-b border-warm-border/60 dark:border-dark-border/60">
-          <h2 className="text-sm font-bold text-warm-text dark:text-dark-text tracking-tight">
-            Funnel Period Controls
-          </h2>
-        </div>
-
-        {/* Filter Controls Grid (3x2 Matrix Layout like Subscription Report) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 w-full">
+      {/* Sticky compact filter bar: title left, self-labeled pill filters right */}
+      <StickyFilterBar>
           {/* 1. Primary Range Selection */}
-          <div className="flex flex-col gap-1 w-full">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Primary Period</label>
-            <div className="flex items-center gap-1 w-full bg-warm-tableBg/60 dark:bg-slate-800/60 p-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
+          <div className="shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {datePreset === "Custom range" && (
                 <div className="flex items-center gap-1">
                   <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
@@ -5916,7 +6063,7 @@ function FunnelAnalysis({ isDark }) {
               <select 
                 value={datePreset} 
                 onChange={(e) => setDatePreset(e.target.value)}
-                className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
+                className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
               >
                 <option value="Yesterday">Yesterday</option>
                 <option value="Last 7 days">Last 7 days</option>
@@ -5929,10 +6076,9 @@ function FunnelAnalysis({ isDark }) {
             </div>
           </div>
 
-          {/* 2. Comparison Period Selector */}
-          <div className="flex flex-col gap-1 w-full">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-amber-accent">Comparison Period</label>
-            <div className="flex items-center gap-1 w-full bg-warm-tableBg/60 dark:bg-slate-800/60 p-1.5 rounded-lg border border-warm-border/40 dark:border-dark-border/40">
+          {/* Comparison Period — visible when filters are expanded */}
+          <ExpandedFilters expanded={areFiltersExpanded}>
+            <div className="flex items-center gap-1 shrink-0">
               {compPreset === "Custom range" && (
                 <div className="flex items-center gap-1">
                   <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
@@ -5940,39 +6086,42 @@ function FunnelAnalysis({ isDark }) {
                   <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
                 </div>
               )}
-              <select 
-                value={compPreset} 
-                onChange={(e) => setCompPreset(e.target.value)}
-                className="bg-white dark:bg-slate-800 border border-amber-500/40 text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
-              >
-                <option value="None">No Comparison</option>
-                <option value="Previous period">Previous period</option>
-                <option value="Previous month">Previous month</option>
-                <option value="Custom range">Custom range</option>
-              </select>
+              <label className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-white dark:bg-slate-800 border border-amber-500/40 rounded-full text-xs font-bold text-warm-text dark:text-dark-text shadow-xs cursor-pointer shrink-0">
+                <span className="text-warm-muted dark:text-dark-muted font-semibold">Comparison:</span>
+                <select
+                  value={compPreset}
+                  onChange={(e) => setCompPreset(e.target.value)}
+                  className="bg-white dark:bg-slate-800 text-xs font-bold text-warm-text dark:text-dark-text focus:outline-none cursor-pointer"
+                >
+                  <option value="None">None</option>
+                  <option value="Previous period">Previous period</option>
+                  <option value="Previous month">Previous month</option>
+                  <option value="Custom range">Custom range</option>
+                </select>
+              </label>
             </div>
-          </div>
+          </ExpandedFilters>
 
-          {/* 3. Platform Multi-select Checkbox Popover */}
-          <div className="relative flex flex-col gap-1 w-full" ref={platformDropdownRef}>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Platform</label>
+          {/* Platform Multi-select Checkbox Popover (inline: most-used filter) */}
+          <div className="relative shrink-0" ref={platformDropdownRef}>
             <button
               type="button"
               onClick={() => setIsPlatformDropdownOpen(!isPlatformDropdownOpen)}
-              className="flex items-center justify-between bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
+              className="flex items-center justify-between bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-full px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
             >
               <span className="truncate">
+                <span className="text-warm-muted dark:text-dark-muted font-semibold">Platforms: </span>
                 {selectedPlatforms.length === 0
-                  ? 'None Selected'
+                  ? 'None'
                   : selectedPlatforms.length === availablePlatforms.length
-                  ? 'All Platforms' 
+                  ? 'All'
                   : `${selectedPlatforms.length} Selected`}
               </span>
               <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0 ml-1" />
             </button>
 
             {isPlatformDropdownOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
+              <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
                 <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
                   <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Platforms</span>
                   <button 
@@ -6010,91 +6159,111 @@ function FunnelAnalysis({ isDark }) {
             )}
           </div>
 
-          {/* 4. Country Filter Selector */}
-          <div className="flex flex-col gap-1 w-full">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Country</label>
-            <select 
-              value={selectedCountry} 
-              onChange={(e) => setSelectedCountry(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
-            >
-              {availableCountries.map(c => (
-                <option key={c} value={c}>{c === 'All' ? 'All Countries' : c}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 5. Marketing Team Filter Selector */}
-          <div className="flex flex-col gap-1 w-full">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Marketing Team</label>
-            <select 
-              value={selectedMarketingTeam} 
-              onChange={(e) => setSelectedMarketingTeam(e.target.value)}
-              className="bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
-            >
-              {availableMarketingTeams.map(m => (
-                <option key={m} value={m}>{m === 'All' ? 'All Teams' : m}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 6. Day of Week Multi-select Checkbox Popover */}
-          <div className="relative flex flex-col gap-1 w-full" ref={dayOfWeekDropdownRef}>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-warm-label dark:text-dark-label">Day of Week</label>
-            <button
-              type="button"
-              onClick={() => setIsDayOfWeekDropdownOpen(!isDayOfWeekDropdownOpen)}
-              className="flex items-center justify-between bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-[11px] font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer w-full"
-            >
-              <span className="truncate">
-                {selectedDaysOfWeek.length === 7 
-                  ? 'All Days' 
-                  : selectedDaysOfWeek.length === 0 
-                  ? 'None Selected' 
-                  : `${selectedDaysOfWeek.length} Days Selected`}
-              </span>
-              <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0 ml-1" />
-            </button>
-
-            {isDayOfWeekDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
-                <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
-                  <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Days</span>
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      if (selectedDaysOfWeek.length === 7) {
-                        setSelectedDaysOfWeek([]);
-                      } else {
-                        setSelectedDaysOfWeek([...DAYS_LIST]);
-                      }
-                    }}
-                    className="text-[11px] font-bold text-amber-accent hover:underline cursor-pointer"
+          {/* Country & Team — visible when filters are expanded */}
+          <ExpandedFilters expanded={areFiltersExpanded}>
+              <div className="shrink-0">
+                <label className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-full text-xs font-bold text-warm-text dark:text-dark-text shadow-xs cursor-pointer shrink-0">
+                  <span className="text-warm-muted dark:text-dark-muted font-semibold">Country:</span>
+                  <select
+                    value={selectedCountry}
+                    onChange={(e) => setSelectedCountry(e.target.value)}
+                    className="bg-white dark:bg-slate-800 text-xs font-bold text-warm-text dark:text-dark-text focus:outline-none cursor-pointer"
                   >
-                    {selectedDaysOfWeek.length === 7 ? 'Deselect All' : 'Select All'}
-                  </button>
-                </div>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
-                  {DAYS_LIST.map(day => {
-                    const checked = selectedDaysOfWeek.includes(day);
-                    return (
-                      <label key={day} className="flex items-center gap-2 text-xs font-medium text-warm-text dark:text-dark-text cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1 rounded">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleDayOfWeek(day)}
-                          className="accent-amber-500 rounded cursor-pointer"
-                        />
-                        <span>{day}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+                    {availableCountries.map(c => (
+                      <option key={c} value={c}>{c === 'All' ? 'All' : c}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
+
+              <div className="shrink-0">
+                <label className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-full text-xs font-bold text-warm-text dark:text-dark-text shadow-xs cursor-pointer shrink-0">
+                  <span className="text-warm-muted dark:text-dark-muted font-semibold">Team:</span>
+                  <select
+                    value={selectedMarketingTeam}
+                    onChange={(e) => setSelectedMarketingTeam(e.target.value)}
+                    className="bg-white dark:bg-slate-800 text-xs font-bold text-warm-text dark:text-dark-text focus:outline-none cursor-pointer"
+                  >
+                    {availableMarketingTeams.map(m => (
+                      <option key={m} value={m}>{m === 'All' ? 'All' : m}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {/* Day multi-select */}
+              <div className="relative shrink-0" ref={dayOfWeekDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsDayOfWeekDropdownOpen(!isDayOfWeekDropdownOpen)}
+                  className={FILTER_PILL_CLS}
+                >
+                  <span className="truncate">
+                    <span className="text-warm-muted dark:text-dark-muted font-semibold">Day: </span>
+                    {selectedDaysOfWeek.length === 7
+                      ? 'All'
+                      : `${selectedDaysOfWeek.length} Selected`}
+                  </span>
+                  <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0 ml-1" />
+                </button>
+
+                {isDayOfWeekDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
+                    <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
+                      <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Days</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDaysOfWeek([...DAYS_LIST])}
+                        className="text-[11px] font-bold text-amber-accent hover:underline cursor-pointer"
+                      >
+                        Select All
+                      </button>
+                    </div>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
+                      {DAYS_LIST.map(day => {
+                        const checked = selectedDaysOfWeek.includes(day);
+                        return (
+                          <label key={day} className="flex items-center gap-2 text-xs font-medium text-warm-text dark:text-dark-text cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1 rounded">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleDayOfWeek(day)}
+                              className="accent-amber-500 rounded cursor-pointer"
+                            />
+                            <span>{day}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+          </ExpandedFilters>
+
+          {/* More / Less toggle */}
+          <button
+            type="button"
+            onClick={() => setFiltersExpanded(!areFiltersExpanded)}
+            className={FILTER_PILL_CLS}
+          >
+            <span>{areFiltersExpanded ? '− Less' : `+ More${moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}`}</span>
+          </button>
+
+          {/* Chips: when collapsed, non-default hidden filters stay visible */}
+          {!areFiltersExpanded && (
+            <>
+              {compPreset !== 'None' && <FilterChip label={`vs ${compPreset}`} onClear={() => setCompPreset('None')} />}
+              {selectedCountry !== 'All' && <FilterChip label={`Country: ${selectedCountry}`} onClear={() => setSelectedCountry('All')} />}
+              {selectedMarketingTeam !== 'All' && <FilterChip label={`Team: ${selectedMarketingTeam}`} onClear={() => setSelectedMarketingTeam('All')} />}
+              {selectedDaysOfWeek.length !== 7 && <FilterChip label={`Days: ${selectedDaysOfWeek.length}/7`} onClear={() => setSelectedDaysOfWeek([...DAYS_LIST])} />}
+            </>
+          )}
+          {moreActiveCount > 0 && (
+            <button type="button" onClick={resetMoreFilters} className="text-[11px] font-bold text-warm-muted dark:text-dark-muted hover:text-amber-accent underline cursor-pointer shrink-0">
+              Reset
+            </button>
+          )}
+      </StickyFilterBar>
 
       {/* KPI Cards */}
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
@@ -6111,7 +6280,7 @@ function FunnelAnalysis({ isDark }) {
           {trendData && (
             <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
-                data={[{ x: trendData.dates, y: trendData.dau, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)', hovertext: trendData.dau.map(v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(1)), hovertemplate: '%{hovertext}<extra></extra>' }]}
+                data={[{ x: trendData.dates, y: trendData.dau, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.dau.map(v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(1)), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
             </div>
@@ -6131,7 +6300,7 @@ function FunnelAnalysis({ isDark }) {
           {trendData && (
             <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
-                data={[{ x: trendData.dates, y: trendData.conv, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)', hovertext: trendData.conv.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
+                data={[{ x: trendData.dates, y: trendData.conv, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.conv.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
             </div>
@@ -6151,7 +6320,7 @@ function FunnelAnalysis({ isDark }) {
           {trendData && (
             <div className="w-full sm:w-28 h-12 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
-                data={[{ x: trendData.dates, y: trendData.paywallRate, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#fbbf24' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(251,191,36,0.1)' : 'rgba(217,119,6,0.1)', hovertext: trendData.paywallRate.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
+                data={[{ x: trendData.dates, y: trendData.paywallRate, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.paywallRate.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
             </div>
@@ -7274,18 +7443,18 @@ function Realtime({ isDark }) {
   const activePlatforms = hasCombined ? ['Combined', ...otherPlatforms] : otherPlatforms;
 
   return (
-    <div className="animate-in fade-in duration-300 pb-12">
+    <div className="animate-in fade-in duration-300 pb-12 pt-4">
       {/* Realtime Header + Top Right Comparison Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
-          <h2 className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight flex items-center gap-2">
+          <h2 className="text-2xl font-black text-warm-text dark:text-dark-text tracking-tight flex items-center gap-2">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
             </span>
             Realtime Live Forecast
           </h2>
-          <p className="text-base font-medium text-warm-muted dark:text-dark-muted mt-1 tracking-wide">
+          <p className="text-sm font-medium text-warm-muted dark:text-dark-muted mt-0.5 tracking-wide">
             Monitoring data for <strong className="text-warm-text dark:text-dark-text">{todayDate}</strong> up to hour <strong className="text-warm-text dark:text-dark-text">{String(currentHour + 1).padStart(2, '0')}:00</strong>
           </p>
         </div>
@@ -7316,32 +7485,32 @@ function Realtime({ isDark }) {
       </div>
 
       {/* KPI Cards (2-Column Grid on Mobile) */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-3 md:p-4">
           <h3 className="text-[10px] md:text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Purchases Today</h3>
-          <span className="text-2xl md:text-4xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(todayPurchases).toLocaleString()}</span>
+          <span className="text-xl md:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(todayPurchases).toLocaleString()}</span>
         </div>
         
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5 ring-1 ring-amber-500/30 relative overflow-hidden">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-3 md:p-4 ring-1 ring-amber-500/30 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-2 opacity-10 hidden sm:block">
             <Sun size={48} />
           </div>
           <h3 className="text-[10px] md:text-[11px] font-bold text-amber-accent dark:text-amber-500 tracking-wider uppercase mb-1">Estimated Today (EOD)</h3>
-          <span className="text-2xl md:text-4xl font-black text-amber-accent dark:text-amber-400 tracking-tight">{Math.round(projectedTotal).toLocaleString()}</span>
+          <span className="text-xl md:text-2xl font-black text-amber-accent dark:text-amber-400 tracking-tight">{Math.round(projectedTotal).toLocaleString()}</span>
         </div>
 
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-3 md:p-4">
           <h3 className="text-[10px] md:text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">{benchmarkTitle}</h3>
           <div className="flex items-end gap-1.5 md:gap-2">
-            <span className="text-2xl md:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(benchmarkTotal).toLocaleString()}</span>
+            <span className="text-xl md:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{Math.round(benchmarkTotal).toLocaleString()}</span>
             <span className="text-[10px] md:text-xs text-warm-muted dark:text-dark-muted pb-1 font-bold">Total EOD</span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-4 md:p-5">
+        <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-3 md:p-4">
            <h3 className="text-[10px] md:text-xs font-medium text-warm-muted dark:text-dark-muted tracking-wider uppercase mb-1">Pacing vs History</h3>
            <div className="flex items-end gap-2">
-              <span className={`text-2xl md:text-3xl font-black tracking-tight ${todayPurchases >= benchmarkCurrentHour ? 'text-emerald-500' : 'text-red-500'}`}>
+              <span className={`text-xl md:text-2xl font-black tracking-tight ${todayPurchases >= benchmarkCurrentHour ? 'text-emerald-500' : 'text-red-500'}`}>
                 {benchmarkCurrentHour > 0 ? ((todayPurchases / benchmarkCurrentHour - 1) * 100).toFixed(1) : 0}%
               </span>
            </div>
@@ -7350,7 +7519,7 @@ function Realtime({ isDark }) {
       </section>
 
       {/* Hourly Trend Chart & Today vs History sharing real estate */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-8">
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-4">
         {/* Left: Hourly Purchase Velocity Chart */}
         <div className="lg:col-span-8 xl:col-span-9 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 md:p-5 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
@@ -7358,7 +7527,7 @@ function Realtime({ isDark }) {
               Hourly Purchase Velocity (Today vs {benchmarkShort})
             </h3>
           </div>
-          <div className="w-full h-[320px]">
+          <div className="w-full h-[260px]">
             <Plot
               data={[
                 {
@@ -7367,7 +7536,7 @@ function Realtime({ isDark }) {
                   type: 'scatter',
                   mode: 'lines',
                   name: 'Today',
-                  line: { color: isDark ? '#fbbf24' : '#d97706', width: 3, shape: 'spline' },
+                  line: { color: isDark ? '#60a5fa' : '#d97706', width: 3, shape: 'spline' },
                   hovertemplate: '  <b>%{y}</b>  <extra></extra>'
                 },
                 {
@@ -7421,29 +7590,7 @@ function Realtime({ isDark }) {
               </h3>
             </div>
 
-            {/* Quick Benchmark Comparison Toggle */}
-            <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-full border border-warm-border/60 dark:border-zinc-700 mb-4">
-              <button
-                onClick={() => setRealtimeCompMode("4-Week")}
-                className={`flex-1 py-1 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
-                  realtimeCompMode === "4-Week"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
-                }`}
-              >
-                Past 4-Week Avg
-              </button>
-              <button
-                onClick={() => setRealtimeCompMode("7-Day")}
-                className={`flex-1 py-1 text-[10px] font-extrabold rounded-full transition-all cursor-pointer ${
-                  realtimeCompMode === "7-Day"
-                    ? "bg-white dark:bg-slate-700 text-amber-accent shadow-xs"
-                    : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
-                }`}
-              >
-                Last 7-Days
-              </button>
-            </div>
+            {/* Benchmark is controlled by the page-level toggle (top right) */}
           </div>
 
           {/* Dual Bar Graphic */}
@@ -7523,28 +7670,33 @@ function Realtime({ isDark }) {
         {/* SVG Multi-Platform Funnel Canvas */}
         <div className="overflow-x-auto custom-scrollbar w-full py-2">
           {(() => {
-            const combinedPlat = activePlatforms.filter(p => p.toLowerCase() === 'combined');
-            const otherPlats = activePlatforms.filter(p => p.toLowerCase() !== 'combined');
-            const displayPlatforms = [...(combinedPlat.length ? combinedPlat : ['Combined']), ...otherPlats];
+            // Fixed display order: Overall, MWeb, Web, Main Android, Main iOS,
+            // Market Android, Market iOS (order checks 'mweb'/'main'/'mkt'
+            // before the bare 'web' catch-all)
+            const orderRank = (p) => {
+              const s = p.toLowerCase();
+              if (s === 'combined') return 0;
+              if (s.includes('mweb')) return 1;
+              if (s.includes('main') && s.includes('android')) return 3;
+              if (s.includes('main') && s.includes('ios')) return 4;
+              if (s.includes('mkt') && s.includes('android')) return 5;
+              if (s.includes('mkt') && s.includes('ios')) return 6;
+              if (s.includes('web')) return 2;
+              return 7;
+            };
+            const displayPlatforms = [...new Set(['Combined', ...activePlatforms])]
+              .filter(p => activePlatforms.includes(p) || p === 'Combined')
+              .sort((a, b) => orderRank(a) - orderRank(b));
             const numCols = displayPlatforms.length;
             const labelColW = 120;
             const colW = 142;
             const totalSvgW = labelColW + numCols * colW;
 
-            const getBottomColor = (p) => {
-              const s = p.toLowerCase();
-              if (s.includes('combined')) return '#EA580C';
-              if (s.includes('mkt_android')) return '#EA580C';
-              if (s.includes('mkt_ios')) return '#F97316';
-              if (s.includes('mweb')) return '#DC2626';
-              if (s.includes('main android') || s.includes('main_android')) return '#D97706';
-              if (s.includes('main ios') || s.includes('main_ios')) return '#2563EB';
-              if (s.includes('web')) return '#059669';
-              return '#475569';
-            };
+            // One color for the Purchase step across all platforms
+            const purchaseColor = isDark ? '#3B82F6' : '#EA580C';
 
             return (
-              <svg viewBox={`0 0 ${totalSvgW} 330`} className="w-full h-auto min-w-[960px] select-none">
+              <svg viewBox={`0 0 ${totalSvgW} 310`} className="w-full h-auto min-w-[960px] select-none">
                 {/* Left Stage Labels & Horizontal Ticks */}
                 <g className="font-bold text-[11px]">
                   <text x="100" y="70" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Plan Page Load</text>
@@ -7560,35 +7712,6 @@ function Realtime({ isDark }) {
                   <line x1="104" y1="273" x2="116" y2="273" stroke="#94A3B8" strokeWidth="1.5" />
                 </g>
 
-                {/* Flow Curves between adjacent columns */}
-                {displayPlatforms.map((_, cIdx) => {
-                  if (cIdx >= numCols - 1) return null;
-                  const c1 = labelColW + cIdx * colW + colW / 2;
-                  const c2 = labelColW + (cIdx + 1) * colW + colW / 2;
-                  return (
-                    <g key={`flow-${cIdx}`}>
-                      {/* Curve Stage 2 -> Stage 3 */}
-                      <path
-                        d={`M ${c1 + 44} 143 C ${c1 + 78} 150, ${c2 - 62} 170, ${c2 - 31} 178`}
-                        fill="none"
-                        stroke="#94A3B8"
-                        strokeWidth="1.2"
-                        strokeDasharray="2,2"
-                        opacity="0.55"
-                      />
-                      {/* Curve Stage 3 -> Stage 4 */}
-                      <path
-                        d={`M ${c1 + 21} 211 C ${c1 + 52} 220, ${c2 - 48} 235, ${c2 - 20} 243`}
-                        fill="none"
-                        stroke="#94A3B8"
-                        strokeWidth="1.2"
-                        strokeDasharray="2,2"
-                        opacity="0.55"
-                      />
-                    </g>
-                  );
-                })}
-
                 {/* Platform Columns */}
                 {displayPlatforms.map((plat, cIdx) => {
                   const cCenter = labelColW + cIdx * colW + colW / 2;
@@ -7600,8 +7723,7 @@ function Realtime({ isDark }) {
 
                   const drop1 = loads > 0 ? Math.max(0, Math.round((1 - selected / loads) * 100)) : 0;
                   const drop2 = selected > 0 ? Math.max(0, Math.round((1 - initiated / selected) * 100)) : 0;
-                  const platDisplay = plat === 'Combined' ? 'Overall (Combined)' : plat;
-                  const bottomColor = getBottomColor(plat);
+                  const platDisplay = plat === 'Combined' ? 'Overall' : plat.replace(/_/g, ' ');
 
                   return (
                     <g key={plat}>
@@ -7622,17 +7744,11 @@ function Realtime({ isDark }) {
                         points={`${cCenter - 58},35 ${cCenter + 58},35 ${cCenter + 44},106 ${cCenter - 44},106`}
                         fill="#1E293B"
                       />
-                      <text x={cCenter} y="58" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">
+                      <text x={cCenter} y="66" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">
                         {loads.toLocaleString()}
                       </text>
-                      <text x={cCenter} y="71" textAnchor="middle" fill="#94A3B8" fontSize="8.5" fontWeight="600">
-                        tot Volume
-                      </text>
-                      <text x={cCenter} y="84" textAnchor="middle" fill="#CBD5E1" fontSize="8" fontWeight="500">
-                        Plan Page Load to
-                      </text>
-                      <text x={cCenter} y="95" textAnchor="middle" fill="#CBD5E1" fontSize="8" fontWeight="500">
-                        Plan Selected: {drop1}% drop-off
+                      <text x={cCenter} y="82" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">
+                        {drop1}% drop-off
                       </text>
 
                       {/* Level 2: Plan Selected (Trap 2) */}
@@ -7640,14 +7756,11 @@ function Realtime({ isDark }) {
                         points={`${cCenter - 44},109 ${cCenter + 44},109 ${cCenter + 31},175 ${cCenter - 31},175`}
                         fill="#334155"
                       />
-                      <text x={cCenter} y="132" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
+                      <text x={cCenter} y="138" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
                         {selected.toLocaleString()}
                       </text>
-                      <text x={cCenter} y="146" textAnchor="middle" fill="#94A3B8" fontSize="8.5" fontWeight="600">
-                        Plan Selected
-                      </text>
-                      <text x={cCenter} y="160" textAnchor="middle" fill="#CBD5E1" fontSize="8" fontWeight="500">
-                        Drop-off: {drop2}% drop-off
+                      <text x={cCenter} y="153" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">
+                        {drop2}% drop-off
                       </text>
 
                       {/* Level 3: Pay Initiated (Trap 3) */}
@@ -7655,11 +7768,8 @@ function Realtime({ isDark }) {
                         points={`${cCenter - 31},178 ${cCenter + 31},178 ${cCenter + 21},240 ${cCenter - 21},240`}
                         fill="#475569"
                       />
-                      <text x={cCenter} y="206" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
+                      <text x={cCenter} y="213" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
                         {initiated.toLocaleString()}
-                      </text>
-                      <text x={cCenter} y="222" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">
-                        Pay Initiated
                       </text>
 
                       {/* Level 4: Purchase (Block) */}
@@ -7669,29 +7779,15 @@ function Realtime({ isDark }) {
                         width="40"
                         height="58"
                         rx="3"
-                        fill={bottomColor}
+                        fill={purchaseColor}
                       />
-                      <text x={cCenter} y="271" textAnchor="middle" fill="#FFFFFF" fontSize="13.5" fontWeight="900">
+                      <text x={cCenter} y="277" textAnchor="middle" fill="#FFFFFF" fontSize="13.5" fontWeight="900">
                         {purchased.toLocaleString()}
-                      </text>
-                      <text x={cCenter} y="286" textAnchor="middle" fill="#FFFFFF" fontSize="8.5" fontWeight="700">
-                        Purchase
                       </text>
                     </g>
                   );
                 })}
 
-                {/* Centered Platform Label */}
-                <text
-                  x={labelColW + (numCols * colW) / 2}
-                  y="320"
-                  textAnchor="middle"
-                  fontSize="11"
-                  fontWeight="700"
-                  className="fill-slate-500 dark:fill-slate-400 tracking-wider"
-                >
-                  Platform
-                </text>
               </svg>
             );
           })()}
@@ -7880,19 +7976,21 @@ function MultiSelectDropdown({ label, options, selectedValues, onChange, isDark 
   }
 
   return (
-    <div className="relative" ref={containerRef}>
-      <label className="block text-[10px] font-bold text-warm-muted dark:text-dark-muted uppercase mb-1 truncate">{label}</label>
+    <div className="relative shrink-0" ref={containerRef}>
+      {/* Self-labeled compact pill: "Platform: All" (Option A filter layout) */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer flex items-center justify-between gap-1 text-left"
+        className={FILTER_PILL_CLS}
       >
-        <span className="truncate max-w-[110px]">{displayLabel}</span>
+        <span className="truncate max-w-[160px]">
+          <span className="text-warm-muted dark:text-dark-muted font-semibold">{label}: </span>{displayLabel}
+        </span>
         <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 mt-1 w-56 max-h-64 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-900 border border-warm-border dark:border-zinc-700 rounded-xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 mt-1 w-56 max-h-64 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-900 border border-warm-border dark:border-zinc-700 rounded-xl shadow-xl z-50 p-2 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-warm-border/60 dark:border-zinc-800 px-1">
             <label className="flex items-center gap-2 text-xs font-bold cursor-pointer select-none">
               <input
@@ -7950,6 +8048,9 @@ function ArpuReport({ isDark }) {
   const [selectedThemes, setSelectedThemes] = useState([]);
   const [selectedSaleStatuses, setSelectedSaleStatuses] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // "+ More" reveals the remaining filters inline; scrolling collapses them
+  const [areFiltersExpanded, setFiltersExpanded] = useCollapsibleFilters();
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -8193,37 +8294,32 @@ function ArpuReport({ isDark }) {
     );
   }
 
+  // Non-default state among the "+ More" (hidden) filters — badge + chips.
+  // Empty selection means "All" in this tab's multi-selects.
+  const isNarrowed = (sel, opts) => sel.length > 0 && sel.length < opts.length;
+  const hiddenFilterDefs = [
+    ['Plan Category', selectedPlanCategories, planCategories, setSelectedPlanCategories],
+    ['User Txn Type', selectedUserTxnTypes, userTxnTypes, setSelectedUserTxnTypes],
+    ['Marketing Team', selectedMarketingTeams, marketingTeams, setSelectedMarketingTeams],
+    ['Offer', selectedOffers, offers, setSelectedOffers],
+    ['Campaign Theme', selectedThemes, themes, setSelectedThemes],
+    ['Sale Status', selectedSaleStatuses, saleStatuses, setSelectedSaleStatuses],
+  ];
+  const hiddenFiltersActiveCount = hiddenFilterDefs.filter(([, sel, opts]) => isNarrowed(sel, opts)).length;
+
   return (
     <div className="animate-in fade-in duration-300">
-      
-      {/* Header Info Banner */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">ARPU Analytics & Campaign Performance</h2>
-          <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">
-            Average Revenue Per User (Revenue / Conversions) across campaign themes, offers & user segments
-          </p>
-        </div>
-        <button
-          onClick={resetFilters}
-          className="px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 self-end md:self-auto"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          <span>Reset All Filters</span>
-        </button>
-      </div>
 
-      {/* Multi-Select Dropdown Filters Toolbar */}
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-4 shadow-sm mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-          
+      {/* Sticky compact filter bar: title left, self-labeled pill filters right */}
+      <StickyFilterBar>
+        <h2 className="text-base sm:text-xl font-bold text-warm-text dark:text-dark-text tracking-tight mr-auto">ARPU Analytics & Campaign Performance</h2>
+
           {/* Timeframe */}
-          <div>
-            <label className="block text-[10px] font-bold text-warm-muted dark:text-dark-muted uppercase mb-1">Timeframe</label>
+          <div className="shrink-0">
             <select
               value={datePreset}
               onChange={(e) => setDatePreset(e.target.value)}
-              className="w-full bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text text-xs font-bold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-accent shadow-xs cursor-pointer"
+              className={FILTER_PILL_SELECT_CLS}
             >
               <option value="Yesterday">Yesterday</option>
               <option value="Last 7 days">Last 7 days</option>
@@ -8237,25 +8333,47 @@ function ArpuReport({ isDark }) {
           </div>
 
           <MultiSelectDropdown label="Platform" options={platforms} selectedValues={selectedPlatforms} onChange={setSelectedPlatforms} isDark={isDark} />
-          <MultiSelectDropdown label="Plan Category" options={planCategories} selectedValues={selectedPlanCategories} onChange={setSelectedPlanCategories} isDark={isDark} />
-          <MultiSelectDropdown label="User Txn Type" options={userTxnTypes} selectedValues={selectedUserTxnTypes} onChange={setSelectedUserTxnTypes} isDark={isDark} />
-          <MultiSelectDropdown label="Marketing Team" options={marketingTeams} selectedValues={selectedMarketingTeams} onChange={setSelectedMarketingTeams} isDark={isDark} />
-          <MultiSelectDropdown label="Offer" options={offers} selectedValues={selectedOffers} onChange={setSelectedOffers} isDark={isDark} />
-          <MultiSelectDropdown label="Campaign Theme" options={themes} selectedValues={selectedThemes} onChange={setSelectedThemes} isDark={isDark} />
-          <MultiSelectDropdown label="Sale Status" options={saleStatuses} selectedValues={selectedSaleStatuses} onChange={setSelectedSaleStatuses} isDark={isDark} />
 
-        </div>
+          {/* Remaining filters — expanded only */}
+          <ExpandedFilters expanded={areFiltersExpanded}>
+            <MultiSelectDropdown label="Plan Category" options={planCategories} selectedValues={selectedPlanCategories} onChange={setSelectedPlanCategories} isDark={isDark} />
+            <MultiSelectDropdown label="User Txn Type" options={userTxnTypes} selectedValues={selectedUserTxnTypes} onChange={setSelectedUserTxnTypes} isDark={isDark} />
+            <MultiSelectDropdown label="Marketing Team" options={marketingTeams} selectedValues={selectedMarketingTeams} onChange={setSelectedMarketingTeams} isDark={isDark} />
+            <MultiSelectDropdown label="Offer" options={offers} selectedValues={selectedOffers} onChange={setSelectedOffers} isDark={isDark} />
+            <MultiSelectDropdown label="Campaign Theme" options={themes} selectedValues={selectedThemes} onChange={setSelectedThemes} isDark={isDark} />
+            <MultiSelectDropdown label="Sale Status" options={saleStatuses} selectedValues={selectedSaleStatuses} onChange={setSelectedSaleStatuses} isDark={isDark} />
+          </ExpandedFilters>
+
+          {/* More / Less toggle */}
+          <button
+            type="button"
+            onClick={() => setFiltersExpanded(!areFiltersExpanded)}
+            className={FILTER_PILL_CLS}
+          >
+            <span>{areFiltersExpanded ? '− Less' : `+ More${hiddenFiltersActiveCount > 0 ? ` (${hiddenFiltersActiveCount})` : ''}`}</span>
+          </button>
+
+          {/* Chips: when collapsed, non-default hidden filters stay visible */}
+          {!areFiltersExpanded && hiddenFilterDefs.map(([label, sel, opts, setter]) => (
+            isNarrowed(sel, opts) && (
+              <FilterChip
+                key={label}
+                label={`${label}: ${sel.length <= 2 ? sel.join(', ') : `${sel.length} Selected`}`}
+                onClear={() => setter([])}
+              />
+            )
+          ))}
 
         {/* Custom Range Inputs if selected */}
         {datePreset === "Custom range" && (
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-warm-border/50 dark:border-zinc-800">
-            <span className="text-xs font-bold text-warm-muted dark:text-dark-muted">Custom Date Range:</span>
-            <input type="date" value={startDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+          <div className="flex items-center gap-2 shrink-0">
+            <input type="date" value={startDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-full bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border focus:outline-none" />
             <span className="text-xs text-warm-muted dark:text-dark-muted">to</span>
-            <input type="date" value={endDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-lg bg-warm-tableBg dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+            <input type="date" value={endDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-full bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border focus:outline-none" />
           </div>
         )}
-      </div>
+
+      </StickyFilterBar>
 
       {/* Executive KPI Cards */}
       <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
