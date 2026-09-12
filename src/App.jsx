@@ -1691,9 +1691,21 @@ const FILTER_PILL_SELECT_CLS = "appearance-none px-3 py-1.5 bg-white dark:bg-sla
  * when collapsed cancels the flex gap the zero-width element would leave.
  */
 function ExpandedFilters({ expanded, children }) {
+  // overflow-hidden is needed while the max-width animation runs, but it also
+  // clips the filters' dropdown panels — so once the expansion settles, switch
+  // to overflow-visible so popovers can escape the wrapper.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!expanded) { setSettled(false); return; }
+    const t = setTimeout(() => setSettled(true), 320);
+    return () => clearTimeout(t);
+  }, [expanded]);
+
   return (
     <div
-      className={`flex items-center gap-2 flex-nowrap overflow-hidden transition-all duration-300 ease-in-out ${
+      className={`flex items-center gap-2 flex-nowrap transition-all duration-300 ease-in-out ${
+        settled ? 'overflow-visible' : 'overflow-hidden'
+      } ${
         expanded ? 'max-w-[1400px] opacity-100' : 'max-w-0 opacity-0 -ml-2 pointer-events-none'
       }`}
     >
@@ -5264,7 +5276,11 @@ function FunnelAnalysis({ isDark }) {
 
   // Segment Filters State (Platform, Country, Marketing Team & Day of Week)
   const [selectedCountry, setSelectedCountry] = useState("All");
-  const [selectedMarketingTeam, setSelectedMarketingTeam] = useState("All");
+  // Marketing teams: multi-select (like Platforms); empty until data seeds it
+  const [selectedTeams, setSelectedTeams] = useState([]);
+  const [isTeamsTouched, setIsTeamsTouched] = useState(false);
+  const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
+  const teamDropdownRef = useRef(null);
 
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [isPlatformDropdownOpen, setIsPlatformDropdownOpen] = useState(false);
@@ -5286,21 +5302,6 @@ function FunnelAnalysis({ isDark }) {
     } else {
       setSelectedDaysOfWeek(prev => [...prev, day]);
     }
-  };
-
-  // How many "+ More" filters are set away from their defaults (drives the
-  // badge on the More pill and the visibility of the Reset link)
-  const moreActiveCount =
-    (compPreset !== 'None' ? 1 : 0) +
-    (selectedCountry !== 'All' ? 1 : 0) +
-    (selectedMarketingTeam !== 'All' ? 1 : 0) +
-    (selectedDaysOfWeek.length !== DAYS_LIST.length ? 1 : 0);
-
-  const resetMoreFilters = () => {
-    setCompPreset('None');
-    setSelectedCountry('All');
-    setSelectedMarketingTeam('All');
-    setSelectedDaysOfWeek([...DAYS_LIST]);
   };
 
   const availablePlatforms = useMemo(() => {
@@ -5332,6 +5333,9 @@ function FunnelAnalysis({ isDark }) {
       if (dayOfWeekDropdownRef.current && !dayOfWeekDropdownRef.current.contains(event.target)) {
         setIsDayOfWeekDropdownOpen(false);
       }
+      if (teamDropdownRef.current && !teamDropdownRef.current.contains(event.target)) {
+        setIsTeamDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -5349,9 +5353,37 @@ function FunnelAnalysis({ isDark }) {
 
   const availableMarketingTeams = useMemo(() => {
     const list = Array.from(new Set(rawData.map(r => r.marketingTeam).filter(Boolean))).sort();
-    const sorted = list.filter(m => m.toLowerCase() !== 'overall');
-    return ['All', ...sorted];
+    return list.filter(m => m.toLowerCase() !== 'overall');
   }, [rawData]);
+
+  // Seed team selection to "all teams" once data arrives (until user touches it)
+  useEffect(() => {
+    if (availableMarketingTeams.length > 0 && !isTeamsTouched) {
+      setSelectedTeams(availableMarketingTeams);
+    }
+  }, [availableMarketingTeams, isTeamsTouched]);
+
+  const toggleTeam = (team) => {
+    setIsTeamsTouched(true);
+    setSelectedTeams(prev => prev.includes(team) ? prev.filter(t => t !== team) : [...prev, team]);
+  };
+  const isAllTeamsSelected = availableMarketingTeams.length === 0 || selectedTeams.length === availableMarketingTeams.length;
+
+  // How many "+ More" filters are set away from their defaults (drives the
+  // badge on the More pill and the visibility of the Reset link)
+  const moreActiveCount =
+    (compPreset !== 'None' ? 1 : 0) +
+    (selectedCountry !== 'All' ? 1 : 0) +
+    (!isAllTeamsSelected ? 1 : 0) +
+    (selectedDaysOfWeek.length !== DAYS_LIST.length ? 1 : 0);
+
+  const resetMoreFilters = () => {
+    setCompPreset('None');
+    setSelectedCountry('All');
+    setSelectedTeams(availableMarketingTeams);
+    setIsTeamsTouched(false);
+    setSelectedDaysOfWeek([...DAYS_LIST]);
+  };
 
 
 
@@ -5480,7 +5512,12 @@ function FunnelAnalysis({ isDark }) {
   const [weeklyDauMode, setWeeklyDauMode] = useState("Daily Average"); // "Daily Average" | "Weekly Sum"
 
   // Process data for a given date range, segment filters, day of week list, and platforms list
-  const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeam = 'All', daysOfWeekFilter = [], platformsFilter = []) => {
+  const processFunnelData = useCallback((sDate, eDate, filterCountry = 'All', filterMktTeams = [], daysOfWeekFilter = [], platformsFilter = []) => {
+    // Teams filter: [] or a full selection means "All" (use Overall rows);
+    // a subset means: sum the matching teams' rows.
+    const teamsArr = Array.isArray(filterMktTeams) ? filterMktTeams : (filterMktTeams === 'All' ? [] : [filterMktTeams]);
+    const teamsLower = teamsArr.map(t => t.toLowerCase());
+    const isAllTeams = teamsArr.length === 0 || (availableMarketingTeams.length > 0 && teamsArr.length >= availableMarketingTeams.length);
     const overall = { DAU: 0, paywalling_hits: 0, Plan_Page_Load: 0, Plan_Selected: 0, Pay_Initiated: 0, Purchased: 0, daily: {} };
     const platforms = {};
     const marketingTeams = {};
@@ -5491,13 +5528,12 @@ function FunnelAnalysis({ isDark }) {
     }
 
     const targetCountry = filterCountry === 'All' ? 'Overall' : filterCountry;
-    const targetMktTeam = filterMktTeam === 'All' ? 'Overall' : filterMktTeam;
     const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     const filtered = rawData.filter(r => {
       if (r.dateStr < sDate || r.dateStr > eDate) return false;
       const cMatch = r.country && r.country.toLowerCase() === targetCountry.toLowerCase();
-      const mMatch = filterMktTeam === 'All' || (r.marketingTeam && r.marketingTeam.toLowerCase() === targetMktTeam.toLowerCase());
+      const mMatch = isAllTeams || (r.marketingTeam && teamsLower.includes(r.marketingTeam.toLowerCase()));
       
       let dayMatch = true;
       if (daysOfWeekFilter && daysOfWeekFilter.length > 0 && daysOfWeekFilter.length < 7) {
@@ -5560,15 +5596,15 @@ function FunnelAnalysis({ isDark }) {
       let dayPageLoad = 0, daySelected = 0, dayInit = 0, dayPurch = 0;
       const overallTeamRow = rows.find(r => r.marketingTeam && r.marketingTeam.toLowerCase() === 'overall');
 
-      if (overallTeamRow && filterMktTeam === 'All') {
+      if (overallTeamRow && isAllTeams) {
         dayPageLoad = overallTeamRow.Plan_Page_Load;
         daySelected = overallTeamRow.Plan_Selected;
         dayInit = overallTeamRow.Pay_Initiated;
         dayPurch = overallTeamRow.Purchased;
       } else {
-        const teamRows = filterMktTeam === 'All' 
+        const teamRows = isAllTeams
           ? rows.filter(r => !r.marketingTeam || r.marketingTeam.toLowerCase() !== 'overall' || rows.length === 1)
-          : rows;
+          : rows.filter(r => !r.marketingTeam || r.marketingTeam.toLowerCase() !== 'overall');
         teamRows.forEach(r => {
           dayPageLoad += r.Plan_Page_Load;
           daySelected += r.Plan_Selected;
@@ -5685,7 +5721,7 @@ function FunnelAnalysis({ isDark }) {
         const overallRow = rows.find(r => r.marketingTeam && r.marketingTeam.toLowerCase() === 'overall');
 
         let dayPageLoad = 0, daySelected = 0, dayInit = 0, dayPurch = 0;
-        if (overallRow && filterMktTeam === 'All') {
+        if (overallRow && isAllTeams) {
           dayPageLoad = overallRow.Plan_Page_Load;
           daySelected = overallRow.Plan_Selected;
           dayInit = overallRow.Pay_Initiated;
@@ -5808,15 +5844,15 @@ function FunnelAnalysis({ isDark }) {
         step4: step4LoadToPurch
       }
     };
-  }, [rawData]);
+  }, [rawData, availablePlatforms, selectedPlatforms, isPlatformsTouched, availableMarketingTeams]);
 
-  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms), [processFunnelData, startDate, endDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms]);
-  
+  const primaryFunnel = useMemo(() => processFunnelData(startDate, endDate, selectedCountry, selectedTeams, selectedDaysOfWeek, selectedPlatforms), [processFunnelData, startDate, endDate, selectedCountry, selectedTeams, selectedDaysOfWeek, selectedPlatforms]);
+
   const isCompActive = compPreset !== "None" && compStartDate && compEndDate;
   const compFunnel = useMemo(() => {
     if (!isCompActive) return null;
-    return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms);
-  }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedMarketingTeam, selectedDaysOfWeek, selectedPlatforms]);
+    return processFunnelData(compStartDate, compEndDate, selectedCountry, selectedTeams, selectedDaysOfWeek, selectedPlatforms);
+  }, [processFunnelData, isCompActive, compStartDate, compEndDate, selectedCountry, selectedTeams, selectedDaysOfWeek, selectedPlatforms]);
 
   // Helper to compute weekly grouped step data for trendlines
   const computeWeeklyStepData = useCallback((trendObj, dauMode = "Daily Average") => {
@@ -6091,7 +6127,7 @@ function FunnelAnalysis({ isDark }) {
                 <select
                   value={compPreset}
                   onChange={(e) => setCompPreset(e.target.value)}
-                  className="bg-white dark:bg-slate-800 text-xs font-bold text-warm-text dark:text-dark-text focus:outline-none cursor-pointer"
+                  className="bg-white dark:bg-slate-800 text-xs font-bold text-warm-text dark:text-dark-text focus:outline-none cursor-pointer w-[7.6rem]"
                 >
                   <option value="None">None</option>
                   <option value="Previous period">Previous period</option>
@@ -6176,19 +6212,59 @@ function FunnelAnalysis({ isDark }) {
                 </label>
               </div>
 
-              <div className="shrink-0">
-                <label className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-full text-xs font-bold text-warm-text dark:text-dark-text shadow-xs cursor-pointer shrink-0">
-                  <span className="text-warm-muted dark:text-dark-muted font-semibold">Team:</span>
-                  <select
-                    value={selectedMarketingTeam}
-                    onChange={(e) => setSelectedMarketingTeam(e.target.value)}
-                    className="bg-white dark:bg-slate-800 text-xs font-bold text-warm-text dark:text-dark-text focus:outline-none cursor-pointer"
-                  >
-                    {availableMarketingTeams.map(m => (
-                      <option key={m} value={m}>{m === 'All' ? 'All' : m}</option>
-                    ))}
-                  </select>
-                </label>
+              {/* Team multi-select */}
+              <div className="relative shrink-0" ref={teamDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)}
+                  className={FILTER_PILL_CLS}
+                >
+                  <span className="truncate">
+                    <span className="text-warm-muted dark:text-dark-muted font-semibold">Team: </span>
+                    {isAllTeamsSelected
+                      ? 'All'
+                      : selectedTeams.length === 0
+                      ? 'None'
+                      : selectedTeams.length === 1
+                      ? selectedTeams[0]
+                      : `${selectedTeams.length} Selected`}
+                  </span>
+                  <ChevronDown size={14} className="text-warm-muted dark:text-dark-muted shrink-0 ml-1" />
+                </button>
+
+                {isTeamDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-56 bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border rounded-xl shadow-xl z-50 p-3">
+                    <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-2 mb-2">
+                      <span className="text-xs font-bold text-warm-text dark:text-dark-text">Select Teams</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsTeamsTouched(true);
+                          setSelectedTeams(isAllTeamsSelected ? [] : [...availableMarketingTeams]);
+                        }}
+                        className="text-[11px] font-bold text-amber-accent hover:underline cursor-pointer"
+                      >
+                        {isAllTeamsSelected ? 'Deselect All' : 'Select All'}
+                      </button>
+                    </div>
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto custom-scrollbar">
+                      {availableMarketingTeams.map(team => {
+                        const checked = selectedTeams.includes(team);
+                        return (
+                          <label key={team} className="flex items-center gap-2 text-xs font-medium text-warm-text dark:text-dark-text cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 p-1 rounded">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleTeam(team)}
+                              className="accent-amber-500 rounded cursor-pointer"
+                            />
+                            <span className="truncate">{team}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Day multi-select */}
@@ -6254,7 +6330,12 @@ function FunnelAnalysis({ isDark }) {
             <>
               {compPreset !== 'None' && <FilterChip label={`vs ${compPreset}`} onClear={() => setCompPreset('None')} />}
               {selectedCountry !== 'All' && <FilterChip label={`Country: ${selectedCountry}`} onClear={() => setSelectedCountry('All')} />}
-              {selectedMarketingTeam !== 'All' && <FilterChip label={`Team: ${selectedMarketingTeam}`} onClear={() => setSelectedMarketingTeam('All')} />}
+              {!isAllTeamsSelected && (
+                <FilterChip
+                  label={`Team: ${selectedTeams.length === 0 ? 'None' : selectedTeams.length === 1 ? selectedTeams[0] : `${selectedTeams.length} Selected`}`}
+                  onClear={() => { setSelectedTeams(availableMarketingTeams); setIsTeamsTouched(false); }}
+                />
+              )}
               {selectedDaysOfWeek.length !== 7 && <FilterChip label={`Days: ${selectedDaysOfWeek.length}/7`} onClear={() => setSelectedDaysOfWeek([...DAYS_LIST])} />}
             </>
           )}
@@ -6265,14 +6346,44 @@ function FunnelAnalysis({ isDark }) {
           )}
       </StickyFilterBar>
 
-      {/* KPI Cards */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+      {/* Two-column layout: Overall User Funnel (~70%) + stacked KPI cards (~30%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 sm:gap-5 mb-6 items-stretch">
+
+        {/* Funnel Chart Section (left, 70%) */}
+        <section className="lg:col-span-7 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-base font-bold text-warm-text dark:text-dark-text">
+                {isCompActive ? "Overall User Funnel Comparison" : "Overall User Funnel"}
+              </h3>
+              <p className="text-xs text-warm-muted dark:text-dark-muted">
+                {isCompActive
+                  ? `Comparing Primary (${startDate} to ${endDate}) vs Comparison (${compStartDate} to ${compEndDate})`
+                  : `Daily average volume across funnel stages (${startDate} to ${endDate})`}
+              </p>
+            </div>
+          </div>
+
+          <HorizontalFunnelBars
+            stages={FUNNEL_STAGES.map((s, i) => ({ label: funnelLabels[i], value: primaryFunnel.overallAvg[s.key] || 0 }))}
+            comparison={isCompActive && compFunnel
+              ? FUNNEL_STAGES.map((s, i) => ({ label: funnelLabels[i], value: compFunnel.overallAvg[s.key] || 0 }))
+              : null}
+            primaryLabel={`Primary (${startDate} to ${endDate})`}
+            comparisonLabel={`Comparison (${compStartDate} to ${compEndDate})`}
+            isDark={isDark}
+            formatValue={formatMetric}
+          />
+        </section>
+
+      {/* KPI Cards (right, 30%, stacked) */}
+      <section className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 sm:gap-4">
         <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 sm:p-5 hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-2 relative overflow-hidden">
           <div className="shrink-0">
             <h3 className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-1">Daily Active Users</h3>
             <div className="flex items-end gap-2">
               <span className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">
-                {dailyAvgDau.toLocaleString()}
+                {dailyAvgDau >= 1e6 ? `${(dailyAvgDau / 1e6).toFixed(2)}Mn` : dailyAvgDau >= 1e3 ? `${(dailyAvgDau / 1e3).toFixed(1)}k` : Math.round(dailyAvgDau).toLocaleString()}
               </span>
             </div>
             <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-1 font-semibold">Daily Active Users</p>
@@ -6327,46 +6438,7 @@ function FunnelAnalysis({ isDark }) {
           )}
         </div>
       </section>
-
-      {/* Funnel Chart Section */}
-      <section className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-base font-bold text-warm-text dark:text-dark-text">
-              {isCompActive ? "Overall User Funnel Comparison" : "Overall User Funnel"}
-            </h3>
-            <p className="text-xs text-warm-muted dark:text-dark-muted">
-              {isCompActive 
-                ? `Comparing Primary (${startDate} to ${endDate}) vs Comparison (${compStartDate} to ${compEndDate})`
-                : `Daily average volume across funnel stages (${startDate} to ${endDate})`}
-            </p>
-          </div>
-        </div>
-
-        <div className="w-full h-[420px]">
-          <Plot
-            data={funnelTraces}
-            layout={{
-              autosize: true,
-              margin: { l: 140, r: 40, t: isCompActive ? 40 : 20, b: 20 },
-              paper_bgcolor: 'transparent',
-              plot_bgcolor: 'transparent',
-              yaxis: { 
-                tickfont: { family: 'inherit', color: isDark ? '#F8FAFC' : '#0F172A', size: 12, weight: 'bold' }
-              },
-              legend: {
-                orientation: 'h',
-                y: 1.15,
-                x: 0,
-                font: { size: 11, color: isDark ? '#cbd5e1' : '#334155' }
-              },
-              showlegend: isCompActive
-            }}
-            config={{ responsive: true, displayModeBar: false }}
-            style={{ width: '100%', height: '100%' }}
-          />
-        </div>
-      </section>
+      </div>
 
       {/* Funnel Trendlines Section (DAU, Paywall Hits & Step Conversions) */}
       {primaryTrendDisplay && (
@@ -7153,16 +7225,19 @@ function Realtime({ isDark }) {
       const rawDate = r.event_date || r.EVENT_DATE || '';
       const rawHour = r.event_hour ?? r.EVENT_HOUR ?? '';
       const rawPlatform = r.ET_Platform || r.et_platform || r.platform || '';
+      const rawTeam = r['Marketing Team'] ?? r.Marketing_Team ?? r.marketing_team ?? r.Item_category ?? '';
       const rawEvent = r.event_name || r.EVENT_NAME || r.event || '';
       const rawCount = r.event_count ?? r.EVENT_COUNT ?? r.count ?? 0;
 
       const dateStr = String(rawDate).trim();
       const hour = typeof rawHour === 'number' || typeof rawHour === 'bigint' ? Number(rawHour) : parseInt(String(rawHour).trim(), 10);
       const platform = String(rawPlatform).trim();
+      // Rows without the column (older sheet format) count as overall
+      const team = String(rawTeam).trim() || 'Combined';
       const event = String(rawEvent).trim();
       const count = typeof rawCount === 'number' || typeof rawCount === 'bigint' ? Number(rawCount) : (parseInt(String(rawCount).trim(), 10) || 0);
 
-      return { dateStr, hour, platform, event, count };
+      return { dateStr, hour, platform, team, event, count };
     }).filter(r => r.dateStr && !isNaN(r.hour));
   };
 
@@ -7260,10 +7335,23 @@ function Realtime({ isDark }) {
     const platformFunnelPast4 = {};
     const platformFunnelLast7 = {};
 
+    // Team accumulators (marketing-team rows summed across platforms)
+    const teamFunnelToday = {};
+    const teamFunnelPast4 = {};
+    const teamFunnelLast7 = {};
+
     const ensurePlatObj = (obj, plat) => {
       if (!obj[plat]) {
         obj[plat] = { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
       }
+    };
+
+    const addToFunnel = (obj, key, r) => {
+      ensurePlatObj(obj, key);
+      if (r.event === 'Plan Page Loaded') obj[key].PlanPageLoaded += r.count;
+      if (r.event === 'Plan Selected') obj[key].PlanSelected += r.count;
+      if (r.event === 'Pay Initiated') obj[key].PayInitiated += r.count;
+      if (r.event === 'Purchase') obj[key].Purchase += r.count;
     };
 
     rawData.forEach(r => {
@@ -7271,6 +7359,21 @@ function Realtime({ isDark }) {
       const isPast4 = past4Dates.includes(r.dateStr);
       const isLast7 = last7Dates.includes(r.dateStr);
       const isPurchase = r.event === 'Purchase';
+      // The sheet now carries BOTH overall rows (team = Combined/Overall) and
+      // per-team rows per platform. Platform metrics must count ONLY the
+      // overall rows or every platform double-counts its team rows.
+      const teamLower = (r.team || 'combined').toLowerCase();
+      const isOverallCat = teamLower === 'combined' || teamLower === 'overall';
+
+      // Team rows: sum across individual platforms (exclude the Combined
+      // platform to avoid double-counting if combined team rows ever appear)
+      if (!isOverallCat && r.platform !== 'Combined') {
+        if (isToday) addToFunnel(teamFunnelToday, r.team, r);
+        if (isPast4 && r.hour <= currentHour) addToFunnel(teamFunnelPast4, r.team, r);
+        if (isLast7 && r.hour <= currentHour) addToFunnel(teamFunnelLast7, r.team, r);
+      }
+
+      if (!isOverallCat) return; // everything below is overall-category only
 
       if (r.platform === 'Combined') {
         if (isToday && isPurchase) {
@@ -7357,6 +7460,23 @@ function Realtime({ isDark }) {
       };
     });
 
+    // Team Averages
+    const avgFunnel = (src, divisor) => {
+      const out = {};
+      Object.keys(src).forEach(k => {
+        const v = src[k];
+        out[k] = {
+          PlanPageLoaded: Math.round(v.PlanPageLoaded / divisor),
+          PlanSelected: Math.round(v.PlanSelected / divisor),
+          PayInitiated: Math.round(v.PayInitiated / divisor),
+          Purchase: Math.round(v.Purchase / divisor),
+        };
+      });
+      return out;
+    };
+    const teamFunnelPast4Avg = avgFunnel(teamFunnelPast4, uniquePast4Count);
+    const teamFunnelLast7Avg = avgFunnel(teamFunnelLast7, uniqueLast7Count);
+
     const projectedTotal4Week = past4CurrentHourSum > 0 
       ? (todayPurchases / past4CurrentHourSum) * past4Total 
       : todayPurchases * (24 / (currentHour + 1));
@@ -7379,7 +7499,9 @@ function Realtime({ isDark }) {
       
       hourlyTrend: hourlyTrendData,
       platformToday: platformFunnelToday,
-      platformBenchmark: realtimeCompMode === "4-Week" ? platformFunnelPast4Avg : platformFunnelLast7Avg
+      platformBenchmark: realtimeCompMode === "4-Week" ? platformFunnelPast4Avg : platformFunnelLast7Avg,
+      teamToday: teamFunnelToday,
+      teamBenchmark: realtimeCompMode === "4-Week" ? teamFunnelPast4Avg : teamFunnelLast7Avg
     };
   }, [rawData, realtimeCompMode]);
 
@@ -7432,7 +7554,9 @@ function Realtime({ isDark }) {
     benchmarkCurrentHour,
     hourlyTrend,
     platformToday,
-    platformBenchmark
+    platformBenchmark,
+    teamToday,
+    teamBenchmark
   } = processedData;
 
   const hours = Array.from({length: 24}, (_, i) => i);
@@ -7441,6 +7565,14 @@ function Realtime({ isDark }) {
     .sort();
   const hasCombined = platformToday['Combined'] || platformBenchmark['Combined'];
   const activePlatforms = hasCombined ? ['Combined', ...otherPlatforms] : otherPlatforms;
+
+  // Marketing teams present in the data, in the team taxonomy order
+  const TEAM_ORDER = ['Paid Marketing', 'Product Marketing', 'Telecalling'];
+  const activeTeams = [...new Set([...Object.keys(teamToday || {}), ...Object.keys(teamBenchmark || {})])]
+    .sort((a, b) => {
+      const ia = TEAM_ORDER.indexOf(a), ib = TEAM_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+    });
 
   return (
     <div className="animate-in fade-in duration-300 pb-12 pt-4">
@@ -7671,8 +7803,7 @@ function Realtime({ isDark }) {
         <div className="overflow-x-auto custom-scrollbar w-full py-2">
           {(() => {
             // Fixed display order: Overall, MWeb, Web, Main Android, Main iOS,
-            // Market Android, Market iOS (order checks 'mweb'/'main'/'mkt'
-            // before the bare 'web' catch-all)
+            // Market Android, Market iOS
             const orderRank = (p) => {
               const s = p.toLowerCase();
               if (s === 'combined') return 0;
@@ -7687,112 +7818,35 @@ function Realtime({ isDark }) {
             const displayPlatforms = [...new Set(['Combined', ...activePlatforms])]
               .filter(p => activePlatforms.includes(p) || p === 'Combined')
               .sort((a, b) => orderRank(a) - orderRank(b));
-            const numCols = displayPlatforms.length;
-            const labelColW = 120;
-            const colW = 142;
-            const totalSvgW = labelColW + numCols * colW;
-
-            // One color for the Purchase step across all platforms
-            const purchaseColor = isDark ? '#3B82F6' : '#EA580C';
-
-            return (
-              <svg viewBox={`0 0 ${totalSvgW} 310`} className="w-full h-auto min-w-[960px] select-none">
-                {/* Left Stage Labels & Horizontal Ticks */}
-                <g className="font-bold text-[11px]">
-                  <text x="100" y="70" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Plan Page Load</text>
-                  <line x1="104" y1="67" x2="116" y2="67" stroke="#94A3B8" strokeWidth="1.5" />
-
-                  <text x="100" y="146" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Plan Selected</text>
-                  <line x1="104" y1="143" x2="116" y2="143" stroke="#94A3B8" strokeWidth="1.5" />
-
-                  <text x="100" y="214" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Pay Initiated</text>
-                  <line x1="104" y1="211" x2="116" y2="211" stroke="#94A3B8" strokeWidth="1.5" />
-
-                  <text x="100" y="276" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Purchase</text>
-                  <line x1="104" y1="273" x2="116" y2="273" stroke="#94A3B8" strokeWidth="1.5" />
-                </g>
-
-                {/* Platform Columns */}
-                {displayPlatforms.map((plat, cIdx) => {
-                  const cCenter = labelColW + cIdx * colW + colW / 2;
-                  const tData = platformToday[plat] || { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
-                  const loads = tData.PlanPageLoaded || 0;
-                  const selected = tData.PlanSelected || 0;
-                  const initiated = tData.PayInitiated || 0;
-                  const purchased = tData.Purchase || 0;
-
-                  const drop1 = loads > 0 ? Math.max(0, Math.round((1 - selected / loads) * 100)) : 0;
-                  const drop2 = selected > 0 ? Math.max(0, Math.round((1 - initiated / selected) * 100)) : 0;
-                  const platDisplay = plat === 'Combined' ? 'Overall' : plat.replace(/_/g, ' ');
-
-                  return (
-                    <g key={plat}>
-                      {/* Platform Header */}
-                      <text
-                        x={cCenter}
-                        y="20"
-                        textAnchor="middle"
-                        fontSize="11.5"
-                        fontWeight="800"
-                        className="fill-slate-800 dark:fill-slate-100 uppercase tracking-tight"
-                      >
-                        {platDisplay}
-                      </text>
-
-                      {/* Level 1: Plan Page Load (Trap 1) */}
-                      <polygon
-                        points={`${cCenter - 58},35 ${cCenter + 58},35 ${cCenter + 44},106 ${cCenter - 44},106`}
-                        fill="#1E293B"
-                      />
-                      <text x={cCenter} y="66" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">
-                        {loads.toLocaleString()}
-                      </text>
-                      <text x={cCenter} y="82" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">
-                        {drop1}% drop-off
-                      </text>
-
-                      {/* Level 2: Plan Selected (Trap 2) */}
-                      <polygon
-                        points={`${cCenter - 44},109 ${cCenter + 44},109 ${cCenter + 31},175 ${cCenter - 31},175`}
-                        fill="#334155"
-                      />
-                      <text x={cCenter} y="138" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
-                        {selected.toLocaleString()}
-                      </text>
-                      <text x={cCenter} y="153" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">
-                        {drop2}% drop-off
-                      </text>
-
-                      {/* Level 3: Pay Initiated (Trap 3) */}
-                      <polygon
-                        points={`${cCenter - 31},178 ${cCenter + 31},178 ${cCenter + 21},240 ${cCenter - 21},240`}
-                        fill="#475569"
-                      />
-                      <text x={cCenter} y="213" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">
-                        {initiated.toLocaleString()}
-                      </text>
-
-                      {/* Level 4: Purchase (Block) */}
-                      <rect
-                        x={cCenter - 20}
-                        y="243"
-                        width="40"
-                        height="58"
-                        rx="3"
-                        fill={purchaseColor}
-                      />
-                      <text x={cCenter} y="277" textAnchor="middle" fill="#FFFFFF" fontSize="13.5" fontWeight="900">
-                        {purchased.toLocaleString()}
-                      </text>
-                    </g>
-                  );
-                })}
-
-              </svg>
-            );
+            const items = displayPlatforms.map(p => ({
+              label: p === 'Combined' ? 'Overall' : p.replace(/_/g, ' '),
+              data: platformToday[p] || EMPTY_FUNNEL
+            }));
+            return <MultiFunnelCanvas items={items} isDark={isDark} />;
           })()}
         </div>
       </section>
+
+      {/* Team-wise Funnel Charts */}
+      {activeTeams.length > 0 && (
+        <section className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 md:p-6 mb-8 overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-base font-black text-warm-text dark:text-dark-text tracking-tight">Team-wise Funnel Charts</h3>
+              <p className="text-[11px] font-semibold text-warm-muted dark:text-dark-muted">Today's live conversion progression by marketing team (all platforms summed)</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto custom-scrollbar w-full py-2">
+            <MultiFunnelCanvas
+              items={[
+                { label: 'Overall', data: platformToday['Combined'] || EMPTY_FUNNEL },
+                ...activeTeams.map(t => ({ label: t, data: teamToday[t] || EMPTY_FUNNEL }))
+              ]}
+              isDark={isDark}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Realtime Platform Funnel Table with Multi-level Headers */}
       <section className="mt-8">
@@ -7803,132 +7857,312 @@ function Realtime({ isDark }) {
           ← Swipe table left / right to view all stages →
         </div>
 
-        <div className="overflow-x-auto border border-warm-border dark:border-dark-border rounded-xl bg-white dark:bg-dark-card custom-scrollbar relative">
-          <table className="w-full text-sm text-left border-separate border-spacing-0">
-            <thead className="sticky top-0 z-30">
-              {/* Level 1 Group Header Row */}
-              <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-extrabold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
-                <th rowSpan={2} className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-900 dark:text-amber-200 border-r border-amber-500/30 align-middle sticky left-0 top-0 z-50">
-                  Platform
-                </th>
-                <th colSpan={4} className="p-2.5 text-center bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 border-b border-r border-amber-500/30 font-black">
-                  Today's Performance
-                </th>
-                <th colSpan={4} className="p-2.5 text-center bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-600 dark:text-blue-400 border-b border-blue-500/30 font-black">
-                  {benchmarkTitle} <span className="text-[10px] font-bold opacity-80">(Up to hour {String(currentHour + 1).padStart(2, '0')}:00)</span>
-                </th>
-              </tr>
+        <LiveBreakdownTable
+          entityHeader="Platform"
+          benchmarkTitle={benchmarkTitle}
+          currentHour={currentHour}
+          rows={activePlatforms.map(plat => ({
+            key: plat,
+            label: plat === 'Combined' ? 'Overall (Combined)' : plat.replace(/_/g, ' '),
+            isTotal: plat === 'Combined',
+            tData: platformToday[plat] || EMPTY_FUNNEL,
+            bData: platformBenchmark[plat] || EMPTY_FUNNEL,
+          }))}
+        />
+      </section>
 
-              {/* Level 2 Sub-header Row */}
-              <tr className="relative z-20 text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
-                {/* Today's Columns */}
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Plan Page Load</th>
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Plan Selected</th>
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Pay Initiated</th>
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold border-r border-amber-500/30">Purchase</th>
+      {/* Team-wise Breakdown Table */}
+      {activeTeams.length > 0 && (
+        <section className="mt-8">
+          <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Today's Live Team Breakdown</h3>
+          <div className="block sm:hidden text-center text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 py-1 px-3 rounded-full mb-2">
+            ← Swipe table left / right to view all stages →
+          </div>
+          <LiveBreakdownTable
+            entityHeader="Marketing Team"
+            benchmarkTitle={benchmarkTitle}
+            currentHour={currentHour}
+            rows={[
+              {
+                key: '__overall',
+                label: 'Overall (Combined)',
+                isTotal: true,
+                tData: platformToday['Combined'] || EMPTY_FUNNEL,
+                bData: platformBenchmark['Combined'] || EMPTY_FUNNEL,
+              },
+              ...activeTeams.map(t => ({
+                key: t,
+                label: t,
+                isTotal: false,
+                tData: teamToday[t] || EMPTY_FUNNEL,
+                bData: teamBenchmark[t] || EMPTY_FUNNEL,
+              })),
+            ]}
+          />
+        </section>
+      )}
+    </div>
+  );
+}
 
-                {/* Benchmark Columns */}
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Plan Page Load</th>
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Plan Selected</th>
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Pay Initiated</th>
-                <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Purchase</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activePlatforms.map(plat => {
-                const tData = platformToday[plat] || { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
-                const bData = platformBenchmark[plat] || { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
-                const isCombined = plat === 'Combined';
+const EMPTY_FUNNEL = { PlanPageLoaded: 0, PlanSelected: 0, PayInitiated: 0, Purchase: 0 };
+
+/**
+ * Horizontal bar funnel: one row per stage with a log-scaled bar (funnel
+ * volumes span ~4 orders of magnitude — linear bars would vanish), the
+ * daily-average value and the drop-off to the next stage. With a comparison
+ * period active, each stage shows a second, lighter bar for the comparison.
+ * Accent follows the theme: amber in light mode, blue in dark.
+ */
+function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabel, isDark, formatValue }) {
+  const vals = stages.map(s => s.value || 0);
+  const compVals = comparison ? comparison.map(s => s.value || 0) : null;
+  const positives = [...vals, ...(compVals || [])].filter(v => v > 0);
+  const maxV = positives.length ? Math.max(...positives) : 1;
+  const minV = positives.length ? Math.min(...positives) : 1;
+  const logMin = Math.log10(Math.max(minV, 1)) - 0.4;
+  const logMax = Math.log10(Math.max(maxV, 1));
+  const widthPct = (v) => {
+    if (!v || v <= 0) return 2;
+    if (logMax <= logMin) return 100;
+    return Math.max(4, ((Math.log10(v) - logMin) / (logMax - logMin)) * 100);
+  };
+  const primColor = isDark ? '#3B82F6' : '#F59E0B';
+  const compColor = isDark ? '#93C5FD' : '#FCD34D';
+  const fmt = formatValue || ((v) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : Math.round(v).toLocaleString());
+  const dropOf = (arr, i) => (i < arr.length - 1 && arr[i] > 0) ? Math.max(0, (1 - arr[i + 1] / arr[i]) * 100) : null;
+
+  return (
+    <div>
+      {comparison && (
+        <div className="flex items-center gap-4 mb-3 text-[11px] font-semibold text-warm-muted dark:text-dark-muted">
+          <span className="flex items-center gap-1.5"><span className="w-4 h-2.5 rounded-sm inline-block" style={{ background: primColor }} /> {primaryLabel}</span>
+          <span className="flex items-center gap-1.5"><span className="w-4 h-2.5 rounded-sm inline-block" style={{ background: compColor }} /> {comparisonLabel}</span>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {stages.map((s, i) => {
+          const drop = dropOf(vals, i);
+          const cDrop = compVals ? dropOf(compVals, i) : null;
+          return (
+            <div key={s.label} className="flex items-center gap-3">
+              <div className="w-28 sm:w-32 shrink-0 text-right text-xs font-bold text-warm-text dark:text-dark-text">{s.label}</div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-5 rounded-md transition-all duration-500" style={{ width: `${widthPct(vals[i])}%`, background: primColor, minWidth: 6 }} />
+                  <span className="text-xs font-extrabold text-warm-text dark:text-dark-text whitespace-nowrap">{fmt(vals[i])}/day</span>
+                  {drop !== null && (
+                    <span className="text-[11px] font-semibold text-red-600/90 dark:text-red-400/90 whitespace-nowrap hidden sm:inline">
+                      ▼ {drop.toFixed(1)}% drop-off
+                    </span>
+                  )}
+                </div>
+                {compVals && (
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 rounded-md transition-all duration-500" style={{ width: `${widthPct(compVals[i])}%`, background: compColor, minWidth: 6 }} />
+                    <span className="text-xs font-bold text-warm-muted dark:text-dark-muted whitespace-nowrap">{fmt(compVals[i])}/day</span>
+                    {cDrop !== null && (
+                      <span className="text-[11px] font-semibold text-warm-muted dark:text-dark-muted whitespace-nowrap hidden sm:inline">
+                        ▼ {cDrop.toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] text-warm-muted dark:text-dark-muted mt-3 pl-1">
+        Bar lengths are log-scaled for readability — funnel volumes span several orders of magnitude.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Shared SVG funnel canvas: one column per item ({label, data}), four stages.
+ * Used for both the platform-wise and team-wise realtime funnels.
+ */
+function MultiFunnelCanvas({ items, isDark }) {
+  const numCols = items.length;
+  const labelColW = 120;
+  const colW = 142;
+  const totalSvgW = labelColW + numCols * colW;
+  const purchaseColor = isDark ? '#3B82F6' : '#EA580C';
+
+  return (
+    <svg viewBox={`0 0 ${totalSvgW} 310`} className="w-full h-auto select-none mx-auto" style={{ minWidth: Math.round(totalSvgW * 0.86), maxWidth: Math.round(totalSvgW * 1.3) }}>
+      {/* Left Stage Labels & Horizontal Ticks */}
+      <g className="font-bold text-[11px]">
+        <text x="100" y="70" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Plan Page Load</text>
+        <line x1="104" y1="67" x2="116" y2="67" stroke="#94A3B8" strokeWidth="1.5" />
+
+        <text x="100" y="146" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Plan Selected</text>
+        <line x1="104" y1="143" x2="116" y2="143" stroke="#94A3B8" strokeWidth="1.5" />
+
+        <text x="100" y="214" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Pay Initiated</text>
+        <line x1="104" y1="211" x2="116" y2="211" stroke="#94A3B8" strokeWidth="1.5" />
+
+        <text x="100" y="276" textAnchor="end" className="fill-slate-700 dark:fill-slate-200" fontSize="11" fontWeight="700">Purchase</text>
+        <line x1="104" y1="273" x2="116" y2="273" stroke="#94A3B8" strokeWidth="1.5" />
+      </g>
+
+      {items.map(({ label, data }, cIdx) => {
+        const cCenter = labelColW + cIdx * colW + colW / 2;
+        const tData = data || EMPTY_FUNNEL;
+        const loads = tData.PlanPageLoaded || 0;
+        const selected = tData.PlanSelected || 0;
+        const initiated = tData.PayInitiated || 0;
+        const purchased = tData.Purchase || 0;
+
+        const drop1 = loads > 0 ? Math.max(0, Math.round((1 - selected / loads) * 100)) : 0;
+        const drop2 = selected > 0 ? Math.max(0, Math.round((1 - initiated / selected) * 100)) : 0;
+
+        return (
+          <g key={label}>
+            <text x={cCenter} y="20" textAnchor="middle" fontSize="11.5" fontWeight="800" className="fill-slate-800 dark:fill-slate-100 uppercase tracking-tight">
+              {label}
+            </text>
+
+            {/* Level 1: Plan Page Load */}
+            <polygon points={`${cCenter - 58},35 ${cCenter + 58},35 ${cCenter + 44},106 ${cCenter - 44},106`} fill="#1E293B" />
+            <text x={cCenter} y="66" textAnchor="middle" fill="#FFFFFF" fontSize="13" fontWeight="900">{loads.toLocaleString()}</text>
+            <text x={cCenter} y="82" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">{drop1}% drop-off</text>
+
+            {/* Level 2: Plan Selected */}
+            <polygon points={`${cCenter - 44},109 ${cCenter + 44},109 ${cCenter + 31},175 ${cCenter - 31},175`} fill="#334155" />
+            <text x={cCenter} y="138" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">{selected.toLocaleString()}</text>
+            <text x={cCenter} y="153" textAnchor="middle" fill="#CBD5E1" fontSize="8.5" fontWeight="600">{drop2}% drop-off</text>
+
+            {/* Level 3: Pay Initiated */}
+            <polygon points={`${cCenter - 31},178 ${cCenter + 31},178 ${cCenter + 21},240 ${cCenter - 21},240`} fill="#475569" />
+            <text x={cCenter} y="213" textAnchor="middle" fill="#FFFFFF" fontSize="12.5" fontWeight="900">{initiated.toLocaleString()}</text>
+
+            {/* Level 4: Purchase */}
+            <rect x={cCenter - 20} y="243" width="40" height="58" rx="3" fill={purchaseColor} />
+            <text x={cCenter} y="277" textAnchor="middle" fill="#FFFFFF" fontSize="13.5" fontWeight="900">{purchased.toLocaleString()}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/**
+ * Shared live breakdown table (Today's Performance vs benchmark) for a set of
+ * rows: [{ key, label, isTotal, tData, bData }]. Used for the platform-wise
+ * and team-wise realtime breakdowns.
+ */
+function LiveBreakdownTable({ entityHeader, rows, benchmarkTitle, currentHour }) {
+  const STAGE_KEYS = ['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'];
+  return (
+    <div className="overflow-x-auto border border-warm-border dark:border-dark-border rounded-xl bg-white dark:bg-dark-card custom-scrollbar relative">
+      <table className="w-full text-sm text-left border-separate border-spacing-0">
+        <thead className="sticky top-0 z-30">
+          <tr className="relative z-30 text-warm-muted dark:text-dark-muted uppercase font-extrabold text-xs tracking-wider border-b border-warm-border dark:border-dark-border">
+            <th rowSpan={2} className="p-3 whitespace-nowrap bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-900 dark:text-amber-200 border-r border-amber-500/30 align-middle sticky left-0 top-0 z-50">
+              {entityHeader}
+            </th>
+            <th colSpan={4} className="p-2.5 text-center bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-600 dark:text-amber-400 border-b border-r border-amber-500/30 font-black">
+              Today's Performance
+            </th>
+            <th colSpan={4} className="p-2.5 text-center bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-600 dark:text-blue-400 border-b border-blue-500/30 font-black">
+              {benchmarkTitle} <span className="text-[10px] font-bold opacity-80">(Up to hour {String(currentHour + 1).padStart(2, '0')}:00)</span>
+            </th>
+          </tr>
+
+          <tr className="relative z-20 text-warm-muted dark:text-dark-muted uppercase font-bold text-[11px] tracking-wider border-b border-warm-border dark:border-dark-border">
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Plan Page Load</th>
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Plan Selected</th>
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold">Pay Initiated</th>
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#FEF3C7] dark:bg-[#1E293B] text-amber-700 dark:text-amber-300 font-extrabold border-r border-amber-500/30">Purchase</th>
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Plan Page Load</th>
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Plan Selected</th>
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Pay Initiated</th>
+            <th className="p-2.5 whitespace-nowrap text-right bg-[#DBEAFE] dark:bg-[#1E293B] text-blue-700 dark:text-blue-300 font-extrabold">Purchase</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ key: rowKey, label, isTotal, tData, bData }) => (
+            <tr
+              key={rowKey}
+              className={`border-b transition-colors ${
+                isTotal
+                  ? 'bg-amber-500/10 dark:bg-amber-500/15 font-black border-amber-500/30 border-b-2'
+                  : 'border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-warm-text dark:text-dark-text'
+              }`}
+            >
+              <td className={`p-3 whitespace-nowrap border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-20 ${
+                isTotal
+                  ? 'bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-700 dark:text-amber-300'
+                  : 'bg-white dark:bg-[#0F172A] font-bold text-amber-accent dark:text-amber-400'
+              }`}>
+                {label}
+              </td>
+
+              {/* Today's Data with % comparison badge & previous step conversion % */}
+              {STAGE_KEYS.map((key, idx) => {
+                const tVal = tData[key] || 0;
+                const bVal = bData[key] || 0;
+                const prevTVal = idx > 0 ? (tData[STAGE_KEYS[idx - 1]] || 0) : 0;
+                const tStepPct = idx > 0 && prevTVal > 0 ? ((tVal / prevTVal) * 100).toFixed(1) : null;
+                let diffPct = null;
+                if (bVal > 0) diffPct = (((tVal - bVal) / bVal) * 100).toFixed(1);
+                const isLast = idx === 3;
 
                 return (
-                  <tr 
-                    key={plat} 
-                    className={`border-b transition-colors ${
-                      isCombined 
-                        ? 'bg-amber-500/10 dark:bg-amber-500/15 font-black border-amber-500/30 border-b-2' 
-                        : 'border-warm-border/50 dark:border-zinc-800 hover:bg-black/5 dark:hover:bg-white/5 font-semibold text-warm-text dark:text-dark-text'
-                    }`}
-                  >
-                    <td className={`p-3 whitespace-nowrap border-r border-warm-border/30 dark:border-zinc-800 sticky left-0 z-20 ${
-                      isCombined 
-                        ? 'bg-[#FEF3C7] dark:bg-[#1E293B] font-black text-amber-700 dark:text-amber-300' 
-                        : 'bg-white dark:bg-[#0F172A] font-bold text-amber-accent dark:text-amber-400'
-                    }`}>
-                      {isCombined ? 'Overall (Combined)' : plat}
-                    </td>
-                    
-                    {/* Today's Data with % comparison badge & previous step conversion % */}
-                    {['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'].map((key, idx) => {
-                      const stageKeys = ['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'];
-                      const tVal = tData[key] || 0;
-                      const bVal = bData[key] || 0;
-
-                      // Step conversion % (of previous step)
-                      const prevTVal = idx > 0 ? (tData[stageKeys[idx - 1]] || 0) : 0;
-                      const tStepPct = idx > 0 && prevTVal > 0 ? ((tVal / prevTVal) * 100).toFixed(1) : null;
-
-                      let diffPct = null;
-                      if (bVal > 0) {
-                        diffPct = (((tVal - bVal) / bVal) * 100).toFixed(1);
-                      }
-                      const isLast = idx === 3;
-
-                      return (
-                        <td key={key} className={`p-3 whitespace-nowrap text-right ${isLast ? 'border-r border-warm-border/30 dark:border-zinc-800' : ''}`}>
-                          <div className={`font-extrabold ${isCombined ? 'text-base text-amber-800 dark:text-amber-200' : 'text-sm text-warm-text dark:text-dark-text'}`}>
-                            {tVal.toLocaleString()}
-                            {tStepPct !== null && (
-                              <span className="ml-1 text-xs font-semibold text-warm-muted dark:text-dark-muted">
-                                ({tStepPct}% of prev)
-                              </span>
-                            )}
-                          </div>
-                          {diffPct !== null ? (
-                            <div className="flex items-center justify-end mt-0.5">
-                              {parseFloat(diffPct) >= 0 ? (
-                                <span className="text-xs font-semibold text-green-600 dark:text-green-400 inline-flex items-center gap-0.5">
-                                  <span className="text-[9px]">▲</span> +{diffPct}%
-                                </span>
-                              ) : (
-                                <span className="text-xs font-semibold text-red-600 dark:text-red-400 inline-flex items-center gap-0.5">
-                                  <span className="text-[9px]">▼</span> {diffPct}%
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-[10px] text-warm-muted dark:text-dark-muted font-medium mt-0.5">-</div>
-                          )}
-                        </td>
-                      );
-                    })}
-
-                    {/* Benchmark Data with previous step conversion % */}
-                    {['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'].map((key, idx) => {
-                      const stageKeys = ['PlanPageLoaded', 'PlanSelected', 'PayInitiated', 'Purchase'];
-                      const bVal = bData[key] || 0;
-
-                      // Benchmark step conversion % (of previous step)
-                      const prevBVal = idx > 0 ? (bData[stageKeys[idx - 1]] || 0) : 0;
-                      const bStepPct = idx > 0 && prevBVal > 0 ? ((bVal / prevBVal) * 100).toFixed(1) : null;
-
-                      return (
-                        <td key={key} className={`p-3 whitespace-nowrap text-right ${isCombined ? 'font-bold text-warm-text dark:text-dark-text' : 'font-medium text-warm-muted dark:text-dark-muted'}`}>
-                          <span>{bVal.toLocaleString()}</span>
-                          {bStepPct !== null && (
-                            <span className="ml-1 text-xs text-warm-muted/75 dark:text-dark-muted/75 font-semibold">
-                              ({bStepPct}% of prev)
-                            </span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
+                  <td key={key} className={`p-3 whitespace-nowrap text-right ${isLast ? 'border-r border-warm-border/30 dark:border-zinc-800' : ''}`}>
+                    <div className={`font-extrabold ${isTotal ? 'text-base text-amber-800 dark:text-amber-200' : 'text-sm text-warm-text dark:text-dark-text'}`}>
+                      {tVal.toLocaleString()}
+                      {tStepPct !== null && (
+                        <span className="ml-1 text-xs font-semibold text-warm-muted dark:text-dark-muted">
+                          ({tStepPct}% of prev)
+                        </span>
+                      )}
+                    </div>
+                    {diffPct !== null ? (
+                      <div className="flex items-center justify-end mt-0.5">
+                        {parseFloat(diffPct) >= 0 ? (
+                          <span className="text-xs font-semibold text-green-600 dark:text-green-400 inline-flex items-center gap-0.5">
+                            <span className="text-[9px]">▲</span> +{diffPct}%
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-red-600 dark:text-red-400 inline-flex items-center gap-0.5">
+                            <span className="text-[9px]">▼</span> {diffPct}%
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-warm-muted dark:text-dark-muted font-medium mt-0.5">-</div>
+                    )}
+                  </td>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+
+              {/* Benchmark Data with previous step conversion % */}
+              {STAGE_KEYS.map((key, idx) => {
+                const bVal = bData[key] || 0;
+                const prevBVal = idx > 0 ? (bData[STAGE_KEYS[idx - 1]] || 0) : 0;
+                const bStepPct = idx > 0 && prevBVal > 0 ? ((bVal / prevBVal) * 100).toFixed(1) : null;
+
+                return (
+                  <td key={key} className={`p-3 whitespace-nowrap text-right ${isTotal ? 'font-bold text-warm-text dark:text-dark-text' : 'font-medium text-warm-muted dark:text-dark-muted'}`}>
+                    <span>{bVal.toLocaleString()}</span>
+                    {bStepPct !== null && (
+                      <span className="ml-1 text-xs text-warm-muted/75 dark:text-dark-muted/75 font-semibold">
+                        ({bStepPct}% of prev)
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

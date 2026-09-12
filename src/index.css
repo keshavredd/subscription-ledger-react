@@ -48,6 +48,14 @@ html {
   color-scheme: dark;
 }
 
+/* Checkbox accents follow the theme: amber in light, blue in dark */
+input[type='checkbox'] {
+  accent-color: #d97706;
+}
+.dark input[type='checkbox'] {
+  accent-color: #3b82f6;
+}
+
 /* Scrolled state: the header+filter block casts one shadow at its bottom
    edge so it reads as a single floating element over the content. */
 .app-scrolled .app-filter-bar {
