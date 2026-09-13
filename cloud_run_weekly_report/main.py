@@ -1992,6 +1992,141 @@ def build_html_email(metrics, narrative):
 # ==============================================================================
 # 6. MAIN CLOUD RUN FUNCTION ENTRYPOINT
 # ==============================================================================
+# ==============================================================================
+# 5. INSIGHTS HUB PERSISTENCE (Firestore + Firebase Storage)
+# ==============================================================================
+def _json_native(obj):
+    """json.dumps default handler: numpy scalars, datetimes, DataFrames -> native."""
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return None if np.isnan(obj) else float(obj)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, pd.DataFrame):
+        return json.loads(obj.reset_index().to_json(orient='records'))
+    if isinstance(obj, (datetime,)):
+        return obj.isoformat()
+    return str(obj)
+
+
+def _firestore_safe(obj):
+    """Round-trips any metrics structure into Firestore-safe native types."""
+    return json.loads(json.dumps(obj, default=_json_native))
+
+
+def persist_report_artifacts(metrics, narrative, html_content, pdf_path):
+    """
+    Writes the weekly run into the dashboard's Firebase project so the
+    Insights Hub can archive it:
+      - PDF -> Firebase Storage at reports/weekly_subscription_audit/{weekEnd}.pdf
+      - Four typed Firestore docs in `insight_reports`, one per report type,
+        each holding its narrative slice + machine-readable keyMetrics.
+    Requires env vars:
+      FIREBASE_SERVICE_ACCOUNT_JSON  - full service-account key JSON (dashboard's
+                                       Firebase project, e.g. subscription-ledger-849a8)
+      FIREBASE_STORAGE_BUCKET        - e.g. subscription-ledger-849a8.firebasestorage.app
+    Never raises: persistence failures must not block the email dispatch.
+    """
+    try:
+        sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
+        bucket_name = os.environ.get("FIREBASE_STORAGE_BUCKET", "subscription-ledger-849a8.firebasestorage.app")
+        if not sa_json.strip():
+            print("ℹ️ FIREBASE_SERVICE_ACCOUNT_JSON not set — skipping Insights Hub persistence.")
+            return
+
+        import firebase_admin
+        from firebase_admin import credentials, firestore as fb_firestore, storage as fb_storage
+
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(json.loads(sa_json))
+            firebase_admin.initialize_app(cred, {"storageBucket": bucket_name})
+
+        fs = fb_firestore.client()
+        tf = metrics["timeframe"]
+        week_start = datetime.strptime(tf["lw_min"], "%d %b %Y").date().isoformat()
+        week_end = datetime.strptime(tf["lw_max"], "%d %b %Y").date().isoformat()
+
+        # Upload the consolidated PDF once; all four report docs reference it
+        pdf_storage_path = None
+        if pdf_path and os.path.exists(pdf_path):
+            pdf_storage_path = f"reports/weekly_subscription_audit/{week_end}.pdf"
+            bucket = fb_storage.bucket()
+            blob = bucket.blob(pdf_storage_path)
+            blob.upload_from_filename(pdf_path, content_type="application/pdf")
+            print(f"☁️ Uploaded PDF to Storage: {pdf_storage_path}")
+
+        key_highlights = narrative.get("key_highlights", [])
+
+        report_slices = {
+            "weekly_revenue_aop": {
+                "narrative": {
+                    "key_highlights": key_highlights,
+                    "top_wins": narrative.get("top_wins", []),
+                    "focus_area": narrative.get("focus_area", []),
+                    "revenue_takeaway": narrative.get("revenue_takeaway", ""),
+                    "arpu_takeaway": narrative.get("arpu_takeaway", ""),
+                },
+                "keyMetrics": {
+                    "aop": metrics.get("aop", {}),
+                    "revenue": metrics.get("revenue", {}),
+                    "arpu": metrics.get("arpu", {}),
+                },
+                # Full email overview lives on the primary revenue doc only
+                "htmlBody": html_content,
+            },
+            "weekly_funnel": {
+                "narrative": {
+                    "key_highlights": key_highlights,
+                    "funnel_takeaway": narrative.get("funnel_takeaway", ""),
+                },
+                "keyMetrics": {"funnel": metrics.get("funnel", {})},
+            },
+            "weekly_renewals_recurring": {
+                "narrative": {
+                    "key_highlights": key_highlights,
+                    "renewals_takeaway": narrative.get("renewals_takeaway", ""),
+                    "recurring_takeaway": narrative.get("recurring_takeaway", ""),
+                },
+                "keyMetrics": {
+                    "renewals": metrics.get("renewals", {}),
+                    "recurring": metrics.get("recurring", {}),
+                },
+            },
+            "weekly_team_channel": {
+                "narrative": {
+                    "key_highlights": key_highlights,
+                    "user_type_takeaway": narrative.get("user_type_takeaway", ""),
+                },
+                "keyMetrics": {
+                    "marketing_breakdown": metrics.get("revenue", {}).get("marketing_breakdown"),
+                    "user_type_breakdown": metrics.get("revenue", {}).get("user_type_breakdown"),
+                    "recurring_marketing_breakdown": metrics.get("recurring", {}).get("marketing_breakdown"),
+                },
+            },
+        }
+
+        for report_type, payload in report_slices.items():
+            doc_id = f"{report_type}_{week_end}"
+            doc = {
+                "reportType": report_type,
+                "weekStart": week_start,
+                "weekEnd": week_end,
+                "generatedAt": datetime.utcnow().isoformat() + "Z",
+                "pdfPath": pdf_storage_path,
+                "narrative": _firestore_safe(payload["narrative"]),
+                "keyMetrics": _firestore_safe(payload["keyMetrics"]),
+            }
+            if "htmlBody" in payload:
+                doc["htmlBody"] = payload["htmlBody"]
+            fs.collection("insight_reports").document(doc_id).set(doc)
+            print(f"🗂️ Persisted Insights Hub report: {doc_id}")
+
+    except Exception as persist_ex:
+        print(f"⚠️ Insights Hub persistence failed (email dispatch unaffected): {repr(persist_ex)}")
+        traceback.print_exc()
+
+
 def process_weekly_analytics_report(request):
     """
     Google Cloud Run / Cloud Functions entrypoint.
@@ -2029,6 +2164,9 @@ def process_weekly_analytics_report(request):
 
         # 5. Build HTML Email
         html_content = build_html_email(metrics, narrative)
+
+        # 5.5 Persist artifacts for the dashboard's Insights Hub (never blocks email)
+        persist_report_artifacts(metrics, narrative, html_content, pdf_path)
 
         # 6. Dispatch Email via SMTP SSL
         print(f"📧 Dispatching report to {RECIPIENT_EMAIL} via SMTP...")

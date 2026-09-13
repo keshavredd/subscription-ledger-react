@@ -3,7 +3,7 @@ import { processConversationalQuery, processConversationalQueryAsync } from './u
 import { getStoredApiKey, setStoredApiKey } from './services/geminiService';
 import { getStoredLlamaConfig, setStoredLlamaConfig } from './services/llamaService';
 import { buildPlotlyConfig } from './utils/chartHelper';
-import { themedColorMap, themedColorList } from './utils/themePalettes';
+import { themedColorMap, themedColorList, softLightColorMap, softLightColorList } from './utils/themePalettes';
 import Papa from 'papaparse';
 import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X, Download } from 'lucide-react';
 import Plotly from 'plotly.js-dist-min';
@@ -15,6 +15,7 @@ import { isAdminEmail, isUserAuthorized, isUserAuthorizedAsync, logTabPageView, 
 import { logoutUser, auth, onAuthStateChanged } from './services/firebaseService';
 import { fetchDatasetCached, refreshDataset, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
 import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from './components/RenewalVisuals';
+import InsightsHub from './components/InsightsHub';
 
 const Plot = createPlotlyComponent(Plotly);
 
@@ -968,7 +969,7 @@ export function SubscriptionReport({ isDark }) {
           x: weekLabels,
           y: revValues,
           type: 'scatter',
-          mode: 'lines+markers+text',
+          mode: 'lines+text',
           name: 'Overall Weekly Revenue',
           text: revValues.map(v => formatIndianCurrency1Dec(v)),
           textposition: revValues.map((v, idx) => {
@@ -1009,23 +1010,16 @@ export function SubscriptionReport({ isDark }) {
         });
         const catRevs = sortedWeekKeys.map(k => catRevMap[k] || 0);
 
+        // Multi-series split: no per-point data labels (unreadable with many
+        // lines); one unified hover callout shows every series for the week
         return {
           x: weekLabels,
           y: catRevs,
           type: 'scatter',
-          mode: 'lines+markers+text',
+          mode: 'lines',
           name: cat,
-          text: catRevs.map(v => v > 0 ? formatIndianCurrency1Dec(v) : ''),
-          textposition: catRevs.map((v, idx) => {
-            if (idx === 0) return 'top right';
-            if (idx === catRevs.length - 1) return 'top left';
-            return 'top center';
-          }),
-          cliponaxis: false,
-          textfont: { family: "DM Sans, sans-serif", size: 9, color: color, weight: 'bold' },
           line: { color: color, width: 2, shape: 'spline' },
-          marker: { size: 5, color: color },
-          hovertemplate: `<b>${cat}</b><br>%{x}<br>Weekly Revenue: ₹%{y:,.2f}<extra></extra>`
+          hovertemplate: `₹%{y:,.0f}<extra>${cat}</extra>`
         };
       });
     }
@@ -1048,7 +1042,7 @@ export function SubscriptionReport({ isDark }) {
         x: dateLabels,
         y: revValues,
         type: 'scatter',
-        mode: 'lines+markers+text',
+        mode: 'lines+text',
         name: 'Overall Revenue',
         text: revValues.map(v => formatIndianCurrency1Dec(v)),
         textposition: revValues.map((v, idx) => {
@@ -1088,23 +1082,16 @@ export function SubscriptionReport({ isDark }) {
       });
       const catRevs = sortedDateStrs.map(d => catRevMap[d] || 0);
 
+      // Multi-series split: no per-point data labels (unreadable with many
+      // lines); one unified hover callout shows every series for the date
       return {
         x: dateLabels,
         y: catRevs,
         type: 'scatter',
-        mode: 'lines+markers+text',
+        mode: 'lines',
         name: cat,
-        text: catRevs.map(v => v > 0 ? formatIndianCurrency1Dec(v) : ''),
-        textposition: catRevs.map((v, idx) => {
-          if (idx === 0) return 'top right';
-          if (idx === catRevs.length - 1) return 'top left';
-          return 'top center';
-        }),
-        cliponaxis: false,
-        textfont: { family: "DM Sans, sans-serif", size: 9, color: color, weight: 'bold' },
         line: { color: color, width: 2, shape: 'spline' },
-        marker: { size: 5, color: color },
-        hovertemplate: `<b>${cat}</b><br>%{x}<br>Revenue: ₹%{y:,.2f}<extra></extra>`
+        hovertemplate: `₹%{y:,.0f}<extra>${cat}</extra>`
       };
     });
   }, [filteredData, trendDataCut, revenueTrendViewMode, isDark]);
@@ -1142,13 +1129,8 @@ export function SubscriptionReport({ isDark }) {
   return (
     <div className="w-full animate-in fade-in duration-300">
 
-      {/* Sticky compact filter bar: title left, self-labeled pill filters right */}
+      {/* Sticky compact filter bar: self-labeled pill filters, right-aligned */}
       <StickyFilterBar>
-        <div className="flex items-center gap-2 flex-wrap mr-auto">
-          <h2 className="text-base sm:text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">Subscription Performance Report</h2>
-          <span className="text-xs text-warm-muted dark:text-dark-muted font-medium hidden sm:inline">• {dateRangeStr}</span>
-        </div>
-
         <div className="flex items-center gap-2">
           {datePreset === "Custom range" && (
             <div className="flex items-center gap-1.5 mr-1">
@@ -1428,6 +1410,14 @@ export function SubscriptionReport({ isDark }) {
               },
               margin: { l: 55, r: 55, t: trendDataCut !== 'Overall' ? 45 : 30, b: 45 },
               height: 380,
+              // Splits: one callout listing every series for the hovered date
+              hovermode: trendDataCut !== 'Overall' ? 'x unified' : 'closest',
+              // White callout with black text — readable in both themes
+              hoverlabel: {
+                bgcolor: '#ffffff',
+                bordercolor: '#e2e8f0',
+                font: { family: "DM Sans, sans-serif", size: 11, color: '#0f172a' }
+              },
               xaxis: {
                 showgrid: false,
                 gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
@@ -1731,6 +1721,46 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
     return max;
   }, [dailyRows, categories, metricMode]);
 
+  // CSV export: Period total + every daily row, revenue AND conversions per
+  // category, whole numbers regardless of the on-screen metric toggle.
+  const exportPivotCsv = () => {
+    const esc = (v) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const header = ['Date'];
+    categories.forEach(cat => header.push(`${cat} Revenue (₹)`, `${cat} Conversions`));
+    header.push('Total Revenue (₹)', 'Total Conversions');
+    const rows = [header];
+
+    const totalRow = ['Period total'];
+    categories.forEach(cat => {
+      const g = categoryGrandTotals[cat] || { rev: 0, conv: 0 };
+      totalRow.push(Math.round(g.rev), Math.round(g.conv));
+    });
+    totalRow.push(Math.round(finalGrandTotalRev), Math.round(finalGrandTotalConv));
+    rows.push(totalRow);
+
+    dailyRows.forEach(row => {
+      const r = [row.dateStr];
+      categories.forEach(cat => {
+        const c = row.totals[cat];
+        r.push(Math.round(c ? c.rev : 0), Math.round(c ? c.conv : 0));
+      });
+      r.push(Math.round(row.dayTotalRev), Math.round(row.dayTotalConv));
+      rows.push(r);
+    });
+
+    const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${String(title || 'table').replace(/[^a-z0-9]+/gi, '_').toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!categories || categories.length === 0) {
     return (
       <div className="flex flex-col h-full">
@@ -1761,9 +1791,19 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full group/pivot">
       <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
         <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+        {/* Appears on table hover: CSV export with Date + per-category columns */}
+        <button
+          type="button"
+          onClick={exportPivotCsv}
+          title="Download as CSV (import into Google Sheets)"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text shadow-xs opacity-0 group-hover/pivot:opacity-100 focus:opacity-100 transition-opacity cursor-pointer hover:text-amber-accent shrink-0"
+        >
+          <Download className="h-3 w-3" />
+          Export CSV
+        </button>
       </div>
       <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto overflow-y-auto h-[480px] shadow-sm">
         <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
@@ -1826,11 +1866,12 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
 }
  
 function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defaultColors: defaultColorsProp, isDark }) {
-  const [viewMode, setViewMode] = useState('percent'); // 'percent' | 'value'
+  const [viewMode, setViewMode] = useState('value'); // 'value' (default) | 'percent'
   const { categories, dailyRows } = pivotData;
-  // Warm identity colors flip to their blue equivalents in dark mode
-  const colorMap = themedColorMap(colorMapProp, isDark);
-  const defaultColors = themedColorList(defaultColorsProp, isDark);
+  // Dark mode: warm identity colors flip to blues. Light mode: the deep warm
+  // tones soften to a lighter orange→yellow ladder (area fills only).
+  const colorMap = isDark ? themedColorMap(colorMapProp, isDark) : softLightColorMap(colorMapProp);
+  const defaultColors = isDark ? themedColorList(defaultColorsProp, isDark) : softLightColorList(defaultColorsProp);
 
   const chartData = useMemo(() => {
     if (!dailyRows || !categories || dailyRows.length === 0) return [];
@@ -1846,7 +1887,8 @@ function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defau
       return r.dateStr;
     });
 
-    const colors = defaultColors || themedColorList(['#C2410C', '#EA580C', '#9A3412', '#D97706', '#F59E0B', '#FEF08A', '#FBBF24', '#78350F'], isDark);
+    const fallback = ['#C2410C', '#EA580C', '#9A3412', '#D97706', '#F59E0B', '#FEF08A', '#FBBF24', '#78350F'];
+    const colors = defaultColors || (isDark ? themedColorList(fallback, isDark) : softLightColorList(fallback));
 
     return categories.map((cat, idx) => {
       const color = colorMap?.[cat] || colorMap?.[cat.toLowerCase()] || colors[idx % colors.length];
@@ -1883,8 +1925,8 @@ function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defau
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
-        <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+      {/* Title omitted — the paired table on the left already carries it */}
+      <div className="flex items-center justify-end mb-2 px-1 h-[28px]">
         <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0">
           <button
             onClick={() => setViewMode('percent')}
@@ -2008,8 +2050,8 @@ function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, def
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
-        <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+      {/* Title omitted — the paired table on the left already carries it */}
+      <div className="flex items-center justify-end mb-2 px-1 h-[28px]">
         <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0">
           <button
             onClick={() => setMetricMode("Revenue (₹)")}
@@ -2121,8 +2163,8 @@ function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions"
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-2 px-1 h-[28px]">
-        <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
+      {/* Title omitted — the paired table on the left already carries it */}
+      <div className="flex items-center justify-end mb-2 px-1 h-[28px]">
         <div className="flex items-center gap-1.5 text-xs bg-warm-tableBg dark:bg-zinc-800 px-2.5 py-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0">
           <span className="text-[10px] uppercase font-bold text-warm-muted dark:text-dark-muted">Total Rev:</span>
           <span className="text-xs font-black text-amber-accent">{formatIndianCurrency1Dec(treemapItems.total)}</span>
@@ -4479,8 +4521,10 @@ export default function App() {
   }, [handleSetUser]);
 
   const isAdmin = isAdminEmail(currentUser?.email);
-  const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU'];
-  const navTabs = isAdmin ? [...baseTabs, 'Conversational Analytics'] : baseTabs;
+  // Conversational Analytics left the nav on purpose: admins reach it via the
+  // floating "Ask Insights" CTA until it's ready for everyone.
+  const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU', 'Insights Hub'];
+  const navTabs = baseTabs;
 
   useEffect(() => {
     if (!isAdmin && activeTab === 'Conversational Analytics') {
@@ -4592,6 +4636,9 @@ export default function App() {
           <div className={activeTab === 'ARPU' ? 'block' : 'hidden'}>
             <ArpuReport isDark={isDark} />
           </div>
+          <div className={activeTab === 'Insights Hub' ? 'block' : 'hidden'}>
+            <InsightsHub isDark={isDark} currentUser={currentUser} />
+          </div>
           {isAdmin && (
             <div className={activeTab === 'Conversational Analytics' ? 'block' : 'hidden'}>
               <ConversationalAnalytics isDark={isDark} currentUser={currentUser} />
@@ -4603,6 +4650,22 @@ export default function App() {
             </div>
           )}
         </main>
+
+        {/* Floating "Ask Insights" CTA (admin-only while Conversational
+            Analytics is under development). Hover expands the label. */}
+        {isAdmin && activeTab !== 'Conversational Analytics' && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('Conversational Analytics')}
+            title="Conversational Analytics — Ask your questions"
+            className="fixed bottom-6 right-6 z-[95] group/cta flex items-center bg-[#ED1C24] text-white rounded-full shadow-lg hover:shadow-xl p-4 transition-all duration-300 cursor-pointer"
+          >
+            <MessageSquare className="h-5 w-5 shrink-0" />
+            <span className="max-w-0 group-hover/cta:max-w-[120px] group-hover/cta:ml-2 overflow-hidden whitespace-nowrap font-bold text-sm transition-all duration-300">
+              Ask Insights
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );

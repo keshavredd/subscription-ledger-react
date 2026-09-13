@@ -19,6 +19,7 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { prefersRedirectSignIn } from '../utils/browserEnv';
 
 const firebaseConfig = {
@@ -64,6 +65,7 @@ function createAuth() {
 
 export const auth = createAuth();
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Always let the user pick an account rather than silently reusing one.

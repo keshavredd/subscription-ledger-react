@@ -55,3 +55,35 @@ export function themedColorList(colors, isDark) {
   if (!isDark || !Array.isArray(colors)) return colors;
   return colors.map(c => themedHex(c, isDark));
 }
+
+// Light-mode softening for large stacked FILLS: the deep ember/russet tones
+// read too heavy as area fills on the ivory background, so they map to a
+// lighter orange→yellow ladder (same stacking hierarchy, injective within
+// each chart's map). Lines/bars/treemaps keep the original warm tones.
+const WARM_SOFT_LIGHT = {
+  '#C2410C': '#F97316', // burnt ember -> orange-500 (bottom, strongest)
+  '#EA580C': '#FB923C', // ember       -> orange-300
+  '#9A3412': '#F59E0B', // russet      -> amber-500
+  '#B45309': '#FBBF24', // amber-700   -> amber-400
+  '#D97706': '#FCD34D', // amber-600   -> amber-300
+  '#F59E0B': '#FDE047', // amber-500   -> yellow-300
+  '#FBBF24': '#FEF08A', // amber-400   -> yellow-200
+  '#FEF08A': '#FEF9C3', // pale ember  -> yellow-100 (top, palest)
+  '#78350F': '#D97706', // amber-900   -> amber-600
+};
+
+/** Soften a {seriesName: hex} map for light-mode stacked fills. */
+export function softLightColorMap(colorMap) {
+  if (!colorMap) return colorMap;
+  const out = {};
+  for (const [key, value] of Object.entries(colorMap)) {
+    out[key] = (typeof value === 'string' && WARM_SOFT_LIGHT[value.toUpperCase()]) || value;
+  }
+  return out;
+}
+
+/** Soften an ordered color array for light-mode stacked fills. */
+export function softLightColorList(colors) {
+  if (!Array.isArray(colors)) return colors;
+  return colors.map(c => (typeof c === 'string' && WARM_SOFT_LIGHT[c.toUpperCase()]) || c);
+}
