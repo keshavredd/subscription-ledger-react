@@ -10,6 +10,13 @@ SCHEDULER_JOB_NAME="monday-weekly-performance-trigger"
 
 echo "Deploying Cloud Run Function: ${FUNCTION_NAME} in project ${PROJECT_ID}, region ${REGION}..."
 
+# 0. All env vars (incl. secrets + Firebase service account JSON) come from
+#    env.yaml — a gitignored file that must sit next to this script.
+if [ ! -f env.yaml ]; then
+  echo "❌ env.yaml not found. Create it from the template in the repo docs (it holds SMTP/Gemini/Firebase secrets) before deploying."
+  exit 1
+fi
+
 # 1. Deploy the Cloud Function (2nd Gen / Cloud Run)
 gcloud functions deploy ${FUNCTION_NAME} \
   --gen2 \
@@ -21,7 +28,7 @@ gcloud functions deploy ${FUNCTION_NAME} \
   --no-allow-unauthenticated \
   --memory=1Gi \
   --timeout=300s \
-  --set-env-vars SENDER_EMAIL="keshava.reddy@timesinternet.in",RECIPIENT_EMAIL="keshava.reddy@timesinternet.in"
+  --env-vars-file env.yaml
 
 # 2. Get the Function URL
 FUNCTION_URL=$(gcloud functions describe ${FUNCTION_NAME} --gen2 --region=${REGION} --format='value(serviceConfig.uri)')

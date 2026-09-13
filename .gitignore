@@ -35,3 +35,6 @@ scratch/
 vite.config.js.timestamp*
 __pycache__/
 *.pyc
+
+# Cloud Run deployment env (contains secrets) — never commit
+cloud_run_weekly_report/env.yaml
