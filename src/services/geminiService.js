@@ -1,10 +1,14 @@
 /**
  * geminiService.js
- * Integration service for Google Gemini 2.0 Flash Function Calling Agent
+ * Integration service for Google Gemini 3.6 Flash Function Calling Agent
  * Executes multi-turn tool calling, multi-period comparative analytics, and response synthesis.
  */
 
 import { executeToolByName } from '../utils/aiDataEngine.js';
+
+// Single place to bump the model when Google retires one
+// (gemini-2.0-flash was shut down ~Sep 2026 with an HTTP 404 pointing here).
+export const GEMINI_MODEL = 'gemini-3.6-flash';
 
 export function getStoredApiKey() {
   if (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_GEMINI_API_KEY) {
@@ -95,7 +99,7 @@ const GEMINI_TOOLS_DECLARATION = [
 ];
 
 /**
- * Queries Gemini 2.0 Flash Function Calling Agent
+ * Queries Gemini 3.6 Flash Function Calling Agent
  */
 export async function queryGeminiBI(rawQuery, contextData = {}) {
   const apiKey = getStoredApiKey();
@@ -103,7 +107,7 @@ export async function queryGeminiBI(rawQuery, contextData = {}) {
     throw new Error("NO_API_KEY");
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const systemInstructionPass1 = `You are the Conversational BI Agent for ET Prime Subscription Ledger.
 Analyze the user's prompt alongside conversation history.
@@ -159,7 +163,7 @@ CONTEXT & MULTI-TURN RULES:
   const functionCalls = messagePartsPass1.filter(p => p.functionCall);
 
   if (functionCalls.length > 0) {
-    console.log("⚡ [Gemini Agent] Function Calls Requested by Gemini 2.0:", functionCalls);
+    console.log("⚡ [Gemini Agent] Function Calls Requested by Gemini:", functionCalls);
 
     // Execute Tools locally
     const functionResponses = [];

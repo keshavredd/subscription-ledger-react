@@ -11,7 +11,6 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
-  indexedDBLocalPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
   inMemoryPersistence,
@@ -19,7 +18,6 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 import { prefersRedirectSignIn } from '../utils/browserEnv';
 
 const firebaseConfig = {
@@ -44,16 +42,17 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
  * itself hits that teardown and getRedirectResult dies before a later
  * setPersistence call could change anything.
  *
- * On the redirect path (iOS, webviews, desktop Safari) IndexedDB is therefore
- * excluded from the list entirely — never instantiated, never able to throw.
- * localStorage/sessionStorage have no open/close lifecycle. Popup-path
- * browsers keep Firebase's default order. The first AVAILABLE entry wins, so
- * Safari Private Browsing (unusable storage) still falls through safely.
+ * IndexedDB is excluded for EVERY browser, not just the redirect path: macOS
+ * popup-path browsers (Chrome/Edge) hit the same teardown when the OAuth popup
+ * takes focus and the opener page reports hidden — the user then sees
+ * "Sign-in was interrupted while the page was navigating" (2026-09-13,
+ * MacBook user report). localStorage keeps users signed in across sessions
+ * just the same and has no open/close lifecycle. The first AVAILABLE entry
+ * wins, so Safari Private Browsing (unusable storage) still falls through
+ * safely to sessionStorage/in-memory.
  */
 function createAuth() {
-  const persistence = prefersRedirectSignIn()
-    ? [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence]
-    : [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence];
+  const persistence = [browserLocalPersistence, browserSessionPersistence, inMemoryPersistence];
   try {
     return initializeAuth(app, { persistence, popupRedirectResolver: browserPopupRedirectResolver });
   } catch {
@@ -65,7 +64,6 @@ function createAuth() {
 
 export const auth = createAuth();
 export const db = getFirestore(app);
-export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Always let the user pick an account rather than silently reusing one.

@@ -1112,6 +1112,167 @@ def generate_pdf_report(metrics, narrative, output_path):
     doc.build(elements)
     print(f"✅ Generated executive PDF attachment successfully: {output_path}")
 
+
+def build_report_text(metrics, narrative):
+    """
+    Renders the same content as the executive PDF into plain markdown text.
+    Stored in Firestore (`reportText`) so the dashboard's Insights Hub can show
+    the detailed report and feed it to Gemini — no Firebase Storage needed
+    (the project is on the Spark plan, which does not include Storage).
+    Never raises: returns whatever sections rendered successfully.
+    """
+    lines = []
+
+    def _strip(s):
+        return re.sub(r'<[^>]+>', '', str(s or '')).strip()
+
+    try:
+        tf = metrics['timeframe']
+        lines.append("# ET PRIME — WEEKLY EXECUTIVE AUDIT REPORT")
+        lines.append(f"Audit Window: {tf['lw_min']} - {tf['lw_max']} (vs 4-Wk Baseline)")
+        lines.append("")
+    except Exception:
+        pass
+
+    try:
+        aop = metrics.get("aop", {})
+        if aop:
+            lines.append("## AOP Pacing")
+            lines.append(
+                f"Target {format_currency_inr(aop['target'])} | MTD Achieved: {format_currency_inr(aop['mtd_revenue'])} "
+                f"({aop['achievement_pct']:.1f}%) | Day {aop['days_elapsed']} of {aop['days_in_month']}"
+            )
+            lines.append(
+                f"Current Run-Rate: {format_currency_inr(aop['current_daily_run_rate'])}/day "
+                f"(Pacing: {format_currency_inr(aop['current_pacing_revenue'])} / {aop['current_pacing_pct']:.1f}%) | "
+                f"Required Run-Rate: {format_currency_inr(aop['required_daily_run_rate'])}/day "
+                f"({'+' if aop['run_rate_acceleration_pct'] > 0 else ''}{aop['run_rate_acceleration_pct']:.1f}%) "
+                f"for remaining {aop['days_remaining']} days"
+            )
+            lines.append("")
+    except Exception:
+        pass
+
+    try:
+        highlights = narrative.get("key_highlights", narrative.get("at_a_glance_bullets", []))
+        if highlights:
+            lines.append("## Key Highlights")
+            lines.extend(f"- {_strip(b)}" for b in highlights)
+            lines.append("")
+        wins = narrative.get("top_wins", [])
+        if wins:
+            lines.append("## Top Wins")
+            lines.extend(f"- {_strip(w)}" for w in wins)
+            lines.append("")
+        focus = narrative.get("focus_area", [])
+        if focus:
+            lines.append("## Focus Area")
+            lines.extend(f"- {_strip(f)}" for f in focus)
+            lines.append("")
+    except Exception:
+        pass
+
+    try:
+        plat_df = metrics["revenue"]["plat_breakdown"]
+        if not plat_df.empty:
+            lines.append("## 1. Weekly Revenue & Platform Share")
+            lines.append("| Platform | Last Week | 4-Wk Avg | Net Shift | WoW % | Share % |")
+            lines.append("|---|---|---|---|---|---|")
+            for p, r in plat_df.iterrows():
+                net = r.get('net_shift_abs', r['rev_lw'] - r['rev_4w_avg'])
+                lines.append(
+                    f"| {p} | {format_currency_inr(r['rev_lw'])} | {format_currency_inr(r['rev_4w_avg'])} | "
+                    f"{format_currency_inr(net)} | {r['rev_change_pct']:+.1f}% | {r['rev_share_pct']:.1f}% |"
+                )
+            lines.append("")
+    except Exception:
+        pass
+
+    try:
+        funnel = metrics.get("funnel", {})
+        f_df = funnel.get("platform_breakdown")
+        if f_df is not None and not f_df.empty:
+            lines.append("## 2. Acquisition Funnel Analysis (Daily Averages)")
+            lines.append("| Platform | DAU | Paywall Hits | Plan Page | Selected | Initiated | Purchased |")
+            lines.append("|---|---|---|---|---|---|---|")
+            ov = funnel.get("overall", {})
+            if ov:
+                lines.append(
+                    f"| Overall | {ov.get('dau', 0):,} | {ov.get('hits', 0):,} | {ov.get('page_loaded', 0):,} | "
+                    f"{ov.get('plan_selected', 0):,} | {ov.get('pay_initiated', 0):,} | {ov.get('purchased', 0):,} |"
+                )
+            for p, r in f_df.iterrows():
+                lines.append(
+                    f"| {p} | {int(r['dau']):,} | {int(r['hits']):,} | {int(r['page_loaded']):,} | "
+                    f"{int(r['plan_selected']):,} | {int(r['pay_initiated']):,} | {int(r['purchased']):,} |"
+                )
+            lines.append("")
+    except Exception:
+        pass
+
+    try:
+        arpu = metrics["arpu"]
+        lines.append("## 3. ARPU & Yield Movement (Excl. Auto-Renewal)")
+        lines.append("| Segment | Last Week ARPU | 4-Wk Baseline | Net Shift | WoW % |")
+        lines.append("|---|---|---|---|---|")
+        lines.append(
+            f"| Overall Blended ARPU | ₹{arpu['arpu_lw']:,.0f} | ₹{arpu['arpu_4w']:,.0f} | "
+            f"₹{arpu.get('arpu_delta_val', 0):+,.0f} | {arpu['arpu_change_pct']:+.1f}% |"
+        )
+        for p, r in arpu['plat_breakdown'].iterrows():
+            net = r.get('net_shift', r['arpu_lw'] - r['arpu_4w'])
+            lines.append(
+                f"| {p} | ₹{r['arpu_lw']:,.0f} | ₹{r['arpu_4w']:,.0f} | ₹{net:+,.0f} | {r['arpu_change_pct']:+.1f}% |"
+            )
+        lines.append("")
+    except Exception:
+        pass
+
+    try:
+        ren_plat_df = metrics["renewals"].get("platform_breakdown", pd.DataFrame())
+        if not ren_plat_df.empty:
+            lines.append("## 4. Renewals & Retention Performance")
+            lines.append("| Platform | Due (LW) | Renewed | Rate (LW) | Rate (4W Avg) | Net Shift |")
+            lines.append("|---|---|---|---|---|---|")
+            for p, r in ren_plat_df.iterrows():
+                lines.append(
+                    f"| {p} | {int(r['due_lw']):,} | {int(r['ren_lw']):,} | {r['rate_lw']:.1f}% | "
+                    f"{r['rate_4w']:.1f}% | {r['rate_pp_change']:+.1f} pp |"
+                )
+            lines.append("")
+    except Exception:
+        pass
+
+    try:
+        rec_plat_df = metrics["recurring"]["plat_breakdown"]
+        if not rec_plat_df.empty:
+            lines.append("## 5. Recurring Subscriptions & Platform Split")
+            lines.append("| Platform | Total Sold | Recurring Sold | Recurring Share | Recurring Revenue |")
+            lines.append("|---|---|---|---|---|")
+            for p, r in rec_plat_df.iterrows():
+                lines.append(
+                    f"| {p} | {int(r['tot_sold_lw']):,} | {int(r['rec_sold_lw']):,} | "
+                    f"{r['rec_share_pct']:.1f}% | {format_currency_inr(r['rec_rev_lw'])} |"
+                )
+            lines.append("")
+    except Exception:
+        pass
+
+    try:
+        for key, title in [
+            ("revenue_takeaway", "Revenue Takeaway"), ("funnel_takeaway", "Funnel Takeaway"),
+            ("arpu_takeaway", "ARPU Takeaway"), ("renewals_takeaway", "Renewals Takeaway"),
+            ("recurring_takeaway", "Recurring Takeaway"), ("user_type_takeaway", "User Type Takeaway"),
+        ]:
+            val = _strip(narrative.get(key, ""))
+            if val:
+                lines.append(f"**{title}:** {val}")
+        lines.append("")
+    except Exception:
+        pass
+
+    return "\n".join(lines).strip()
+
 # ==============================================================================
 # 5. HTML EMAIL TEMPLATE BUILDER (CLIENT-FRIENDLY INLINE CSS)
 # ==============================================================================
@@ -2015,46 +2176,51 @@ def _firestore_safe(obj):
     return json.loads(json.dumps(obj, default=_json_native))
 
 
-def persist_report_artifacts(metrics, narrative, html_content, pdf_path):
+def persist_report_artifacts(metrics, narrative, html_content, report_text):
     """
     Writes the weekly run into the dashboard's Firebase project so the
-    Insights Hub can archive it:
-      - PDF -> Firebase Storage at reports/weekly_subscription_audit/{weekEnd}.pdf
-      - Four typed Firestore docs in `insight_reports`, one per report type,
-        each holding its narrative slice + machine-readable keyMetrics.
-    Requires env vars:
-      FIREBASE_SERVICE_ACCOUNT_JSON  - full service-account key JSON (dashboard's
-                                       Firebase project, e.g. subscription-ledger-849a8)
-      FIREBASE_STORAGE_BUCKET        - e.g. subscription-ledger-849a8.firebasestorage.app
+    Insights Hub can archive it: four typed Firestore docs in `insight_reports`,
+    one per report type, each holding its narrative slice, machine-readable
+    keyMetrics, and the full detailed report as markdown text (`reportText` —
+    the PDF's content; Firebase Storage needs the Blaze plan, so the PDF binary
+    itself is email-only).
+    Requires env var:
+      FIREBASE_SERVICE_ACCOUNT_JSON  - service-account key of the dashboard's
+                                       Firebase project (subscription-ledger-849a8),
+                                       either as raw JSON or base64-encoded JSON
+                                       (base64 survives console/YAML quoting intact).
     Never raises: persistence failures must not block the email dispatch.
     """
     try:
-        sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "")
-        bucket_name = os.environ.get("FIREBASE_STORAGE_BUCKET", "subscription-ledger-849a8.firebasestorage.app")
-        if not sa_json.strip():
+        sa_raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+        if not sa_raw:
             print("ℹ️ FIREBASE_SERVICE_ACCOUNT_JSON not set — skipping Insights Hub persistence.")
             return
 
+        # Accept raw JSON (possibly wrapped in stray quotes) or base64-encoded JSON
+        if sa_raw[0] in "\"'" and sa_raw[-1] == sa_raw[0]:
+            sa_raw = sa_raw[1:-1].strip()
+        sa_info = None
+        try:
+            sa_info = json.loads(sa_raw)
+        except Exception:
+            import base64
+            sa_info = json.loads(base64.b64decode(sa_raw))
+        if not isinstance(sa_info, dict) or "private_key" not in sa_info:
+            print("⚠️ FIREBASE_SERVICE_ACCOUNT_JSON parsed but doesn't look like a service-account key — skipping persistence.")
+            return
+
         import firebase_admin
-        from firebase_admin import credentials, firestore as fb_firestore, storage as fb_storage
+        from firebase_admin import credentials, firestore as fb_firestore
 
         if not firebase_admin._apps:
-            cred = credentials.Certificate(json.loads(sa_json))
-            firebase_admin.initialize_app(cred, {"storageBucket": bucket_name})
+            cred = credentials.Certificate(sa_info)
+            firebase_admin.initialize_app(cred)
 
         fs = fb_firestore.client()
         tf = metrics["timeframe"]
         week_start = datetime.strptime(tf["lw_min"], "%d %b %Y").date().isoformat()
         week_end = datetime.strptime(tf["lw_max"], "%d %b %Y").date().isoformat()
-
-        # Upload the consolidated PDF once; all four report docs reference it
-        pdf_storage_path = None
-        if pdf_path and os.path.exists(pdf_path):
-            pdf_storage_path = f"reports/weekly_subscription_audit/{week_end}.pdf"
-            bucket = fb_storage.bucket()
-            blob = bucket.blob(pdf_storage_path)
-            blob.upload_from_filename(pdf_path, content_type="application/pdf")
-            print(f"☁️ Uploaded PDF to Storage: {pdf_storage_path}")
 
         key_highlights = narrative.get("key_highlights", [])
 
@@ -2113,9 +2279,10 @@ def persist_report_artifacts(metrics, narrative, html_content, pdf_path):
                 "weekStart": week_start,
                 "weekEnd": week_end,
                 "generatedAt": datetime.utcnow().isoformat() + "Z",
-                "pdfPath": pdf_storage_path,
                 "narrative": _firestore_safe(payload["narrative"]),
                 "keyMetrics": _firestore_safe(payload["keyMetrics"]),
+                # Full detailed report (the PDF's content as markdown text)
+                "reportText": report_text or "",
             }
             if "htmlBody" in payload:
                 doc["htmlBody"] = payload["htmlBody"]
@@ -2165,8 +2332,11 @@ def process_weekly_analytics_report(request):
         # 5. Build HTML Email
         html_content = build_html_email(metrics, narrative)
 
-        # 5.5 Persist artifacts for the dashboard's Insights Hub (never blocks email)
-        persist_report_artifacts(metrics, narrative, html_content, pdf_path)
+        # 5.5 Persist artifacts for the dashboard's Insights Hub (never blocks email).
+        # The PDF itself stays email-only (Storage needs Blaze); the Hub gets the
+        # same content as markdown text.
+        report_text = build_report_text(metrics, narrative)
+        persist_report_artifacts(metrics, narrative, html_content, report_text)
 
         # 6. Dispatch Email via SMTP SSL
         print(f"📧 Dispatching report to {RECIPIENT_EMAIL} via SMTP...")

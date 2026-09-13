@@ -4995,7 +4995,7 @@ function ConversationalAnalytics({ isDark, currentUser }) {
         conversationHistory: messages
       });
 
-      const engineUsed = getStoredApiKey() ? 'Gemini 2.0 Flash' : 'Local React Engine';
+      const engineUsed = getStoredApiKey() ? 'Gemini 3.6 Flash' : 'Local React Engine';
       const userEmail = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? currentUser.email : 'Anonymous User';
       logChatQuery(userEmail, queryText.trim(), engineUsed);
 
@@ -5111,7 +5111,7 @@ function ConversationalAnalytics({ isDark, currentUser }) {
 
                 <div>
                   <label className="block text-[11px] uppercase tracking-wider font-extrabold text-warm-muted dark:text-dark-muted mb-1.5">
-                    <span>⚡ Gemini 2.0 Flash API Key (Secondary Fallback)</span>
+                    <span>⚡ Gemini 3.6 Flash API Key (Secondary Fallback)</span>
                   </label>
                   <input
                     type="password"
