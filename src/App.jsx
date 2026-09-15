@@ -16,6 +16,7 @@ import { logoutUser, auth, onAuthStateChanged } from './services/firebaseService
 import { fetchDatasetCached, refreshDataset, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
 import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from './components/RenewalVisuals';
 import InsightsHub from './components/InsightsHub';
+import MISReports from './components/MISReports';
 
 const Plot = createPlotlyComponent(Plotly);
 
@@ -1310,40 +1311,37 @@ export function SubscriptionReport({ isDark }) {
         )}
       </StickyFilterBar>
 
-      {/* KPI Cards */}
-      <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Total Revenue</div>
-          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.totalRev)}</div>
-          <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
-            Daily avg: <span className="font-bold text-amber-accent">{formatIndianCurrency(metrics.dailyAvgRev)}/day</span> <br />
-            <span className="text-[10px] hidden sm:inline">{dateRangeStr} ({metrics.numDays} days)</span>
+      {/* KPI Cards (compact: the trend chart should fit in the first screenload) */}
+      <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Total Revenue</div>
+          <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.totalRev)}</div>
+          <div className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">
+            <span className="font-bold text-amber-accent">{formatIndianCurrency(metrics.dailyAvgRev)}/day</span> · {metrics.numDays} days
           </div>
         </div>
 
-        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Conversions</div>
-          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{metrics.conversionsExclAuto.toLocaleString()}</div>
-          <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
-            Daily avg: <span className="font-bold text-amber-accent">{metrics.dailyAvgConvExcl.toFixed(0)}/day</span> <br />
-            <span>Total conversions: {metrics.totalConversions.toLocaleString()}</span>
+        <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Conversions</div>
+          <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{metrics.conversionsExclAuto.toLocaleString()}</div>
+          <div className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">
+            <span className="font-bold text-amber-accent">{metrics.dailyAvgConvExcl.toFixed(0)}/day</span> · {metrics.totalConversions.toLocaleString()} total
           </div>
         </div>
 
-        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Avg Revenue / Txn</div>
-          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.avgRevPerTxn)}</div>
-          <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
-            Daily avg volume: <span className="font-bold text-amber-accent">{metrics.dailyAvgTxns.toFixed(0)} txns/day</span> <br />
-            <span>Across {metrics.totalTxns.toLocaleString()} transactions</span>
+        <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Avg Revenue / Txn</div>
+          <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.avgRevPerTxn)}</div>
+          <div className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">
+            <span className="font-bold text-amber-accent">{metrics.dailyAvgTxns.toFixed(0)} txns/day</span> · {metrics.totalTxns.toLocaleString()} txns
           </div>
         </div>
 
-        <div className="p-4 sm:p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-          <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Recurring Rate (New)</div>
-          <div className="text-2xl sm:text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{(metrics.recurringRate * 100).toFixed(1)}%</div>
-          <div className="text-xs text-warm-muted dark:text-dark-muted mt-2 leading-relaxed">
-            <span className="font-bold text-amber-accent">{metrics.recurringTrueCount} recurring transactions</span>
+        <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Recurring Rate (New)</div>
+          <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{(metrics.recurringRate * 100).toFixed(1)}%</div>
+          <div className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">
+            <span className="font-bold text-amber-accent">{metrics.recurringTrueCount} recurring txns</span>
           </div>
         </div>
       </section>
@@ -1703,6 +1701,26 @@ function ExpandedFilters({ expanded, children }) {
     </div>
   );
 }
+
+// Shared CSV download for the simple breakdown tables (Renewals & Recurring):
+// whole numbers for counts/revenue, 1-decimal for rates, BOM for Sheets/Excel.
+function downloadTableCsv(filename, header, rows) {
+  const esc = (v) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const csv = [header, ...rows].map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Hover-revealed export button, same look as the PivotTable one
+const TABLE_EXPORT_BTN_CLS = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text shadow-xs opacity-0 group-hover/rtbl:opacity-100 focus:opacity-100 transition-opacity cursor-pointer hover:text-amber-accent shrink-0";
 
 function PivotTable({ pivotData, title, metricMode, isDark }) {
   const { categories, dailyRows, categoryGrandTotals, finalGrandTotalRev, finalGrandTotalConv } = pivotData;
@@ -3237,13 +3255,8 @@ function RenewalsAndRecurring({ isDark }) {
       {/* TOP HALF: RENEWALS DASHBOARD */}
       {/* ======================================================== */}
       <section className="mb-12">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-warm-border dark:border-dark-border pb-4">
-          <div>
-            <h2 className="text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">Subscription Renewals Dashboard</h2>
-            <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">Tracking Renewal Due vs Renewed Performance</p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 self-start sm:self-end">
+        <div className="flex justify-end items-center gap-4 mb-4">
+          <div className="flex flex-wrap items-center gap-3">
             {renDatePreset === "Custom range" && (
               <div className="flex items-center gap-2">
                 <input type="date" value={renStartDate} onChange={(e) => setRenStartDate(e.target.value)} className="px-2 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-amber-accent" />
@@ -3268,24 +3281,24 @@ function RenewalsAndRecurring({ isDark }) {
           </div>
         </div>
 
-        {/* Renewals KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
-          <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-            <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Total Renewal Due</div>
-            <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{renTotalDue.toLocaleString()}</div>
-            <p className="text-xs text-warm-muted dark:text-dark-muted mt-2">Subscriptions up for renewal</p>
+        {/* Renewals KPI Cards (compact: trend chart should be visible without scrolling) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+            <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Total Renewal Due</div>
+            <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{renTotalDue.toLocaleString()}</div>
+            <p className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">Subscriptions up for renewal</p>
           </div>
 
-          <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-            <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Total Renewed</div>
-            <div className="text-3xl font-black text-amber-accent tracking-tight">{renTotalRenewed.toLocaleString()}</div>
-            <p className="text-xs text-warm-muted dark:text-dark-muted mt-2">Successfully renewed</p>
+          <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+            <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Total Renewed</div>
+            <div className="text-xl sm:text-2xl font-black text-amber-accent tracking-tight">{renTotalRenewed.toLocaleString()}</div>
+            <p className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">Successfully renewed</p>
           </div>
 
-          <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-            <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Overall Renewal Rate</div>
-            <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{renOverallRate.toFixed(1)}%</div>
-            <p className="text-xs text-warm-muted dark:text-dark-muted mt-2">(Renewed / Renewal Due) × 100</p>
+          <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
+            <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Overall Renewal Rate</div>
+            <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{renOverallRate.toFixed(1)}%</div>
+            <p className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">(Renewed / Renewal Due) × 100</p>
           </div>
         </div>
 
@@ -3557,8 +3570,21 @@ function RenewalsAndRecurring({ isDark }) {
         {/* Platform & Plan Breakdown Tables */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Platform-wise Table */}
-          <div>
-            <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Platform-wise Renewals</h3>
+          <div className="group/rtbl">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Platform-wise Renewals</h3>
+              <button
+                type="button"
+                title="Download as CSV (import into Google Sheets)"
+                onClick={() => downloadTableCsv('platform_wise_renewals',
+                  ['Platform', 'Renewal Due', 'Renewed', 'Renewal Rate (%)'],
+                  [['Period total', Math.round(renTotalDue), Math.round(renTotalRenewed), renOverallRate.toFixed(1)],
+                   ...renPlatformData.map(r => [r.platform, Math.round(r.due), Math.round(r.renewed), r.rate.toFixed(1)])])}
+                className={TABLE_EXPORT_BTN_CLS}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </button>
+            </div>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
                 <thead className="sticky top-0 z-30">
@@ -3636,8 +3662,21 @@ function RenewalsAndRecurring({ isDark }) {
           </div>
 
           {/* Plan-wise Table */}
-          <div>
-            <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Plan-wise Renewals</h3>
+          <div className="group/rtbl">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Plan-wise Renewals</h3>
+              <button
+                type="button"
+                title="Download as CSV (import into Google Sheets)"
+                onClick={() => downloadTableCsv('plan_wise_renewals',
+                  ['Plan Category', 'Renewal Due', 'Renewed', 'Renewal Rate (%)'],
+                  [['Period total', Math.round(renTotalDue), Math.round(renTotalRenewed), renOverallRate.toFixed(1)],
+                   ...renPlanData.map(r => [r.plan, Math.round(r.due), Math.round(r.renewed), r.rate.toFixed(1)])])}
+                className={TABLE_EXPORT_BTN_CLS}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </button>
+            </div>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
                 <thead className="sticky top-0 z-30">
@@ -4044,8 +4083,20 @@ function RenewalsAndRecurring({ isDark }) {
         {/* Recurring Breakdown Tables Section (Platform, Plan, Marketing Team) */}
         <div className="flex flex-col gap-6">
           {/* Platform Breakdown */}
-          <div>
-            <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Platform-wise Recurring Breakdown</h3>
+          <div className="group/rtbl">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Platform-wise Recurring Breakdown</h3>
+              <button
+                type="button"
+                title="Download as CSV (import into Google Sheets)"
+                onClick={() => downloadTableCsv('platform_wise_recurring_breakdown',
+                  ['Platform', 'Total Sold', 'Recurring', 'Non-Recurring', 'Recurring Share (%)', 'Recurring Revenue (₹)'],
+                  recPlatformData.map(r => [r.platform, Math.round(r.total), Math.round(r.rec), Math.round(r.nonRec), r.share.toFixed(1), Math.round(r.recRev)]))}
+                className={TABLE_EXPORT_BTN_CLS}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </button>
+            </div>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
                 <thead className="sticky top-0 z-30">
@@ -4133,8 +4184,20 @@ function RenewalsAndRecurring({ isDark }) {
           </div>
 
           {/* Plan Breakdown */}
-          <div>
-            <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Plan-wise Recurring Breakdown</h3>
+          <div className="group/rtbl">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Plan-wise Recurring Breakdown</h3>
+              <button
+                type="button"
+                title="Download as CSV (import into Google Sheets)"
+                onClick={() => downloadTableCsv('plan_wise_recurring_breakdown',
+                  ['Plan Category', 'Total Sold', 'Recurring', 'Non-Recurring', 'Recurring Share (%)', 'Recurring Revenue (₹)'],
+                  recPlanData.map(r => [r.plan, Math.round(r.total), Math.round(r.rec), Math.round(r.nonRec), r.share.toFixed(1), Math.round(r.recRev)]))}
+                className={TABLE_EXPORT_BTN_CLS}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </button>
+            </div>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
                 <thead className="sticky top-0 z-30">
@@ -4222,8 +4285,20 @@ function RenewalsAndRecurring({ isDark }) {
           </div>
 
           {/* Marketing Team Breakdown */}
-          <div>
-            <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-2 px-1">Marketing Team Breakdown</h3>
+          <div className="group/rtbl">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Marketing Team Breakdown</h3>
+              <button
+                type="button"
+                title="Download as CSV (import into Google Sheets)"
+                onClick={() => downloadTableCsv('marketing_team_recurring_breakdown',
+                  ['Marketing Team', 'Total Sold', 'Recurring', 'Non-Recurring', 'Recurring Share (%)', 'Recurring Revenue (₹)'],
+                  recTeamData.map(r => [r.team, Math.round(r.total), Math.round(r.rec), Math.round(r.nonRec), r.share.toFixed(1), Math.round(r.recRev)]))}
+                className={TABLE_EXPORT_BTN_CLS}
+              >
+                <Download className="h-3 w-3" /> Export CSV
+              </button>
+            </div>
             <div className="ledger-table-box bg-warm-tableBg dark:bg-dark-tableBg border border-warm-border dark:border-dark-border rounded-xl custom-scrollbar overflow-x-auto max-h-[480px] shadow-sm">
               <table className="ledger-table text-sm text-left w-full border-separate border-spacing-0">
                 <thead className="sticky top-0 z-30">
@@ -4523,7 +4598,7 @@ export default function App() {
   const isAdmin = isAdminEmail(currentUser?.email);
   // Conversational Analytics left the nav on purpose: admins reach it via the
   // floating "Ask Insights" CTA until it's ready for everyone.
-  const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU', 'Insights Hub'];
+  const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU', 'MIS', 'Insights Hub'];
   const navTabs = baseTabs;
 
   useEffect(() => {
@@ -4635,6 +4710,9 @@ export default function App() {
           </div>
           <div className={activeTab === 'ARPU' ? 'block' : 'hidden'}>
             <ArpuReport isDark={isDark} />
+          </div>
+          <div className={activeTab === 'MIS' ? 'block' : 'hidden'}>
+            <MISReports isDark={isDark} />
           </div>
           <div className={activeTab === 'Insights Hub' ? 'block' : 'hidden'}>
             <InsightsHub isDark={isDark} currentUser={currentUser} />
@@ -8840,7 +8918,7 @@ function ArpuReport({ isDark }) {
 
       {/* Sticky compact filter bar: title left, self-labeled pill filters right */}
       <StickyFilterBar>
-        <h2 className="text-base sm:text-xl font-bold text-warm-text dark:text-dark-text tracking-tight mr-auto">ARPU Analytics & Campaign Performance</h2>
+        <div className="mr-auto" />
 
           {/* Timeframe */}
           <div className="shrink-0">

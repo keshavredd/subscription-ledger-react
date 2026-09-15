@@ -16,7 +16,11 @@ export const DATASET_URLS = {
   funnel: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1049115614",
   realtime: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1333104452",
   renewals: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=renewal_raw",
-  arpu: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=arpu_data"
+  arpu: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/gviz/tq?tqx=out:csv&sheet=arpu_data",
+  // MIS tabs are IMPORTRANGE mirrors of the restricted source sheets; raw
+  // export (not gviz) so text headers in date columns aren't type-coerced away
+  misEtPrime: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=0",
+  misPm: "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=862686897"
 };
 
 const dataCache = {
@@ -24,7 +28,9 @@ const dataCache = {
   funnel: null,
   realtime: null,
   renewals: null,
-  arpu: null
+  arpu: null,
+  misEtPrime: null,
+  misPm: null
 };
 
 const activePromises = {};
@@ -119,8 +125,8 @@ async function syncLiveDataset(key, fallbackUrl, parseConfig) {
  * Forces a fresh fetch from the live Google Sheet, bypassing all caches.
  * Used by the manual "Sync" button; the 'dataset-updated' event notifies the UI.
  */
-export async function refreshDataset(key, fallbackUrl) {
-  return syncLiveDataset(key, fallbackUrl, {});
+export async function refreshDataset(key, fallbackUrl, parseConfig = {}) {
+  return syncLiveDataset(key, fallbackUrl, parseConfig);
 }
 
 function syncLiveDatasetInBackground(key, fallbackUrl, parseConfig) {

@@ -437,10 +437,12 @@ ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
             onClick={() => setSelectedType(rt)}
             className={`${cardCls} p-5 text-left hover:shadow-md hover:border-amber-500/40 hover:-translate-y-0.5 transition-all cursor-pointer group/rt`}
           >
-            <div className={`h-9 w-9 rounded-lg flex items-center justify-center mb-3 ${rt.iconBg}`}>
-              <rt.Icon className={`h-4 w-4 ${rt.iconFg}`} />
+            <div className="flex items-center gap-2.5">
+              <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${rt.iconBg}`}>
+                <rt.Icon className={`h-4 w-4 ${rt.iconFg}`} />
+              </div>
+              <div className="text-sm font-black text-warm-text dark:text-dark-text group-hover/rt:text-amber-accent transition-colors">{rt.name}</div>
             </div>
-            <div className="text-sm font-black text-warm-text dark:text-dark-text group-hover/rt:text-amber-accent transition-colors">{rt.name}</div>
             <p className="text-xs text-warm-muted dark:text-dark-muted leading-relaxed max-h-0 opacity-0 overflow-hidden group-hover/rt:max-h-24 group-hover/rt:opacity-100 group-hover/rt:mt-1.5 transition-all duration-300 ease-out">{rt.desc}</p>
             <div className="mt-3 text-[11px] font-bold text-amber-accent flex items-center gap-1">
               View reports <ChevronRight className="h-3 w-3 group-hover/rt:translate-x-0.5 transition-transform" />
