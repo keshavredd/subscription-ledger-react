@@ -117,6 +117,8 @@ export default function InsightsHub({ isDark, currentUser }) {
 
   const [alerts, setAlerts] = useState([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
+  const [alertsError, setAlertsError] = useState(null);   // Firestore error code when the catalog read failed
+  const [alertsReload, setAlertsReload] = useState(0);    // bump to re-run the catalog fetch
   const [optedIn, setOptedIn] = useState({});
   const [openSamples, setOpenSamples] = useState({});
 
@@ -149,26 +151,39 @@ export default function InsightsHub({ isDark, currentUser }) {
   }, [selectedType]);
 
   // ---- Alerts catalog + my opt-ins -----------------------------------------
+  // The two reads are independent: a failed opt-in lookup must not hide the
+  // catalog, and a failed catalog read is surfaced (code + Retry) instead of
+  // masquerading as "no alerts published yet".
   useEffect(() => {
     let cancelled = false;
+    setAlertsLoading(true);
+    setAlertsError(null);
     (async () => {
+      let cat = null;
       try {
         const catSnap = await getDocs(query(collection(db, 'alert_catalog'), orderBy('name')));
-        const cat = catSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        let mine = {};
-        if (userEmail) {
-          const optSnap = await getDocs(query(collection(db, 'alert_optins'), where('email', '==', userEmail)));
-          optSnap.docs.forEach(d => { mine[d.data().alertId] = true; });
-        }
-        if (!cancelled) { setAlerts(cat); setOptedIn(mine); }
+        cat = catSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       } catch (err) {
         console.warn('[InsightsHub] Error loading alert catalog:', err);
-      } finally {
-        if (!cancelled) setAlertsLoading(false);
+        if (!cancelled) setAlertsError(err?.code || err?.message || 'unknown error');
+      }
+      const mine = {};
+      if (cat && userEmail) {
+        try {
+          const optSnap = await getDocs(query(collection(db, 'alert_optins'), where('email', '==', userEmail)));
+          optSnap.docs.forEach(d => { mine[d.data().alertId] = true; });
+        } catch (err) {
+          console.warn('[InsightsHub] Error loading alert opt-ins:', err);
+        }
+      }
+      if (!cancelled) {
+        if (cat) setAlerts(cat);
+        setOptedIn(mine);
+        setAlertsLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [userEmail]);
+  }, [userEmail, alertsReload]);
 
   // Opt-ins are dashboard-side records only: joining/leaving the Chat space
   // itself always happens in Google Chat (we can only open the join link).
@@ -463,6 +478,21 @@ ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
       {alertsLoading ? (
         <div className="flex items-center gap-2 text-sm font-semibold text-warm-muted dark:text-dark-muted mt-4">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading alerts…
+        </div>
+      ) : alertsError ? (
+        <div className={`${cardCls} p-8 text-center mt-4`}>
+          <Bell className="h-7 w-7 mx-auto mb-2 text-red-600 dark:text-red-400" />
+          <p className="text-sm font-bold text-warm-text dark:text-dark-text mb-1">Couldn't load alerts</p>
+          <p className="text-xs text-warm-muted dark:text-dark-muted">
+            Firestore returned <code className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono text-[11px] text-warm-text dark:text-dark-text">{alertsError}</code>
+          </p>
+          <button
+            type="button"
+            onClick={() => setAlertsReload(n => n + 1)}
+            className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text hover:text-amber-accent cursor-pointer"
+          >
+            <RefreshCw className="h-3 w-3" /> Retry
+          </button>
         </div>
       ) : alerts.length === 0 ? (
         <div className={`${cardCls} p-8 text-center mt-4`}>
