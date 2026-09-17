@@ -12,7 +12,7 @@ import createPlotlyComponent from 'react-plotly.js/factory';
 import LoginScreen from './components/LoginScreen';
 import AdminPanel from './components/AdminPanel';
 import { isAdminEmail, isUserAuthorized, isUserAuthorizedAsync, logTabPageView, logChatQuery } from './services/telemetryService';
-import { logoutUser, auth, onAuthStateChanged } from './services/firebaseService';
+import { logoutUser, auth, onAuthStateChanged, isRedirectPending } from './services/firebaseService';
 import { fetchDatasetCached, refreshDataset, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
 import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from './components/RenewalVisuals';
 import InsightsHub from './components/InsightsHub';
@@ -4590,6 +4590,15 @@ export default function App() {
             });
           }
         }
+      } else if (currentUserRef.current && !isRedirectPending()) {
+        // The app restored its own cached session (et_ledger_current_user) but
+        // Firebase Auth has no user on this origin — e.g. the Firebase session
+        // was stored under the old IndexedDB persistence and is no longer read.
+        // Every Firestore call would then go out unauthenticated and fail with
+        // "Missing or insufficient permissions" while the UI still looks signed
+        // in. Drop the stale cache so the user signs in again properly.
+        console.warn('[Auth] Cached session has no Firebase user — signing out to re-authenticate.');
+        handleSetUser(null);
       }
     });
     return () => unsubscribe();
