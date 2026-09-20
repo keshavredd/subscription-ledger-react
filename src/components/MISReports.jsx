@@ -39,6 +39,15 @@ const REPORTS = [
     labelAlign: 'center',
     compactNumbers: false,
     enhanced: true,
+    // The source sheet only fills in yesterday's column around 4 PM IST. Until
+    // then it holds zeros, which read as a ~100% day-on-day crash. When every
+    // guard metric shows a drop beyond the threshold before that hour, the
+    // newest daily column is treated as not-yet-updated and hidden.
+    staleGuard: {
+      untilHour: 16,
+      dropPct: 90,
+      metrics: [/^total revenue\s*\(et/i, /^et overall revenue/i, /^toi overall revenue/i],
+    },
     sourceUrl: 'https://docs.google.com/spreadsheets/d/1fc1zuxM0_G3WUH1UCkOhdtMwvcMOxou7MYXLXlPku3M/edit?gid=1094052471',
   },
 ];
@@ -146,6 +155,37 @@ function classifyColumns(header, labelColCount) {
   if (daily.length >= 2) ordered.push({ role: 'delta', label: 'Δ DoD', a: daily[0].idx, b: daily[1].idx });
   ordered.push(...rolling, ...months, ...other);
   return { ordered, counts: { daily: daily.length + (daily.length >= 2 ? 1 : 0), rolling: rolling.length, month: months.length + other.length }, monthIdx: months.map(c => c.idx) };
+}
+
+/**
+ * Decides whether the newest daily column looks like it hasn't been filled in
+ * yet (see REPORTS[].staleGuard). Returns the column's index + label when it
+ * should be hidden, else null. Only fires before the guard hour; once the
+ * sheet's update window has passed the data is shown as-is.
+ */
+function detectStaleDaily(grid, report, now) {
+  const guard = report.staleGuard;
+  if (!guard || !grid.header.length || now.getHours() >= guard.untilHour) return null;
+  const { ordered } = classifyColumns(grid.header, report.labelColCount);
+  const daily = ordered.filter(c => c.role === 'daily');
+  if (daily.length < 2) return null;
+  const [newest, prev] = daily;
+  const drops = [];
+  for (const r of grid.rows) {
+    const label = r.slice(0, report.labelColCount).filter(Boolean).join(' ').trim();
+    if (!guard.metrics.some(re => re.test(label))) continue;
+    const a = parseNum(r[newest.idx]), b = parseNum(r[prev.idx]);
+    if (a == null || b == null || b === 0) continue;
+    drops.push(((b - a) / b) * 100);
+  }
+  if (!drops.length || !drops.every(d => d > guard.dropPct)) return null;
+  return { idx: newest.idx, label: newest.label };
+}
+
+/** Grid without the given column (header + every row). */
+function dropGridColumn(grid, idx) {
+  const cut = arr => arr.filter((_, i) => i !== idx);
+  return { ...grid, header: cut(grid.header), rows: grid.rows.map(cut) };
 }
 
 /** Caps every number in a cell at one decimal place: 80.14% -> 80.1%, 3.5991 -> 3.6 */
@@ -293,7 +333,7 @@ function MISTable({ grid, report, collapsed, onToggle }) {
       // box so long headings flow over the value columns on a single line
       // instead of wrapping inside the label column and fattening the row.
       <tr key={g.key}>
-        <td colSpan={totalCols} className="p-0 bg-amber-100 dark:bg-[#2b2416] border-y border-amber-500/20">
+        <td colSpan={totalCols} className="p-0 bg-amber-100 dark:bg-[#1a2540] border-y border-amber-500/20">
           <div className="sticky left-0 w-fit max-w-full flex items-center gap-2.5 px-3 py-2 whitespace-nowrap">
             {enhanced && (
               <button
@@ -306,7 +346,7 @@ function MISTable({ grid, report, collapsed, onToggle }) {
                 {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
               </button>
             )}
-            <span className="font-black text-[10.5px] uppercase tracking-wider text-amber-700 dark:text-amber-300">{g.title}</span>
+            <span className="text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300" style={{ letterSpacing: '0.07em' }}>{g.title}</span>
           </div>
         </td>
       </tr>
@@ -418,6 +458,13 @@ export default function MISReports({ isDark }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [collapsed, setCollapsed] = useState(() => new Set());
+  // Re-evaluated every minute so the stale-day guard releases at the cutoff
+  // hour without a reload.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const loadAll = useCallback(async (force = false) => {
     force ? setRefreshing(true) : setLoading(true);
@@ -440,7 +487,12 @@ export default function MISReports({ isDark }) {
   useEffect(() => { loadAll(false); }, [loadAll]);
 
   const report = REPORTS.find(r => r.id === active);
-  const grid = useMemo(() => parseGrid(datasets[active], report), [datasets, active, report]);
+  const rawGrid = useMemo(() => parseGrid(datasets[active], report), [datasets, active, report]);
+  const staleDay = useMemo(() => detectStaleDaily(rawGrid, report, now), [rawGrid, report, now]);
+  const grid = useMemo(
+    () => (staleDay ? dropGridColumn(rawGrid, staleDay.idx) : rawGrid),
+    [rawGrid, staleDay]
+  );
   const sectionKeys = useMemo(
     () => groupRows(grid.rows, report.labelColCount).filter(g => g.title !== null).map(g => g.key),
     [grid.rows, report.labelColCount]
@@ -459,7 +511,7 @@ export default function MISReports({ isDark }) {
   const btnCls = 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border text-warm-text dark:text-dark-text cursor-pointer hover:text-amber-accent disabled:opacity-50';
 
   return (
-    <div className="animate-in fade-in duration-300 pt-4 pb-10">
+    <div className="animate-in fade-in duration-300 pt-4 pb-10" style={{ fontFamily: '"DM Sans", sans-serif' }}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2 p-1 rounded-full bg-black/5 dark:bg-white/5 border border-warm-border dark:border-dark-border w-fit">
           {REPORTS.map(rep => (
