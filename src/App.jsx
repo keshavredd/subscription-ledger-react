@@ -5,7 +5,7 @@ import { getStoredLlamaConfig, setStoredLlamaConfig } from './services/llamaServ
 import { buildPlotlyConfig } from './utils/chartHelper';
 import { themedColorMap, themedColorList, softLightColorMap, softLightColorList } from './utils/themePalettes';
 import Papa from 'papaparse';
-import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X, Download } from 'lucide-react';
+import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X, Download, Minus } from 'lucide-react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 
@@ -16,6 +16,7 @@ import { logoutUser, auth, onAuthStateChanged, isRedirectPending } from './servi
 import { fetchDatasetCached, refreshDataset, DATASET_URLS, preloadAllDashboardData } from './services/dataPreloader';
 import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from './components/RenewalVisuals';
 import InsightsHub from './components/InsightsHub';
+import InsightsWindow from './components/InsightsWindow';
 import MISReports from './components/MISReports';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -2789,6 +2790,7 @@ function RenewalsAndRecurring({ isDark }) {
                 platform: platformDisplay,
                 plan_category: String(cleanRow['plan_category'] || 'UNKNOWN').trim().toUpperCase(),
                 auto_renew: autoRenewVal,
+                user_txn_type: String(cleanRow['user_txn_type'] || '').trim().toLowerCase(),
                 marketing_team: String(cleanRow['marketing_team'] || 'Others').trim(),
                 conversion: parseInt(cleanRow['conversion'], 10) || 1,
                 revenue: parseFloat(cleanRow['revenue_above_rs_6_txn']) || 0.0
@@ -2848,9 +2850,15 @@ function RenewalsAndRecurring({ isDark }) {
     return [...new Set(recurringData.map(r => r.plan_category))].filter(Boolean).sort();
   }, [recurringData]);
 
+  // Recurring adoption is measured on fresh sales only: auto_renewal and
+  // manual_renewal rows are renewals of existing plans, not new recurring
+  // sign-ups, so they leave both the numerator and the denominator. The
+  // weekly Cloud Run report applies the same rule.
+  const RECURRING_EXCLUDED_TXN_TYPES = ['auto_renewal', 'manual_renewal'];
   const filteredRecurringData = useMemo(() => {
     if (!recurringData.length) return [];
     return recurringData.filter(r => {
+      if (RECURRING_EXCLUDED_TXN_TYPES.includes(r.user_txn_type)) return false;
       const matchDate = !recStartDate || !recEndDate || (r.txn_date >= recStartDate && r.txn_date <= recEndDate);
       const matchTeam = selectedMarketingTeam === "All Marketing Teams" || r.marketing_team === selectedMarketingTeam;
       return matchDate && matchTeam;
@@ -3765,7 +3773,7 @@ function RenewalsAndRecurring({ isDark }) {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-warm-border dark:border-dark-border pb-4">
           <div>
             <h2 className="text-xl font-bold text-warm-text dark:text-dark-text tracking-tight">Recurring Subscriptions Analysis</h2>
-            <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">Tracking Subscriptions Sold with Auto-Renew Enabled</p>
+            <p className="text-xs text-warm-muted dark:text-dark-muted font-medium mt-0.5">Tracking Subscriptions Sold with Auto-Renew Enabled — fresh sales only (auto & manual renewals excluded)</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 self-start sm:self-end">
@@ -3813,14 +3821,14 @@ function RenewalsAndRecurring({ isDark }) {
           <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
             <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Total Subscriptions Sold</div>
             <div className="text-3xl font-black text-warm-text dark:text-dark-text tracking-tight">{recTotalConv.toLocaleString()}</div>
-            <p className="text-xs text-warm-muted dark:text-dark-muted mt-2">All transactions sold</p>
+            <p className="text-xs text-warm-muted dark:text-dark-muted mt-2">Fresh sales (excl. auto & manual renewals)</p>
           </div>
 
           <div className="p-5 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
             <div className="text-xs font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-2">Recurring Subscriptions</div>
             <div className="text-3xl font-black text-amber-accent tracking-tight">{recRecurringConv.toLocaleString()}</div>
             <p className="text-xs text-warm-muted dark:text-dark-muted mt-2 font-semibold">
-              <span className="text-amber-accent font-bold">{recRecurringShare.toFixed(1)}%</span> of total sales (auto_renew = TRUE)
+              <span className="text-amber-accent font-bold">{recRecurringShare.toFixed(1)}%</span> of fresh sales (auto_renew = TRUE)
             </p>
           </div>
 
@@ -4535,6 +4543,11 @@ export default function App() {
     }
   });
 
+  // "Ask Insights" opens Conversational Analytics as a window above the current
+  // tab (genie animation anchored to the dock button); it is never a nav tab.
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const insightsCtaRef = useRef(null);
+
   const handleSetUser = (u) => {
     setCurrentUser(u);
     if (u) {
@@ -4609,12 +4622,6 @@ export default function App() {
   // floating "Ask Insights" CTA until it's ready for everyone.
   const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU', 'MIS', 'Insights Hub'];
   const navTabs = baseTabs;
-
-  useEffect(() => {
-    if (!isAdmin && activeTab === 'Conversational Analytics') {
-      setActiveTab('Realtime');
-    }
-  }, [isAdmin, activeTab]);
 
   if (!currentUser) {
     return <LoginScreen onLoginSuccess={handleSetUser} isDark={isDark} />;
@@ -4727,25 +4734,31 @@ export default function App() {
             <InsightsHub isDark={isDark} currentUser={currentUser} />
           </div>
           {isAdmin && (
-            <div className={activeTab === 'Conversational Analytics' ? 'block' : 'hidden'}>
-              <ConversationalAnalytics isDark={isDark} currentUser={currentUser} />
-            </div>
-          )}
-          {isAdmin && (
             <div className={activeTab === 'Admin Panel' ? 'block' : 'hidden'}>
               <AdminPanel user={currentUser} isDark={isDark} />
             </div>
           )}
         </main>
 
-        {/* Floating "Ask Insights" CTA (admin-only while Conversational
-            Analytics is under development). Hover expands the label. */}
-        {isAdmin && activeTab !== 'Conversational Analytics' && (
+        {/* Conversational Analytics as a window over the current tab. Stays
+            mounted while minimised so the conversation is kept. */}
+        {isAdmin && (
+          <InsightsWindow open={insightsOpen} onClose={() => setInsightsOpen(false)} anchorRef={insightsCtaRef}>
+            <ConversationalAnalytics isDark={isDark} currentUser={currentUser} embedded onMinimize={() => setInsightsOpen(false)} />
+          </InsightsWindow>
+        )}
+
+        {/* Floating "Ask Insights" dock button (admin-only while Conversational
+            Analytics is under development). Hover expands the label; it tucks
+            away while the window is open and returns as the window lands. */}
+        {isAdmin && (
           <button
+            ref={insightsCtaRef}
             type="button"
-            onClick={() => setActiveTab('Conversational Analytics')}
+            onClick={() => setInsightsOpen(true)}
             title="Conversational Analytics — Ask your questions"
-            className="fixed bottom-6 right-6 z-[95] group/cta flex items-center bg-[#ED1C24] text-white rounded-full shadow-lg hover:shadow-xl p-4 transition-all duration-300 cursor-pointer"
+            aria-expanded={insightsOpen}
+            className={`fixed bottom-6 right-6 z-[95] group/cta flex items-center bg-[#ED1C24] text-white rounded-full shadow-lg hover:shadow-xl p-4 transition-all duration-300 cursor-pointer ${insightsOpen ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'}`}
           >
             <MessageSquare className="h-5 w-5 shrink-0" />
             <span className="max-w-0 group-hover/cta:max-w-[120px] group-hover/cta:ml-2 overflow-hidden whitespace-nowrap font-bold text-sm transition-all duration-300">
@@ -4759,7 +4772,7 @@ export default function App() {
 }
 
 
-function ConversationalAnalytics({ isDark, currentUser }) {
+function ConversationalAnalytics({ isDark, currentUser, embedded = false, onMinimize }) {
   const [subscriptionData, setSubscriptionData] = useState([]);
   const [funnelData, setFunnelData] = useState([]);
   const [renewalsData, setRenewalsData] = useState([]);
@@ -5139,8 +5152,8 @@ function ConversationalAnalytics({ isDark, currentUser }) {
   };
 
   return (
-    <div className="animate-in fade-in duration-300 max-w-5xl mx-auto py-2 h-[calc(100vh-165px)] sm:h-[calc(100vh-135px)] flex flex-col">
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl shadow-sm p-4 md:p-5 flex flex-col flex-1 min-h-0">
+    <div className={embedded ? 'h-full flex flex-col' : 'animate-in fade-in duration-300 max-w-5xl mx-auto py-2 h-[calc(100vh-165px)] sm:h-[calc(100vh-135px)] flex flex-col'}>
+      <div className={`bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-4 md:p-5 flex flex-col flex-1 min-h-0 ${embedded ? 'border-0 rounded-none' : 'shadow-sm'}`}>
         {/* Assistant Header */}
         <div className="flex items-center justify-between border-b border-warm-border dark:border-dark-border pb-3 mb-3 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -5162,6 +5175,17 @@ function ConversationalAnalytics({ isDark, currentUser }) {
               <Trash2 className="h-3 w-3" />
               <span>Clear Chat</span>
             </button>
+            {onMinimize && (
+              <button
+                type="button"
+                onClick={onMinimize}
+                title="Minimize (Esc)"
+                aria-label="Minimize Ask Insights"
+                className="h-7 w-7 rounded-full flex items-center justify-center bg-black/5 dark:bg-white/10 hover:bg-amber-500/15 text-warm-muted dark:text-dark-muted hover:text-amber-accent transition-colors cursor-pointer"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
 

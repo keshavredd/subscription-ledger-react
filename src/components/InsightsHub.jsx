@@ -412,6 +412,43 @@ ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
                     </div>
                   </div>
 
+                  {/* Per-report wins / watch-outs / takeaway (schemaVersion 2 docs from the Cloud Run job) */}
+                  {isOpen && (r.narrative?.wins?.length > 0 || r.narrative?.watch_outs?.length > 0 || r.narrative?.takeaway) && (
+                    <div className="mt-4 pt-4 border-t border-warm-border/60 dark:border-dark-border/60 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {r.narrative?.wins?.length > 0 && (
+                        <div>
+                          <div className="text-[10.5px] font-black uppercase tracking-wider text-green-700 dark:text-green-400">Wins</div>
+                          <ul className="mt-1.5 space-y-1">
+                            {r.narrative.wins.map((w, i) => (
+                              <li key={i} className="text-xs text-warm-muted dark:text-dark-muted leading-relaxed flex gap-2">
+                                <span className="text-green-600 dark:text-green-400 shrink-0">▲</span>
+                                <span>{w}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {r.narrative?.watch_outs?.length > 0 && (
+                        <div>
+                          <div className="text-[10.5px] font-black uppercase tracking-wider text-red-700 dark:text-red-400">Watch-outs</div>
+                          <ul className="mt-1.5 space-y-1">
+                            {r.narrative.watch_outs.map((w, i) => (
+                              <li key={i} className="text-xs text-warm-muted dark:text-dark-muted leading-relaxed flex gap-2">
+                                <span className="text-red-600 dark:text-red-400 shrink-0">▼</span>
+                                <span>{w}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {r.narrative?.takeaway && (
+                        <p className="md:col-span-2 text-xs text-warm-text dark:text-dark-text leading-relaxed">
+                          <span className="font-bold">Takeaway: </span>{r.narrative.takeaway}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {isDetailOpen && r.reportText && (
                     <div className="mt-4 pt-4 border-t border-warm-border/60 dark:border-dark-border/60">
                       <ReportTextView text={r.reportText} />
