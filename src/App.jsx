@@ -5763,7 +5763,7 @@ function FunnelAnalysis({ isDark }) {
 
   // Trendlines: one combined multi-metric chart (default) or the 3x3 grid
   const [trendChartMode, setTrendChartMode] = useState("Combined"); // "Combined" | "Individual"
-  const [selectedTrendMetrics, setSelectedTrendMetrics] = useState(['DAU', 'Paywall Hits', 'Purchased']);
+  const [selectedTrendMetrics, setSelectedTrendMetrics] = useState(['Plan Selected', 'Pay Initiated', 'Purchased']);
   const toggleTrendMetric = (name) => {
     setSelectedTrendMetrics(prev => {
       if (prev.includes(name)) {
@@ -6716,6 +6716,7 @@ function FunnelAnalysis({ isDark }) {
           {trendData && (
             <div className="w-full sm:w-32 lg:w-40 h-16 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
+                lockZoom
                 data={[{ x: trendData.dates, y: trendData.dau, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.dau.map(v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(1)), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
@@ -6736,6 +6737,7 @@ function FunnelAnalysis({ isDark }) {
           {trendData && (
             <div className="w-full sm:w-32 lg:w-40 h-16 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
+                lockZoom
                 data={[{ x: trendData.dates, y: trendData.conv, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.conv.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
@@ -6756,6 +6758,7 @@ function FunnelAnalysis({ isDark }) {
           {trendData && (
             <div className="w-full sm:w-32 lg:w-40 h-16 shrink-0 overflow-hidden mt-1 sm:mt-0">
               <Plot
+                lockZoom
                 data={[{ x: trendData.dates, y: trendData.paywallRate, type: 'scatter', mode: 'lines+markers', marker: { size: 3 }, line: { color: isDark ? '#60a5fa' : '#d97706', width: 2 }, fill: 'tozeroy', fillcolor: isDark ? 'rgba(96,165,250,0.12)' : 'rgba(217,119,6,0.1)', hovertext: trendData.paywallRate.map(v => `${Number(v).toFixed(1)}%`), hovertemplate: '%{hovertext}<extra></extra>' }]}
                 layout={sparklineLayout} config={{ responsive: true, displayModeBar: false }} style={{ width: '100%', height: '100%' }}
               />
@@ -6912,6 +6915,7 @@ function FunnelAnalysis({ isDark }) {
 
                 <div className="w-full h-[420px] combined-trend-chart">
                   <Plot
+                    lockZoom
                     data={traces}
                     layout={{
                       autosize: true,
@@ -6961,6 +6965,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7007,6 +7012,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7053,6 +7059,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7099,6 +7106,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7145,6 +7153,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7191,6 +7200,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7237,6 +7247,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7283,6 +7294,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,
@@ -7329,6 +7341,7 @@ function FunnelAnalysis({ isDark }) {
               </div>
               <div className="w-full h-[200px]">
                 <Plot
+                  lockZoom
                   data={[
                     {
                       x: primaryTrendDisplay.dates,

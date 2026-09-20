@@ -14,6 +14,7 @@
  * so the sheet can add or drop months without code changes.
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import useIsMobile from '../hooks/useIsMobile';
 import { fetchDatasetCached, refreshDataset, DATASET_URLS } from '../services/dataPreloader';
 import { FileSpreadsheet, RefreshCw, Loader2, ExternalLink, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 
@@ -250,6 +251,10 @@ const DAILY_TINT_LAYER = { backgroundImage: 'linear-gradient(rgb(var(--accent-50
 function MISTable({ grid, report, collapsed, onToggle }) {
   const { header, rows } = grid;
   const { labelColCount, compactNumbers, enhanced, labelAlign = 'left' } = report;
+  // Phones: two 190px label columns would leave no room for the numbers, so
+  // the sticky label columns shrink (labels wrap onto a second line instead).
+  const isMobile = useIsMobile();
+  const labelColWidth = isMobile ? (labelColCount > 1 ? 108 : 140) : LABEL_COL_WIDTH;
   const labelAlignCls = labelAlign === 'center' ? 'text-center' : 'text-left';
   if (!header.length) return null;
 
@@ -263,10 +268,10 @@ function MISTable({ grid, report, collapsed, onToggle }) {
   const rowRule = 'border-b border-warm-border/40 dark:border-dark-border/40';
   const labelBase = `sticky bg-white dark:bg-dark-card px-3 text-warm-text dark:text-dark-text border-r border-warm-border/60 dark:border-dark-border/60 ${rowRule}`;
   const labelStyle = (col, span = 1) => ({
-    left: col === 0 ? 0 : LABEL_COL_WIDTH,
+    left: col === 0 ? 0 : labelColWidth,
     zIndex: 5,
-    minWidth: LABEL_COL_WIDTH * span,
-    maxWidth: (LABEL_COL_WIDTH + 70) * span,
+    minWidth: labelColWidth * span,
+    maxWidth: (labelColWidth + (isMobile ? 20 : 70)) * span,
   });
 
   const fmtValue = (c) => {
@@ -283,7 +288,7 @@ function MISTable({ grid, report, collapsed, onToggle }) {
       key={`lh${ci}`}
       rowSpan={enhanced ? 2 : 1}
       className={`${thBase} border-r`}
-      style={{ position: 'sticky', left: ci === 0 ? 0 : LABEL_COL_WIDTH, zIndex: 30, minWidth: LABEL_COL_WIDTH, maxWidth: LABEL_COL_WIDTH + 70, textAlign: labelAlign }}
+      style={{ position: 'sticky', left: ci === 0 ? 0 : labelColWidth, zIndex: 30, minWidth: labelColWidth, maxWidth: labelColWidth + (isMobile ? 20 : 70), textAlign: labelAlign }}
     >
       {h}
     </th>
