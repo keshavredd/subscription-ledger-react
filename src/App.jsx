@@ -6,8 +6,9 @@ import { buildPlotlyConfig } from './utils/chartHelper';
 import { themedColorMap, themedColorList, softLightColorMap, softLightColorList } from './utils/themePalettes';
 import Papa from 'papaparse';
 import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X, Download, Minus } from 'lucide-react';
-import Plotly from 'plotly.js-dist-min';
-import createPlotlyComponent from 'react-plotly.js/factory';
+import Plot from './components/Plot';
+import useIsMobile from './hooks/useIsMobile';
+import { phoneTraces } from './utils/phoneCharts';
 
 import LoginScreen from './components/LoginScreen';
 import AdminPanel from './components/AdminPanel';
@@ -18,8 +19,8 @@ import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from
 import InsightsHub from './components/InsightsHub';
 import InsightsWindow from './components/InsightsWindow';
 import MISReports from './components/MISReports';
-
-const Plot = createPlotlyComponent(Plotly);
+import GuidedTour from './components/GuidedTour';
+import { shouldOfferTour, markTourSeen } from './services/tourService';
 
 const DEFAULT_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=598826199";
 const FUNNEL_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1049115614";
@@ -467,6 +468,7 @@ function GeoDistributionChart({ geoData, isDark }) {
 }
 
 export function SubscriptionReport({ isDark }) {
+  const isMobile = useIsMobile();
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1098,6 +1100,12 @@ export function SubscriptionReport({ isDark }) {
     });
   }, [filteredData, trendDataCut, revenueTrendViewMode, isDark]);
 
+  // Phones: only the min / max / latest labels survive, so the daily line stays legible
+  const trendChartTracesView = useMemo(
+    () => (isMobile ? phoneTraces(trendChartTraces) : trendChartTraces),
+    [trendChartTraces, isMobile]
+  );
+
   const platformPivot = useMemo(() => buildPivotData('platformDisplay'), [buildPivotData]);
   const userTypePivot = useMemo(() => buildPivotData('user_txn_type'), [buildPivotData]);
   const tenurePivot = useMemo(() => buildPivotData('plan_tenure'), [buildPivotData]);
@@ -1397,8 +1405,9 @@ export function SubscriptionReport({ isDark }) {
         </div>
 
         {trendChartTraces.length > 0 ? (
-          <Plot 
-            data={trendChartTraces}
+          <Plot
+            lockZoom
+            data={trendChartTracesView}
             layout={{
               paper_bgcolor: 'rgba(0,0,0,0)',
               plot_bgcolor: 'rgba(0,0,0,0)',
@@ -1407,8 +1416,10 @@ export function SubscriptionReport({ isDark }) {
                 color: isDark ? '#94A3B8' : '#64748B',
                 size: 10
               },
-              margin: { l: 55, r: 55, t: trendDataCut !== 'Overall' ? 45 : 30, b: 45 },
-              height: 380,
+              margin: isMobile
+                ? { l: 45, r: 15, t: trendDataCut !== 'Overall' ? 45 : 20, b: 40 }
+                : { l: 55, r: 55, t: trendDataCut !== 'Overall' ? 45 : 30, b: 45 },
+              height: isMobile ? 280 : 380,
               // Splits: one callout listing every series for the hovered date
               hovermode: trendDataCut !== 'Overall' ? 'x unified' : 'closest',
               // White callout with black text — readable in both themes
@@ -1421,13 +1432,15 @@ export function SubscriptionReport({ isDark }) {
                 showgrid: false,
                 gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
                 zerolinecolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
-                tickfont: { size: 10, color: isDark ? '#94A3B8' : '#64748B' }
+                tickfont: { size: isMobile ? 9 : 10, color: isDark ? '#94A3B8' : '#64748B' },
+                nticks: isMobile ? 6 : undefined,
+                tickangle: isMobile ? -45 : 0
               },
               yaxis: {
                 gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
                 zerolinecolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
                 tickfont: { size: 10, color: isDark ? '#94A3B8' : '#64748B' },
-                range: [0, Math.max(...trendChartTraces.flatMap(t => t.y)) * 1.25]
+                range: [0, Math.max(1, ...trendChartTraces.flatMap(t => t.y)) * 1.25]
               },
               legend: {
                 orientation: 'h',
@@ -1440,7 +1453,7 @@ export function SubscriptionReport({ isDark }) {
             }}
             config={{ displayModeBar: false, responsive: true }}
             className="w-full"
-            style={{ width: "100%", height: "380px" }}
+            style={{ width: "100%", height: isMobile ? "280px" : "380px" }}
           />
         ) : (
           <div className="flex h-[250px] items-center justify-center text-base font-semibold text-warm-muted dark:text-dark-muted">
@@ -1886,6 +1899,7 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
  
 function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defaultColors: defaultColorsProp, isDark }) {
   const [viewMode, setViewMode] = useState('value'); // 'value' (default) | 'percent'
+  const isMobile = useIsMobile();
   const { categories, dailyRows } = pivotData;
   // Dark mode: warm identity colors flip to blues. Light mode: the deep warm
   // tones soften to a lighter orange→yellow ladder (area fills only).
@@ -1970,18 +1984,20 @@ function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defau
         </div>
       </div>
 
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[480px]">
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[360px] sm:h-[480px]">
         <div className="w-full h-full min-h-0">
           <Plot
+            lockZoom
             data={chartData}
             layout={{
               autosize: true,
-              margin: { l: 45, r: 20, t: 15, b: 70 },
+              margin: isMobile ? { l: 40, r: 10, t: 10, b: 60 } : { l: 45, r: 20, t: 15, b: 70 },
               paper_bgcolor: 'transparent',
               plot_bgcolor: 'transparent',
               xaxis: {
                 tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 9, weight: 'bold' },
-                tickangle: -90,
+                tickangle: isMobile ? -45 : -90,
+                nticks: isMobile ? 6 : undefined,
                 showgrid: false,
                 zeroline: false
               },
@@ -2011,6 +2027,7 @@ function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defau
 }
 
 function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, defaultColors: defaultColorsProp, isDark, initialMetric = "Revenue (₹)" }) {
+  const isMobile = useIsMobile();
   // Warm identity colors flip to their blue equivalents in dark mode
   const colorMap = themedColorMap(colorMapProp, isDark);
   const defaultColors = themedColorList(defaultColorsProp, isDark);
@@ -2095,19 +2112,22 @@ function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, def
         </div>
       </div>
 
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[480px]">
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[360px] sm:h-[480px]">
         <div className="w-full h-full min-h-0">
           <Plot
+            lockZoom
             data={chartData}
             layout={{
               barmode: 'stack',
               autosize: true,
-              margin: { l: 45, r: 20, t: 15, b: 65 },
+              margin: isMobile ? { l: 40, r: 10, t: 10, b: 60 } : { l: 45, r: 20, t: 15, b: 65 },
               paper_bgcolor: 'transparent',
               plot_bgcolor: 'transparent',
               xaxis: {
-                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10, weight: 'bold' },
-                showgrid: false
+                tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: isMobile ? 9 : 10, weight: 'bold' },
+                showgrid: false,
+                nticks: isMobile ? 6 : undefined,
+                tickangle: isMobile ? -45 : 0
               },
               yaxis: {
                 tickfont: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10, weight: 'bold' },
@@ -2190,7 +2210,7 @@ function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions"
         </div>
       </div>
 
-      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[480px]">
+      <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3 md:p-4 flex flex-col justify-center h-[360px] sm:h-[480px]">
         <div className="w-full h-full min-h-0 rounded-lg overflow-hidden border border-warm-border/50 dark:border-zinc-800">
           <Plot
             data={[{
@@ -2256,6 +2276,7 @@ function getWeekKeyAndLabel(dateStr) {
 }
 
 function RenewalsAndRecurring({ isDark }) {
+  const isMobile = useIsMobile();
   // ----------------------------------------------------
   // RENEWALS STATE & LOGIC (TOP HALF)
   // ----------------------------------------------------
@@ -2727,6 +2748,10 @@ function RenewalsAndRecurring({ isDark }) {
 
     return traces;
   }, [renTrendData, renComparePlatforms, renComparePlans, filteredRenewalsData, renViewLevel, renTrendMetric, isDark]);
+  const renChartTracesView = useMemo(
+    () => (isMobile ? phoneTraces(renChartTraces) : renChartTraces),
+    [renChartTraces, isMobile]
+  );
 
   // ----------------------------------------------------
   // RECURRING STATE & LOGIC (BOTTOM HALF)
@@ -3064,6 +3089,10 @@ function RenewalsAndRecurring({ isDark }) {
 
     return traces;
   }, [recTrendData, recCompareTeams, recComparePlatforms, recComparePlans, filteredRecurringData, recViewLevel, isDark]);
+  const recChartTracesView = useMemo(
+    () => (isMobile ? phoneTraces(recChartTraces) : recChartTraces),
+    [recChartTraces, isMobile]
+  );
 
   // Aggregations for Platform, Plan, and Marketing Team with Daily Breakdown
   const recPlatformData = useMemo(() => {
@@ -3510,18 +3539,20 @@ function RenewalsAndRecurring({ isDark }) {
 
           {renTrendData.length > 0 ? (
             <Plot
-              data={renChartTraces}
+              lockZoom
+              data={renChartTracesView}
               layout={{
                 autosize: true,
-                height: 380,
-                margin: { l: 55, r: 50, t: 40, b: 50 },
+                height: isMobile ? 280 : 380,
+                margin: isMobile ? { l: 45, r: 15, t: 40, b: 45 } : { l: 55, r: 50, t: 40, b: 50 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
                 font: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10 },
                 xaxis: { 
                   showgrid: false,
                   automargin: true,
-                  tickangle: renTrendData.length > 20 ? -45 : 0,
+                  tickangle: isMobile || renTrendData.length > 20 ? -45 : 0,
+                  nticks: isMobile ? 6 : undefined,
                   tickfont: { size: 10, color: isDark ? '#94A3B8' : '#64748B' }
                 },
                 yaxis: renTrendMetric === 'rate' ? { 
@@ -3542,7 +3573,7 @@ function RenewalsAndRecurring({ isDark }) {
               }}
               config={{ displayModeBar: false, responsive: true }}
               className="w-full"
-              style={{ width: "100%", height: "380px" }}
+              style={{ width: "100%", height: isMobile ? "280px" : "380px" }}
             />
           ) : (
             <div className="flex h-[200px] items-center justify-center text-sm font-semibold text-warm-muted dark:text-dark-muted">
@@ -4041,18 +4072,20 @@ function RenewalsAndRecurring({ isDark }) {
 
           {recTrendData.length > 0 ? (
             <Plot
-              data={recChartTraces}
+              lockZoom
+              data={recChartTracesView}
               layout={{
                 autosize: true,
-                height: 380,
-                margin: { l: 55, r: 50, t: 40, b: 50 },
+                height: isMobile ? 280 : 380,
+                margin: isMobile ? { l: 45, r: 15, t: 40, b: 45 } : { l: 55, r: 50, t: 40, b: 50 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
                 font: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10 },
                 xaxis: { 
                   showgrid: false,
                   automargin: true,
-                  tickangle: recTrendData.length > 20 ? -45 : 0,
+                  tickangle: isMobile || recTrendData.length > 20 ? -45 : 0,
+                  nticks: isMobile ? 6 : undefined,
                   tickfont: { size: 10, color: isDark ? '#94A3B8' : '#64748B' }
                 },
                 yaxis: { 
@@ -4070,7 +4103,7 @@ function RenewalsAndRecurring({ isDark }) {
               }}
               config={{ displayModeBar: false, responsive: true }}
               className="w-full"
-              style={{ width: "100%", height: "380px" }}
+              style={{ width: "100%", height: isMobile ? "280px" : "380px" }}
             />
           ) : (
             <div className="flex h-[200px] items-center justify-center text-sm font-semibold text-warm-muted dark:text-dark-muted">
@@ -4399,7 +4432,7 @@ function RenewalsAndRecurring({ isDark }) {
 }
 
 
-function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, isDark }) {
+function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, onStartTour, isDark }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -4469,6 +4502,20 @@ function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, i
           </div>
 
           <div className="my-1.5 border-t border-warm-border/60 dark:border-zinc-800"></div>
+
+          {/* Replay the guided tour of the tabs */}
+          {onStartTour && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onStartTour();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-warm-text dark:text-dark-text hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-xs font-bold cursor-pointer text-left mb-1"
+            >
+              <HelpCircle className="h-4 w-4 text-amber-500 shrink-0" />
+              <span>Take the tour</span>
+            </button>
+          )}
 
           {/* Admin Panel Option (If Admin) */}
           {isAdmin && (
@@ -4547,6 +4594,20 @@ export default function App() {
   // tab (genie animation anchored to the dock button); it is never a nav tab.
   const [insightsOpen, setInsightsOpen] = useState(false);
   const insightsCtaRef = useRef(null);
+
+  // Guided tour of the tabs: null (closed) | 'ask' (first sign-in prompt) | 'tour' (replay)
+  const [tourState, setTourState] = useState(null);
+  const tourEmail = currentUser?.email || null;
+  useEffect(() => {
+    if (!tourEmail) return undefined;
+    let cancelled = false;
+    // Give the dashboard a moment to render before asking
+    const timer = setTimeout(async () => {
+      const offer = await shouldOfferTour(tourEmail);
+      if (!cancelled && offer) setTourState('ask');
+    }, 1500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [tourEmail]);
 
   const handleSetUser = (u) => {
     setCurrentUser(u);
@@ -4654,6 +4715,7 @@ export default function App() {
                 isAdmin={isAdmin}
                 onLogout={handleLogout}
                 onSelectAdminPanel={() => setActiveTab('Admin Panel')}
+                onStartTour={() => setTourState('tour')}
                 isDark={isDark}
               />
               <button 
@@ -4675,6 +4737,7 @@ export default function App() {
             {navTabs.map(tab => (
               <button 
                 key={tab}
+                data-tour-tab={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-3 xl:px-4 py-1.5 text-xs xl:text-sm font-semibold rounded-lg xl:rounded-full whitespace-nowrap transition-all duration-300 ease-in-out cursor-pointer flex-1 xl:flex-none text-center ${
                   activeTab === tab 
@@ -4694,6 +4757,7 @@ export default function App() {
               isAdmin={isAdmin}
               onLogout={handleLogout}
               onSelectAdminPanel={() => setActiveTab('Admin Panel')}
+              onStartTour={() => setTourState('tour')}
               isDark={isDark}
             />
             <button 
@@ -4739,6 +4803,18 @@ export default function App() {
             </div>
           )}
         </main>
+
+        <GuidedTour
+          open={tourState !== null}
+          mode={tourState || 'ask'}
+          tabs={navTabs}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onClose={(outcome) => {
+            setTourState(null);
+            markTourSeen(tourEmail, outcome);
+          }}
+        />
 
         {/* Conversational Analytics as a window over the current tab. Stays
             mounted while minimised so the conversation is kept. */}
@@ -8052,6 +8128,7 @@ function Realtime({ isDark }) {
           </div>
           <div className="w-full h-[260px]">
             <Plot
+              lockZoom
               data={[
                 {
                   x: hours,
@@ -9077,6 +9154,7 @@ function ArpuReport({ isDark }) {
           <p className="text-[11px] text-warm-muted dark:text-dark-muted mb-4">Daily average revenue per conversion (₹)</p>
           <div className="h-64 w-full">
             <Plot
+              lockZoom
               data={[{
                 x: metrics.dateTrendChart.dates,
                 y: metrics.dateTrendChart.values,
@@ -9234,23 +9312,23 @@ function ArpuReport({ isDark }) {
                     <tr key={idx} className="hover:bg-amber-500/5 transition-colors">
                       <td className="p-3 font-semibold whitespace-nowrap sticky left-0 z-20 bg-white dark:bg-[#0F172A] border-r border-warm-border/30 dark:border-zinc-800">{r.dateStr}</td>
                       <td className="p-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 font-bold text-[11px]">
+                        <span className="px-2 py-0.5 rounded bg-zinc-500/10 text-warm-text dark:text-dark-text font-bold text-[11px]">
                           {r.platform}
                         </span>
                       </td>
-                      <td className="p-3 font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">{r.plan_category}</td>
+                      <td className="p-3 font-bold text-warm-text dark:text-dark-text whitespace-nowrap">{r.plan_category}</td>
                       <td className="p-3 capitalize whitespace-nowrap">{r.user_txn_type.replace(/_/g, ' ')}</td>
                       <td className="p-3 whitespace-nowrap">{r.marketing_team}</td>
-                      <td className="p-3 font-semibold text-purple-600 dark:text-purple-400 whitespace-nowrap">{r.offer}</td>
-                      <td className="p-3 font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">{r.theme}</td>
+                      <td className="p-3 font-semibold text-warm-text dark:text-dark-text whitespace-nowrap">{r.offer}</td>
+                      <td className="p-3 font-bold text-warm-text dark:text-dark-text whitespace-nowrap">{r.theme}</td>
                       <td className="p-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-[10px]">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-warm-text dark:text-dark-text font-bold text-[10px]">
                           {r.sale_status}
                         </span>
                       </td>
                       <td className="p-3 text-right font-bold whitespace-nowrap">{r.conversion.toLocaleString()}</td>
                       <td className="p-3 text-right font-bold whitespace-nowrap">₹{Math.round(r.revenue).toLocaleString()}</td>
-                      <td className="p-3 text-right font-black text-amber-accent whitespace-nowrap">
+                      <td className="p-3 text-right font-black text-warm-text dark:text-dark-text whitespace-nowrap">
                         ₹{rowArpu.toLocaleString()}
                       </td>
                     </tr>

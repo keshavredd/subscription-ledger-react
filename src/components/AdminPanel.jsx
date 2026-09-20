@@ -8,15 +8,13 @@ import {
   Users, UserPlus, Trash2, ShieldCheck, Activity, MessageSquare, 
   Search, RefreshCw, BarChart2, Eye, Key, CheckCircle, AlertCircle
 } from 'lucide-react';
-import Plotly from 'plotly.js-dist-min';
-import createPlotlyComponent from 'react-plotly.js/factory';
+import Plot from './Plot';
 
 import { 
   getAllowedUsersAsync, addAllowedUserAsync, removeAllowedUserAsync, 
   getTelemetryStatsAsync, isAdminEmail 
 } from '../services/telemetryService';
 
-const Plot = createPlotlyComponent(Plotly);
 
 export default function AdminPanel({ user, isDark }) {
   const [activeSubTab, setActiveSubTab] = useState('users'); // 'users' | 'telemetry' | 'chat_logs'

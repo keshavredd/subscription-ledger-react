@@ -15,7 +15,7 @@
  */
 import { db } from './firebaseService';
 import {
-  doc, setDoc, deleteDoc, getDocs, collection,
+  doc, getDoc, setDoc, deleteDoc, getDocs, collection,
   query, orderBy, limit, increment, serverTimestamp
 } from 'firebase/firestore';
 
@@ -171,5 +171,39 @@ export async function getTelemetryStatsFS() {
   } catch (err) {
     handleError('Error fetching telemetry stats', err);
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GUIDED TOUR STATE (lives on the user's session doc so it follows them across devices)
+// ---------------------------------------------------------------------------
+
+export async function getUserTourStateFS(userEmail) {
+  if (firestoreDisabled || !userEmail) return null;
+  try {
+    const snap = await getDoc(doc(db, 'admin_user_sessions', userEmail.toLowerCase().trim()));
+    if (!snap.exists()) return { tourVersionSeen: 0 };
+    const data = snap.data() || {};
+    return { tourVersionSeen: Number(data.tourVersionSeen || 0), tourOutcome: data.tourOutcome || null };
+  } catch (err) {
+    handleError('Error reading tour state', err);
+    return null;
+  }
+}
+
+export async function setUserTourStateFS(userEmail, { tourVersionSeen, tourOutcome }) {
+  if (firestoreDisabled || !userEmail) return false;
+  try {
+    const normEmail = userEmail.toLowerCase().trim();
+    await setDoc(doc(db, 'admin_user_sessions', normEmail), {
+      email: normEmail,
+      tourVersionSeen,
+      tourOutcome,
+      tourSeenAt: nowStr()
+    }, { merge: true });
+    return true;
+  } catch (err) {
+    handleError('Error saving tour state', err);
+    return false;
   }
 }
