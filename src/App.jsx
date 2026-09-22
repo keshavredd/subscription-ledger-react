@@ -22,6 +22,14 @@ import MISReports from './components/MISReports';
 import GuidedTour from './components/GuidedTour';
 import { shouldOfferTour, markTourSeen } from './services/tourService';
 
+// Local calendar date as YYYY-MM-DD. Never use toISOString() for this: it
+// converts to UTC first, so a local midnight in IST serialises as the previous
+// day and "This month" silently starts on the last day of the month before.
+const toLocalYMD = (d) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 const DEFAULT_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=598826199";
 const FUNNEL_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1049115614";
 const REALTIME_GSHEET_URL = "https://docs.google.com/spreadsheets/d/1V4-r-cRynpjttGvmLfT2iSx7D3jFnuAMsJyXonPKlEE/export?format=csv&gid=1333104452";
@@ -2430,8 +2438,8 @@ function RenewalsAndRecurring({ isDark }) {
       start = new Date(2000, 0, 1);
     }
     
-    setRenStartDate(start.toISOString().split('T')[0]);
-    setRenEndDate(end.toISOString().split('T')[0]);
+    setRenStartDate(toLocalYMD(start));
+    setRenEndDate(toLocalYMD(end));
   }, [renDatePreset]);
 
   const filteredRenewalsData = useMemo(() => {
@@ -2880,8 +2888,8 @@ function RenewalsAndRecurring({ isDark }) {
       start = new Date(2000, 0, 1);
     }
     
-    setRecStartDate(start.toISOString().split('T')[0]);
-    setRecEndDate(end.toISOString().split('T')[0]);
+    setRecStartDate(toLocalYMD(start));
+    setRecEndDate(toLocalYMD(end));
   }, [recDatePreset]);
 
   const allMarketingTeams = useMemo(() => {
@@ -5684,8 +5692,8 @@ function FunnelAnalysis({ isDark }) {
       start = new Date(2000, 0, 1);
     }
     
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(end.toISOString().split('T')[0]);
+    setStartDate(toLocalYMD(start));
+    setEndDate(toLocalYMD(end));
   }, [datePreset]);
 
   // Auto-calculate comparison date range
@@ -5706,14 +5714,14 @@ function FunnelAnalysis({ isDark }) {
       const compS = new Date(compE);
       compS.setDate(compS.getDate() - diffDays + 1);
 
-      setCompStartDate(compS.toISOString().split('T')[0]);
-      setCompEndDate(compE.toISOString().split('T')[0]);
+      setCompStartDate(toLocalYMD(compS));
+      setCompEndDate(toLocalYMD(compE));
     } else if (compPreset === "Previous month") {
       const compS = new Date(s.getFullYear(), s.getMonth() - 1, 1);
       const compE = new Date(s.getFullYear(), s.getMonth(), 0);
 
-      setCompStartDate(compS.toISOString().split('T')[0]);
-      setCompEndDate(compE.toISOString().split('T')[0]);
+      setCompStartDate(toLocalYMD(compS));
+      setCompEndDate(toLocalYMD(compE));
     }
   }, [compPreset, startDate, endDate]);
 
@@ -6438,9 +6446,9 @@ function FunnelAnalysis({ isDark }) {
             <div className="flex items-center gap-1 shrink-0">
               {datePreset === "Custom range" && (
                 <div className="flex items-center gap-1">
-                  <input type="date" value={startDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                  <input type="date" value={startDate} min="2020-01-01" max={toLocalYMD(new Date())} onChange={(e) => setStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
                   <span className="text-[10px] text-warm-muted dark:text-dark-muted">to</span>
-                  <input type="date" value={endDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                  <input type="date" value={endDate} min="2020-01-01" max={toLocalYMD(new Date())} onChange={(e) => setEndDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
                 </div>
               )}
               <select 
@@ -6464,9 +6472,9 @@ function FunnelAnalysis({ isDark }) {
             <div className="flex items-center gap-1 shrink-0">
               {compPreset === "Custom range" && (
                 <div className="flex items-center gap-1">
-                  <input type="date" value={compStartDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                  <input type="date" value={compStartDate} min="2020-01-01" max={toLocalYMD(new Date())} onChange={(e) => setCompStartDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
                   <span className="text-[10px] text-warm-muted dark:text-dark-muted">to</span>
-                  <input type="date" value={compEndDate} min="2020-01-01" max={new Date().toISOString().split('T')[0]} onChange={(e) => setCompEndDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
+                  <input type="date" value={compEndDate} min="2020-01-01" max={toLocalYMD(new Date())} onChange={(e) => setCompEndDate(e.target.value)} className="px-1 py-0.5 text-[10px] font-medium rounded-md bg-white dark:bg-slate-800 border border-warm-border dark:border-dark-border focus:outline-none" />
                 </div>
               )}
               <label className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-white dark:bg-slate-800 border border-amber-500/40 rounded-full text-xs font-bold text-warm-text dark:text-dark-text shadow-xs cursor-pointer shrink-0">
@@ -8784,6 +8792,20 @@ function MultiSelectDropdown({ label, options, selectedValues, onChange, isDark 
   );
 }
 
+// Category tick labels: break long names onto lines of ~16 characters so the
+// bar charts never truncate them ("Special offer - Ganesh Chaturthi Theme").
+const wrapTickLabel = (label, width = 16) => {
+  const words = String(label || '').split(/\s+/);
+  const lines = [];
+  let cur = '';
+  words.forEach((w) => {
+    if (cur && (cur + ' ' + w).length > width) { lines.push(cur); cur = w; }
+    else cur = cur ? `${cur} ${w}` : w;
+  });
+  if (cur) lines.push(cur);
+  return lines.join('<br>');
+};
+
 function ArpuReport({ isDark }) {
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -8834,8 +8856,8 @@ function ArpuReport({ isDark }) {
       start = new Date(2000, 0, 1);
     }
     
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(end.toISOString().split('T')[0]);
+    setStartDate(toLocalYMD(start));
+    setEndDate(toLocalYMD(end));
   }, [datePreset]);
 
   // Fetch ARPU Data
@@ -9120,9 +9142,9 @@ function ArpuReport({ isDark }) {
         {/* Custom Range Inputs if selected */}
         {datePreset === "Custom range" && (
           <div className="flex items-center gap-2 shrink-0">
-            <input type="date" value={startDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setStartDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-full bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border focus:outline-none" />
+            <input type="date" value={startDate} max={toLocalYMD(new Date())} onChange={(e) => setStartDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-full bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border focus:outline-none" />
             <span className="text-xs text-warm-muted dark:text-dark-muted">to</span>
-            <input type="date" value={endDate} max={new Date().toISOString().split('T')[0]} onChange={(e) => setEndDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-full bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border focus:outline-none" />
+            <input type="date" value={endDate} max={toLocalYMD(new Date())} onChange={(e) => setEndDate(e.target.value)} className="px-2.5 py-1 text-xs font-medium rounded-full bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border focus:outline-none" />
           </div>
         )}
 
@@ -9160,7 +9182,7 @@ function ArpuReport({ isDark }) {
 
         {/* Card 3: TOTAL CONVERSIONS */}
         <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-xs relative overflow-hidden">
-          <div className="text-[10px] font-black uppercase tracking-wider text-blue-500 block mb-1">Total Conversions</div>
+          <div className="text-[10px] font-black uppercase tracking-wider text-amber-accent block mb-1">Total Conversions</div>
           <div className="text-2xl font-black tracking-tight text-warm-text dark:text-dark-text mb-1">
             {metrics.totalConversions.toLocaleString()}
           </div>
@@ -9171,11 +9193,11 @@ function ArpuReport({ isDark }) {
 
         {/* Card 4: TOP PERFORMING THEME */}
         <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl p-5 shadow-xs relative overflow-hidden">
-          <div className="text-[10px] font-black uppercase tracking-wider text-purple-500 block mb-1">Top ARPU Theme</div>
+          <div className="text-[10px] font-black uppercase tracking-wider text-amber-accent block mb-1">Top ARPU Theme</div>
           <div className="text-lg font-black tracking-tight text-warm-text dark:text-dark-text truncate mb-1" title={metrics.topTheme}>
             {metrics.topTheme}
           </div>
-          <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400">
+          <span className="text-[11px] font-bold text-amber-accent">
             ₹{metrics.maxThemeArpu.toLocaleString()} ARPU
           </span>
         </div>
@@ -9199,25 +9221,29 @@ function ArpuReport({ isDark }) {
                 mode: 'lines+markers',
                 line: { color: '#F59E0B', width: 3, shape: 'spline' },
                 marker: { color: '#D97706', size: 6 },
-                name: 'ARPU (₹)'
+                name: 'ARPU',
+                hovertemplate: '<b>%{x|%d %b %Y}</b><br>ARPU: ₹%{y:,.0f}<extra></extra>'
               }]}
               layout={{
                 autosize: true,
-                margin: { l: 45, r: 20, t: 10, b: 35 },
+                margin: { l: 50, r: 20, t: 10, b: 35 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
-                xaxis: { 
-                  color: isDark ? '#94a3b8' : '#64748b', 
-                  showgrid: false, 
-                  tickfont: { size: 10 } 
-                },
-                yaxis: { 
-                  color: isDark ? '#94a3b8' : '#64748b', 
-                  gridcolor: isDark ? '#334155' : '#f1f5f9',
-                  tickprefix: '₹',
+                xaxis: {
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  showgrid: false,
+                  tickformat: '%d %b',
                   tickfont: { size: 10 }
                 },
-                hovermode: 'x'
+                yaxis: {
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  gridcolor: isDark ? '#334155' : '#f1f5f9',
+                  tickprefix: '₹',
+                  tickformat: ',',
+                  tickfont: { size: 10 }
+                },
+                hovermode: 'closest',
+                hoverlabel: { bgcolor: '#ffffff', bordercolor: '#e2e8f0', font: { family: 'DM Sans, sans-serif', size: 11, color: '#0f172a' } },
               }}
               useResizeHandler={true}
               className="w-full h-full"
@@ -9233,33 +9259,38 @@ function ArpuReport({ isDark }) {
           <div className="h-64 w-full">
             <Plot
               data={[{
-                x: metrics.themeChart.labels,
+                x: metrics.themeChart.labels.map(l => wrapTickLabel(l)),
                 y: metrics.themeChart.values,
                 type: 'bar',
-                marker: {
-                  color: ['#F59E0B', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6']
-                },
-                text: metrics.themeChart.values.map(v => `₹${v.toLocaleString()}`),
-                textposition: 'auto',
-                textfont: { size: 10, color: '#FFFFFF', weight: 'bold' }
+                marker: { color: isDark ? '#60A5FA' : '#F59E0B' },
+                text: metrics.themeChart.values.map(v => `₹${v.toLocaleString('en-IN')}`),
+                textposition: 'outside',
+                cliponaxis: false,
+                textfont: { size: 10, color: isDark ? '#E2E8F0' : '#1E293B', weight: 'bold' },
+                hovertemplate: '<b>%{x}</b><br>ARPU: ₹%{y:,.0f}<extra></extra>'
               }]}
               layout={{
                 autosize: true,
-                margin: { l: 45, r: 20, t: 10, b: 65 },
+                margin: { l: 50, r: 20, t: 18, b: 60 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
-                xaxis: { 
-                  color: isDark ? '#94a3b8' : '#64748b', 
-                  showgrid: false, 
-                  tickangle: -25,
-                  tickfont: { size: 9 } 
+                xaxis: {
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  showgrid: false,
+                  tickangle: 0,
+                  automargin: true,
+                  tickfont: { size: 9 }
                 },
-                yaxis: { 
-                  color: isDark ? '#94a3b8' : '#64748b', 
+                yaxis: {
+                  color: isDark ? '#94a3b8' : '#64748b',
                   gridcolor: isDark ? '#334155' : '#f1f5f9',
                   tickprefix: '₹',
-                  tickfont: { size: 10 }
-                }
+                  tickformat: ',',
+                  tickfont: { size: 10 },
+                  range: [0, Math.max(1, ...metrics.themeChart.values) * 1.18]
+                },
+                bargap: 0.35,
+                hoverlabel: { bgcolor: '#ffffff', bordercolor: '#e2e8f0', font: { family: 'DM Sans, sans-serif', size: 11, color: '#0f172a' } },
               }}
               useResizeHandler={true}
               className="w-full h-full"
@@ -9280,18 +9311,22 @@ function ArpuReport({ isDark }) {
               x: metrics.platformChart.labels,
               y: metrics.platformChart.values,
               type: 'bar',
-              marker: { color: '#3B82F6' },
-              text: metrics.platformChart.values.map(v => `₹${v.toLocaleString()}`),
-              textposition: 'auto',
-              textfont: { size: 11, color: '#FFFFFF', weight: 'bold' }
+              marker: { color: isDark ? '#60A5FA' : '#F59E0B' },
+              text: metrics.platformChart.values.map(v => `₹${v.toLocaleString('en-IN')}`),
+              textposition: 'outside',
+              cliponaxis: false,
+              textfont: { size: 11, color: isDark ? '#E2E8F0' : '#1E293B', weight: 'bold' },
+              hovertemplate: '<b>%{x}</b><br>ARPU: ₹%{y:,.0f}<extra></extra>'
             }]}
             layout={{
               autosize: true,
-              margin: { l: 45, r: 20, t: 10, b: 35 },
+              margin: { l: 50, r: 20, t: 18, b: 35 },
               paper_bgcolor: 'transparent',
               plot_bgcolor: 'transparent',
               xaxis: { color: isDark ? '#94a3b8' : '#64748b', tickfont: { size: 10 } },
-              yaxis: { color: isDark ? '#94a3b8' : '#64748b', gridcolor: isDark ? '#334155' : '#f1f5f9', tickprefix: '₹' }
+              yaxis: { color: isDark ? '#94a3b8' : '#64748b', gridcolor: isDark ? '#334155' : '#f1f5f9', tickprefix: '₹', tickformat: ',', range: [0, Math.max(1, ...metrics.platformChart.values) * 1.18] },
+              bargap: 0.35,
+              hoverlabel: { bgcolor: '#ffffff', bordercolor: '#e2e8f0', font: { family: 'DM Sans, sans-serif', size: 11, color: '#0f172a' } },
             }}
             useResizeHandler={true}
             className="w-full h-full"
@@ -9335,7 +9370,7 @@ function ArpuReport({ isDark }) {
                 <th className="p-3 text-right">ARPU (₹)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-warm-border/40 dark:divide-zinc-800/60 font-medium">
+            <tbody className="divide-y divide-warm-border/40 dark:divide-zinc-800/60 font-medium text-warm-text dark:text-dark-text">
               {paginatedRows.length === 0 ? (
                 <tr>
                   <td colSpan="11" className="p-6 text-center text-warm-muted dark:text-dark-muted italic">

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Plot from './Plot';
 
 const CANONICAL_PLATFORMS = [
@@ -281,7 +281,8 @@ export function RenewalRateVsVolumeChart({
 
     // Dynamic Quadrant Thresholds
     // Vertical divider at median/threshold volume (around 2,800 to 3,000)
-    const volumeThreshold = maxDue > 3000 ? 3000 : Math.round((minDue + maxDue) / 2);
+    // On the log axis the divider sits at the geometric midpoint of the volumes
+    const volumeThreshold = maxDue > 3000 ? 3000 : Math.round(Math.sqrt(Math.max(minDue, 1) * Math.max(maxDue, 1)));
     // Horizontal divider at benchmark rate (40%)
     const rateThreshold = 40;
 
@@ -340,15 +341,9 @@ export function RenewalRateVsVolumeChart({
       {
         x: xValues,
         y: yValues,
-        mode: 'markers+text',
+        mode: 'markers',
         type: 'scatter',
         text: textLabels,
-        textposition: 'top right',
-        textfont: {
-          size: 10,
-          color: isDark ? '#E2E8F0' : '#1E293B',
-          weight: 'bold'
-        },
         marker: {
           size: markerSizes,
           color: markerColors,
@@ -368,23 +363,31 @@ export function RenewalRateVsVolumeChart({
       }
     ];
 
-    const maxX = Math.max(5000, Math.ceil((maxDue * 1.25) / 1000) * 1000);
+    // Log x axis fitted to the data (2026-09-22): platforms sit between ~100 and
+    // ~600 due, so a linear 0..5K axis crammed every bubble into the left tenth.
+    const logLo = Math.log10(Math.max(minDue * 0.55, 1));
+    const logHi = Math.log10(Math.max(maxDue * 1.9, 10));
+    const tickCandidates = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+    const xTickVals = tickCandidates.filter(v => Math.log10(v) >= logLo && Math.log10(v) <= logHi);
+    const xTickText = xTickVals.map(v => (v >= 1000 ? `${v / 1000}K` : String(v)));
+    const dividerPaperX = Math.min(0.98, Math.max(0.02, (Math.log10(Math.max(volumeThreshold, 1)) - logLo) / (logHi - logLo)));
 
     const layout = {
       autosize: true,
       height: 380,
-      margin: { l: 55, r: 60, t: 25, b: 50 },
+      margin: { l: 55, r: 25, t: 25, b: 50 },
       paper_bgcolor: 'transparent',
       plot_bgcolor: 'transparent',
       font: { family: 'inherit', color: isDark ? '#94A3B8' : '#64748B', size: 10 },
       showlegend: false,
       xaxis: {
         title: { text: '<b>RENEWAL DUE (VOLUME)</b>', font: { size: 10, color: isDark ? '#94A3B8' : '#64748B' } },
-        range: [0, maxX],
+        type: 'log',
+        range: [logLo, logHi],
         showgrid: false,
         zeroline: false,
-        tickvals: [0, 1000, 2000, 3000, 4000, 5000],
-        ticktext: ['0', '1K', '2K', '3K', '4K', '5K'],
+        tickvals: xTickVals,
+        ticktext: xTickText,
         tickfont: { size: 10, color: isDark ? '#94A3B8' : '#64748B' }
       },
       yaxis: {
@@ -411,14 +414,16 @@ export function RenewalRateVsVolumeChart({
             dash: 'dash'
           }
         },
-        // Vertical Benchmark Divider (Volume threshold)
+        // Vertical Benchmark Divider (Volume threshold), placed in paper units so
+        // it does not depend on how Plotly interprets shape coordinates on a log axis
         {
           type: 'line',
+          xref: 'paper',
           yref: 'paper',
           y0: 0,
           y1: 1,
-          x0: volumeThreshold,
-          x1: volumeThreshold,
+          x0: dividerPaperX,
+          x1: dividerPaperX,
           line: {
             color: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.20)',
             width: 1.5,
@@ -711,25 +716,155 @@ export function RecurringDonutsSection({
   }, [recTeamData, recRecurringConv]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-      <RecurringDonutCard
-        title="Recurring by Platform"
-        items={platformItems}
-        totalCount={recRecurringConv}
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <RecurringDonutCard
+          title="Recurring by Platform"
+          items={platformItems}
+          totalCount={recRecurringConv}
+          isDark={isDark}
+        />
+        <RecurringDonutCard
+          title="Recurring by Plan Category"
+          items={planItems}
+          totalCount={recRecurringConv}
+          isDark={isDark}
+        />
+        <RecurringDonutCard
+          title="Recurring by Marketing Team"
+          items={teamItems}
+          totalCount={recRecurringConv}
+          isDark={isDark}
+        />
+      </div>
+      <RecurringMixColumnChart
+        recPlatformData={recPlatformData}
+        recPlanData={recPlanData}
+        recTeamData={recTeamData}
         isDark={isDark}
       />
-      <RecurringDonutCard
-        title="Recurring by Plan Category"
-        items={planItems}
-        totalCount={recRecurringConv}
-        isDark={isDark}
-      />
-      <RecurringDonutCard
-        title="Recurring by Marketing Team"
-        items={teamItems}
-        totalCount={recRecurringConv}
-        isDark={isDark}
-      />
+    </>
+  );
+}
+
+const titleCase = (s) => String(s || 'Unknown').toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+const MIX_CUTS = [
+  { id: 'platform', label: 'Platform', key: 'platform', clean: (v) => (String(v).startsWith('Main - ') ? String(v).replace('Main - ', '') : v) },
+  { id: 'plan', label: 'Plan Category', key: 'plan', clean: titleCase },
+  { id: 'team', label: 'Marketing Team', key: 'team', clean: (v) => v || 'Unknown' },
+];
+
+/**
+ * Total vs recurring conversions per segment, one grouped column chart with a
+ * Platform / Plan Category / Marketing Team toggle. Sits directly under the
+ * three donuts and uses the same per-segment aggregates the breakdown tables
+ * use (`total`, `rec`). Segments are ordered by total sold; beyond eight, the
+ * tail is bundled into "Others" so the columns stay readable.
+ */
+export function RecurringMixColumnChart({ recPlatformData = [], recPlanData = [], recTeamData = [], isDark = false }) {
+  const [cut, setCut] = useState('platform');
+  const spec = MIX_CUTS.find(c => c.id === cut) || MIX_CUTS[0];
+  const source = cut === 'platform' ? recPlatformData : cut === 'plan' ? recPlanData : recTeamData;
+
+  const rows = useMemo(() => {
+    const sorted = [...source]
+      .filter(r => (r.total || 0) > 0)
+      .map(r => ({ label: spec.clean(r[spec.key]), total: r.total || 0, rec: r.rec || 0 }))
+      .sort((a, b) => b.total - a.total);
+    if (sorted.length <= 8) return sorted;
+    const head = sorted.slice(0, 7);
+    const tail = sorted.slice(7);
+    return [...head, {
+      label: 'Others',
+      total: tail.reduce((a, r) => a + r.total, 0),
+      rec: tail.reduce((a, r) => a + r.rec, 0),
+    }];
+  }, [source, spec]);
+
+  const totalColor = isDark ? '#93C5FD' : '#FDE68A';
+  const recColor = isDark ? '#3B82F6' : '#F59E0B';
+  const outline = isDark ? { width: 0 } : { color: 'rgba(120, 53, 15, 0.28)', width: 0.6 };
+  const tick = isDark ? '#94A3B8' : '#64748B';
+  const labels = rows.map(r => r.label);
+
+  return (
+    <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-4 md:p-5 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+        <div>
+          <h3 className="text-base font-bold text-warm-text dark:text-dark-text">Total vs Recurring Conversions</h3>
+          <p className="text-xs text-warm-muted dark:text-dark-muted mt-0.5">
+            Fresh sales in the period and how many of them chose a recurring plan, by {spec.label.toLowerCase()}
+          </p>
+        </div>
+        <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0 self-start sm:self-auto">
+          {MIX_CUTS.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setCut(c.id)}
+              className={`px-3 py-1 text-[11px] font-medium rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                cut === c.id
+                  ? 'bg-white dark:bg-slate-700 text-amber-accent shadow-xs'
+                  : 'text-warm-muted dark:text-dark-muted hover:text-warm-text dark:hover:text-dark-text'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="h-[300px] flex items-center justify-center text-xs text-warm-muted dark:text-dark-muted">No recurring data for this period.</div>
+      ) : (
+        <Plot
+          lockZoom
+          data={[
+            {
+              type: 'bar',
+              name: 'Total conversions',
+              x: labels,
+              y: rows.map(r => r.total),
+              text: rows.map(r => r.total.toLocaleString()),
+              textposition: 'outside',
+              cliponaxis: false,
+              marker: { color: totalColor, line: outline },
+              hovertemplate: '<b>%{x}</b><br>Total conversions: %{y:,.0f}<extra></extra>',
+            },
+            {
+              type: 'bar',
+              name: 'Recurring conversions',
+              x: labels,
+              y: rows.map(r => r.rec),
+              text: rows.map(r => (r.total > 0 ? `${r.rec.toLocaleString()} (${((r.rec / r.total) * 100).toFixed(0)}%)` : r.rec.toLocaleString())),
+              textposition: 'outside',
+              cliponaxis: false,
+              marker: { color: recColor, line: outline },
+              hovertemplate: '<b>%{x}</b><br>Recurring: %{y:,.0f}<extra></extra>',
+            },
+          ]}
+          layout={{
+            uirevision: cut,
+            barmode: 'group',
+            bargap: 0.3,
+            bargroupgap: 0.08,
+            autosize: true,
+            height: 320,
+            margin: { l: 45, r: 15, t: 30, b: 60 },
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'inherit', size: 10, color: tick },
+            xaxis: { showgrid: false, tickfont: { size: 10, color: tick, weight: 'bold' }, automargin: true, tickangle: labels.length > 6 ? -30 : 0 },
+            yaxis: { gridcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', tickfont: { size: 10, color: tick }, rangemode: 'tozero' },
+            legend: { orientation: 'h', y: 1.14, x: 0, font: { size: 10, color: isDark ? '#cbd5e1' : '#334155' } },
+            hovermode: 'x unified',
+          }}
+          config={{ displayModeBar: false, responsive: true }}
+          className="w-full"
+          style={{ width: '100%', height: '320px' }}
+        />
+      )}
     </div>
   );
 }
