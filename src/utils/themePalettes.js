@@ -58,18 +58,22 @@ export function themedColorList(colors, isDark) {
 
 // Light-mode softening for large stacked FILLS: the deep ember/russet tones
 // read too heavy as area fills on the ivory background, so they map to a
-// lighter orange→yellow ladder (same stacking hierarchy, injective within
-// each chart's map). Lines/bars/treemaps keep the original warm tones.
+// light gold → yellow → cream ladder (2026-09-22: no oranges or reds left;
+// two pale peach steps sit between the yellows so neighbouring layers stay
+// tellable apart). Same stacking hierarchy, injective within each chart's
+// map. Lines and bars keep the original warm tones; the plan treemap has
+// its own light ramp in PlanTreemapChart.
 const WARM_SOFT_LIGHT = {
-  '#C2410C': '#F97316', // burnt ember -> orange-500 (bottom, strongest)
-  '#EA580C': '#FB923C', // ember       -> orange-300
-  '#9A3412': '#F59E0B', // russet      -> amber-500
-  '#B45309': '#FBBF24', // amber-700   -> amber-400
-  '#D97706': '#FCD34D', // amber-600   -> amber-300
+  '#C2410C': '#FBBF24', // burnt ember -> amber-400 golden (bottom, strongest)
+  '#EA580C': '#FDBA74', // ember       -> orange-300 pale apricot
+  '#9A3412': '#FACC15', // russet      -> yellow-400
+  '#D97706': '#FED7AA', // amber-600   -> orange-200 pale peach
   '#F59E0B': '#FDE047', // amber-500   -> yellow-300
-  '#FBBF24': '#FEF08A', // amber-400   -> yellow-200
-  '#FEF08A': '#FEF9C3', // pale ember  -> yellow-100 (top, palest)
-  '#78350F': '#D97706', // amber-900   -> amber-600
+  '#B45309': '#FCD34D', // amber-700   -> amber-300
+  '#FBBF24': '#FDE68A', // amber-400   -> amber-200
+  '#FEF08A': '#FEF3C7', // pale ember  -> amber-100 cream (top)
+  '#FEF3C7': '#FEFCE8', // amber-100   -> yellow-50 lightest cream
+  '#78350F': '#EAB308', // amber-900   -> yellow-500
 };
 
 /** Soften a {seriesName: hex} map for light-mode stacked fills. */

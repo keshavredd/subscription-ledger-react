@@ -363,7 +363,7 @@ function GeoDistributionChart({ geoData, isDark }) {
   if (!geoData || geoData.length === 0) {
     return (
       <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-lg shadow-sm p-5 mt-6 w-full">
-        <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-4">Geographic Revenue Distribution</h3>
+        <h3 className="text-base font-bold text-warm-text dark:text-dark-text mb-4">Geographic GTV Distribution</h3>
         <p className="text-sm text-warm-muted dark:text-dark-muted">No data available for the selection.</p>
       </div>
     );
@@ -392,7 +392,7 @@ function GeoDistributionChart({ geoData, isDark }) {
 
   const locations = formattedGeo.map(d => d.country);
   const rawRevs = formattedGeo.map(d => d.rev);
-  const hoverText = formattedGeo.map(d => `<b>${d.country}</b><br>Revenue: ${formatIndianCurrency(d.rev)}`);
+  const hoverText = formattedGeo.map(d => `<b>${d.country}</b><br>GTV: ${formatIndianCurrency(d.rev)}`);
 
   const zValues = rawRevs.map(r => r > 0 ? Math.log10(r + 1) : 0);
 
@@ -419,7 +419,7 @@ function GeoDistributionChart({ geoData, isDark }) {
     ],
     showscale: !isMobile,
     colorbar: {
-      title: { text: 'Revenue Heatmap', font: { size: 11, color: isDark ? '#d1d5db' : '#374151' } },
+      title: { text: 'GTV Heatmap', font: { size: 11, color: isDark ? '#d1d5db' : '#374151' } },
       tickfont: { size: 9, color: isDark ? '#9ca3af' : '#6b7280' },
       len: 0.75,
       thickness: 10
@@ -430,8 +430,8 @@ function GeoDistributionChart({ geoData, isDark }) {
     <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-3.5 sm:p-5 mt-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 sm:mb-4">
         <div>
-          <h3 className="text-sm sm:text-base font-bold text-warm-text dark:text-dark-text px-1">Geographic Revenue Distribution (World Map)</h3>
-          <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">Interactive Revenue Heatmap across Countries (Scaled for Global Visibility)</p>
+          <h3 className="text-sm sm:text-base font-bold text-warm-text dark:text-dark-text px-1">Geographic GTV Distribution (World Map)</h3>
+          <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">Interactive GTV Heatmap across Countries (Scaled for Global Visibility)</p>
         </div>
       </div>
       <div className="w-full h-[280px] sm:h-[450px] rounded-lg overflow-hidden border border-warm-border/50 dark:border-zinc-800">
@@ -458,7 +458,7 @@ function GeoDistributionChart({ geoData, isDark }) {
               showcountries: true
             }
           }}
-          config={{ displayModeBar: false, responsive: true }}
+          config={{ displayModeBar: false, responsive: true, scrollZoom: false }}
           className="w-full h-full"
           style={{ width: "100%", height: "100%" }}
         />
@@ -476,7 +476,7 @@ export function SubscriptionReport({ isDark }) {
   const [trendDataCut, setTrendDataCut] = useState("Overall");
   const [revenueTrendViewMode, setRevenueTrendViewMode] = useState("Daily"); // "Daily" | "Weekly"
 
-  const [datePreset, setDatePreset] = useState("Last 30 days");
+  const [datePreset, setDatePreset] = useState("Last 7 days");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -974,7 +974,7 @@ export function SubscriptionReport({ isDark }) {
           y: revValues,
           type: 'scatter',
           mode: 'lines+text',
-          name: 'Overall Weekly Revenue',
+          name: 'Overall Weekly GTV',
           text: revValues.map(v => formatIndianCurrency1Dec(v)),
           textposition: revValues.map((v, idx) => {
             if (idx === 0) return 'top right';
@@ -986,7 +986,7 @@ export function SubscriptionReport({ isDark }) {
           line: { color: isDark ? '#60a5fa' : '#f59e0b', width: 2.5, shape: 'spline' },
           fill: 'tozeroy',
           fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
-          hovertemplate: "<b>%{x}</b><br>Overall Weekly Revenue: ₹%{y:,.2f}<extra></extra>"
+          hovertemplate: "<b>%{x}</b><br>Overall Weekly GTV: ₹%{y:,.2f}<extra></extra>"
         }];
       }
 
@@ -1047,7 +1047,7 @@ export function SubscriptionReport({ isDark }) {
         y: revValues,
         type: 'scatter',
         mode: 'lines+text',
-        name: 'Overall Revenue',
+        name: 'Overall GTV',
         text: revValues.map(v => formatIndianCurrency1Dec(v)),
         textposition: revValues.map((v, idx) => {
           if (idx === 0) return 'top right';
@@ -1059,7 +1059,7 @@ export function SubscriptionReport({ isDark }) {
         line: { color: isDark ? '#60a5fa' : '#f59e0b', width: 2.5, shape: 'spline' },
         fill: 'tozeroy',
         fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
-        hovertemplate: "<b>%{x}</b><br>Overall Revenue: ₹%{y:,.2f}<extra></extra>"
+        hovertemplate: "<b>%{x}</b><br>Overall GTV: ₹%{y:,.2f}<extra></extra>"
       }];
     }
 
@@ -1285,9 +1285,9 @@ export function SubscriptionReport({ isDark }) {
             onChange={(e) => setTableMetricMode(e.target.value)}
             className={FILTER_PILL_SELECT_CLS}
           >
-            <option value="Revenue (₹)">Revenue (₹)</option>
+            <option value="Revenue (₹)">GTV (₹)</option>
             <option value="Conversions (#)">Conversions (#)</option>
-            <option value="Combined (Revenue & Conversions)">Combined (Rev & Conv)</option>
+            <option value="Combined (Revenue & Conversions)">Combined (GTV & Conv)</option>
           </select>
         </div>
         </ExpandedFilters>
@@ -1314,7 +1314,7 @@ export function SubscriptionReport({ isDark }) {
               <FilterChip label={`Txn Type: ${selectedTxnTypes.length === 0 ? 'None' : `${selectedTxnTypes.length} Selected`}`} onClear={() => setSelectedTxnTypes(allTxnOptions)} />
             )}
             {tableMetricMode !== 'Revenue (₹)' && (
-              <FilterChip label={`View: ${tableMetricMode === 'Combined (Revenue & Conversions)' ? 'Combined' : tableMetricMode}`} onClear={() => setTableMetricMode('Revenue (₹)')} />
+              <FilterChip label={`View: ${tableMetricMode === 'Combined (Revenue & Conversions)' ? 'Combined' : tableMetricMode.replace('Revenue', 'GTV')}`} onClear={() => setTableMetricMode('Revenue (₹)')} />
             )}
           </>
         )}
@@ -1323,7 +1323,7 @@ export function SubscriptionReport({ isDark }) {
       {/* KPI Cards (compact: the trend chart should fit in the first screenload) */}
       <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Total Revenue</div>
+          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Total GTV</div>
           <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.totalRev)}</div>
           <div className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">
             <span className="font-bold text-amber-accent">{formatIndianCurrency(metrics.dailyAvgRev)}/day</span> · {metrics.numDays} days
@@ -1339,7 +1339,7 @@ export function SubscriptionReport({ isDark }) {
         </div>
 
         <div className="px-4 py-3 bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm">
-          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Avg Revenue / Txn</div>
+          <div className="text-[10px] font-bold tracking-wider text-warm-label dark:text-dark-label uppercase mb-0.5">Avg GTV / Txn</div>
           <div className="text-xl sm:text-2xl font-black text-warm-text dark:text-dark-text tracking-tight">{formatIndianCurrency(metrics.avgRevPerTxn)}</div>
           <div className="text-[11px] text-warm-muted dark:text-dark-muted mt-0.5 truncate">
             <span className="font-bold text-amber-accent">{metrics.dailyAvgTxns.toFixed(0)} txns/day</span> · {metrics.totalTxns.toLocaleString()} txns
@@ -1360,10 +1360,10 @@ export function SubscriptionReport({ isDark }) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text px-1">
-              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} Revenue Trend {trendDataCut !== 'Overall' ? `(${trendDataCut} Split)` : ''}
+              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} GTV Trend {trendDataCut !== 'Overall' ? `(${trendDataCut} Split)` : ''}
             </h3>
             <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">
-              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} revenue trajectory for selected date range
+              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} GTV trajectory for selected date range
             </p>
           </div>
 
@@ -1476,7 +1476,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6 overflow-hidden">
             <PivotTable 
               pivotData={platformPivot} 
-              title="Platform-wise Revenue & Conversions"
+              title="Platform-wise GTV & Conversions"
               metricMode={tableMetricMode}
               isDark={isDark}
             />
@@ -1484,7 +1484,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6">
             <StackedAreaTrendChart
               pivotData={platformPivot}
-              title="Platform-wise Revenue & Conversions"
+              title="Platform-wise GTV & Conversions"
               colorMap={{
                 'Main - Android': '#C2410C', // Deep burnt ember red-orange (Bottom layer)
                 'main - android': '#C2410C',
@@ -1514,7 +1514,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6 overflow-hidden">
             <PivotTable 
               pivotData={userTypePivot} 
-              title="User-type-wise Revenue & Conversions"
+              title="User-type-wise GTV & Conversions"
               metricMode={tableMetricMode}
               isDark={isDark}
             />
@@ -1522,7 +1522,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6">
             <StackedAreaTrendChart
               pivotData={userTypePivot}
-              title="User-type-wise Revenue & Conversions"
+              title="User-type-wise GTV & Conversions"
               colorMap={{
                 'new': '#C2410C',            // Deep burnt ember red-orange (Bottom layer)
                 'New': '#C2410C',
@@ -1559,7 +1559,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6 overflow-hidden">
             <PivotTable 
               pivotData={channelPivot} 
-              title="Channel-wise Revenue & Conversions"
+              title="Channel-wise GTV & Conversions"
               metricMode={tableMetricMode}
               isDark={isDark}
             />
@@ -1567,7 +1567,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6">
             <StackedColumnTrendChart
               pivotData={channelPivot}
-              title="Channel-wise Revenue & Conversions"
+              title="Channel-wise GTV & Conversions"
               colorMap={{
                 'Google Search': '#059669',
                 'Meta Ads': '#EA580C',
@@ -1591,7 +1591,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6 overflow-hidden">
             <PivotTable 
               pivotData={tenurePivot} 
-              title="Plan Duration Tenure-wise Revenue & Conversions"
+              title="Plan Duration Tenure-wise GTV & Conversions"
               metricMode={tableMetricMode}
               isDark={isDark}
             />
@@ -1599,7 +1599,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6">
             <StackedColumnTrendChart
               pivotData={tenurePivot}
-              title="Plan Duration Tenure-wise Revenue & Conversions"
+              title="Plan Duration Tenure-wise GTV & Conversions"
               colorMap={{
                 '< 1 Year': '#FACC15',
                 '1-3 Years': '#F59E0B',
@@ -1616,7 +1616,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6 overflow-hidden">
             <PivotTable 
               pivotData={planPivot} 
-              title="Plan-wise Revenue & Conversions"
+              title="Plan-wise GTV & Conversions"
               metricMode={tableMetricMode}
               isDark={isDark}
             />
@@ -1624,7 +1624,7 @@ export function SubscriptionReport({ isDark }) {
           <div className="xl:col-span-6">
             <PlanTreemapChart
               pivotData={planPivot}
-              title="Plan-wise Revenue & Conversions"
+              title="Plan-wise GTV & Conversions"
               isDark={isDark}
             />
           </div>
@@ -1761,8 +1761,8 @@ function PivotTable({ pivotData, title, metricMode, isDark }) {
       return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     };
     const header = ['Date'];
-    categories.forEach(cat => header.push(`${cat} Revenue (₹)`, `${cat} Conversions`));
-    header.push('Total Revenue (₹)', 'Total Conversions');
+    categories.forEach(cat => header.push(`${cat} GTV (₹)`, `${cat} Conversions`));
+    header.push('Total GTV (₹)', 'Total Conversions');
     const rows = [header];
 
     const totalRow = ['Period total'];
@@ -1938,7 +1938,7 @@ function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defau
         fillcolor: color,
         hovertemplate: viewMode === 'percent'
           ? `<b>${cat}</b><br>%{x}<br>Share: %{y:.1f}%<extra></extra>`
-          : `<b>${cat}</b><br>%{x}<br>Revenue: ₹%{y:,.0f}<extra></extra>`
+          : `<b>${cat}</b><br>%{x}<br>GTV: ₹%{y:,.0f}<extra></extra>`
       };
     });
   }, [dailyRows, categories, viewMode, colorMap, defaultColors]);
@@ -1990,6 +1990,10 @@ function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defau
             lockZoom
             data={chartData}
             layout={{
+              // The mode swaps an explicit [0,100] range for autorange; a new
+              // uirevision makes Plotly drop the old axis state instead of
+              // keeping it (which left the value view on a -1..4 axis).
+              uirevision: viewMode,
               autosize: true,
               margin: isMobile ? { l: 40, r: 10, t: 10, b: 60 } : { l: 45, r: 20, t: 15, b: 70 },
               paper_bgcolor: 'transparent',
@@ -2026,11 +2030,17 @@ function StackedAreaTrendChart({ pivotData, title, colorMap: colorMapProp, defau
   );
 }
 
+// Light-theme series ladder for stacked columns (bottom series first)
+const LIGHT_STACK_LADDER = ['#FBBF24', '#FDBA74', '#FACC15', '#FED7AA', '#FDE047', '#FDE68A', '#FEF3C7', '#FEFCE8'];
+
 function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, defaultColors: defaultColorsProp, isDark, initialMetric = "Revenue (₹)" }) {
   const isMobile = useIsMobile();
-  // Warm identity colors flip to their blue equivalents in dark mode
-  const colorMap = themedColorMap(colorMapProp, isDark);
-  const defaultColors = themedColorList(defaultColorsProp, isDark);
+  // Dark mode: warm identity colors flip to their blue equivalents. Light mode
+  // (2026-09-22): the deep warm tones and the greens read too heavy as stacked
+  // columns, so series take a fixed gold -> yellow -> cream ladder by position
+  // (same family as the area charts and the plan treemap).
+  const colorMap = isDark ? themedColorMap(colorMapProp, isDark) : null;
+  const defaultColors = isDark ? themedColorList(defaultColorsProp, isDark) : LIGHT_STACK_LADDER;
   const [metricMode, setMetricMode] = useState(initialMetric);
   const { categories, dailyRows } = pivotData;
 
@@ -2063,10 +2073,11 @@ function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, def
         y: vals,
         name: cat,
         type: 'bar',
-        marker: { color },
+        // faint warm outline keeps the cream segments visible on the white card
+        marker: { color, line: isDark ? { width: 0 } : { color: 'rgba(120, 53, 15, 0.28)', width: 0.6 } },
         hovertemplate: metricMode.includes('Conversion')
           ? `<b>${cat}</b><br>%{x}<br>Conversions: %{y:,.0f}<extra></extra>`
-          : `<b>${cat}</b><br>%{x}<br>Revenue: ₹%{y:,.0f}<extra></extra>`
+          : `<b>${cat}</b><br>%{x}<br>GTV: ₹%{y:,.0f}<extra></extra>`
       };
     });
   }, [dailyRows, categories, metricMode, colorMap, defaultColors]);
@@ -2097,7 +2108,7 @@ function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, def
                 : "text-warm-muted dark:text-dark-muted hover:text-warm-text"
             }`}
           >
-            Revenue (₹)
+            GTV (₹)
           </button>
           <button
             onClick={() => setMetricMode("Conversions (#)")}
@@ -2151,7 +2162,7 @@ function StackedColumnTrendChart({ pivotData, title, colorMap: colorMapProp, def
   );
 }
 
-function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions", isDark }) {
+function PlanTreemapChart({ pivotData, title = "Plan-wise GTV & Conversions", isDark }) {
   const { categoryGrandTotals, finalGrandTotalRev } = pivotData;
 
   const treemapItems = useMemo(() => {
@@ -2183,8 +2194,19 @@ function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions"
       '#FDE68A',
       '#FEF3C7'
     ];
+    // Light theme: golden -> yellow -> cream by revenue rank (largest tile deepest)
+    const lightColors = [
+      '#FBBF24',
+      '#FCD34D',
+      '#FACC15',
+      '#FDE047',
+      '#FDE68A',
+      '#FEF08A',
+      '#FEF3C7',
+      '#FEFCE8'
+    ];
 
-    return { labels, parents, values, text, warmColors, total: finalGrandTotalRev };
+    return { labels, parents, values, text, warmColors, lightColors, total: finalGrandTotalRev };
   }, [categoryGrandTotals, finalGrandTotalRev]);
 
   if (!treemapItems || treemapItems.labels.length === 0) {
@@ -2194,7 +2216,7 @@ function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions"
           <h3 className="text-base font-bold text-warm-text dark:text-dark-text truncate">{title}</h3>
         </div>
         <div className="bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-xl shadow-sm p-5 h-[480px] flex items-center justify-center text-center">
-          <p className="text-xs text-warm-muted dark:text-dark-muted">No plan revenue data available.</p>
+          <p className="text-xs text-warm-muted dark:text-dark-muted">No plan GTV data available.</p>
         </div>
       </div>
     );
@@ -2205,7 +2227,7 @@ function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions"
       {/* Title omitted — the paired table on the left already carries it */}
       <div className="flex items-center justify-end mb-2 px-1 h-[28px]">
         <div className="flex items-center gap-1.5 text-xs bg-warm-tableBg dark:bg-zinc-800 px-2.5 py-0.5 rounded-full border border-warm-border dark:border-zinc-700 shadow-xs shrink-0">
-          <span className="text-[10px] uppercase font-bold text-warm-muted dark:text-dark-muted">Total Rev:</span>
+          <span className="text-[10px] uppercase font-bold text-warm-muted dark:text-dark-muted">Total GTV:</span>
           <span className="text-xs font-black text-amber-accent">{formatIndianCurrency1Dec(treemapItems.total)}</span>
         </div>
       </div>
@@ -2223,7 +2245,7 @@ function PlanTreemapChart({ pivotData, title = "Plan-wise Revenue & Conversions"
               textposition: 'middle center',
               hoverinfo: 'label+value+percent root',
               marker: {
-                colors: themedColorList(treemapItems.warmColors, isDark),
+                colors: isDark ? themedColorList(treemapItems.warmColors, isDark) : treemapItems.lightColors,
                 line: { width: 2, color: isDark ? '#1E293B' : '#FFFFFF' }
               }
             }]}
@@ -2284,7 +2306,7 @@ function RenewalsAndRecurring({ isDark }) {
   const [renewalsLoading, setRenewalsLoading] = useState(true);
   const [renewalsError, setRenewalsError] = useState(null);
 
-  const [renDatePreset, setRenDatePreset] = useState("Last 30 days");
+  const [renDatePreset, setRenDatePreset] = useState("Last 7 days");
   const [renStartDate, setRenStartDate] = useState("");
   const [renEndDate, setRenEndDate] = useState("");
   const [renViewLevel, setRenViewLevel] = useState("Day");
@@ -2759,7 +2781,7 @@ function RenewalsAndRecurring({ isDark }) {
   const [recurringData, setRecurringData] = useState([]);
   const [recurringLoading, setRecurringLoading] = useState(true);
 
-  const [recDatePreset, setRecDatePreset] = useState("Last 30 days");
+  const [recDatePreset, setRecDatePreset] = useState("Last 7 days");
   const [recStartDate, setRecStartDate] = useState("");
   const [recEndDate, setRecEndDate] = useState("");
   const [recViewLevel, setRecViewLevel] = useState("Day");
@@ -5515,7 +5537,7 @@ function FunnelAnalysis({ isDark }) {
   const [error, setError] = useState(null);
 
   // Primary Date State
-  const [datePreset, setDatePreset] = useState("Last 30 days");
+  const [datePreset, setDatePreset] = useState("Last 7 days");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -8408,7 +8430,7 @@ const TREND_METRICS = [
 /**
  * Horizontal bar funnel: one row per stage with a log-scaled bar (funnel
  * volumes span ~4 orders of magnitude — linear bars would vanish), the
- * daily-average value and the drop-off to the next stage. With a comparison
+ * daily-average value and its share of the previous stage. With a comparison
  * period active, each stage shows a second, lighter bar for the comparison.
  * Accent follows the theme: amber in light mode, blue in dark.
  */
@@ -8428,7 +8450,9 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
   const primColor = isDark ? '#3B82F6' : '#F59E0B';
   const compColor = isDark ? '#93C5FD' : '#FCD34D';
   const fmt = formatValue || ((v) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(1)}k` : Math.round(v).toLocaleString());
-  const dropOf = (arr, i) => (i < arr.length - 1 && arr[i] > 0) ? Math.max(0, (1 - arr[i + 1] / arr[i]) * 100) : null;
+  // Share of the previous stage that reached this one (DAU has no previous stage)
+  const convFromPrev = (arr, i) => (i > 0 && arr[i - 1] > 0) ? (arr[i] / arr[i - 1]) * 100 : null;
+  const fmtPct = (v) => (v < 1 ? v.toFixed(2) : v.toFixed(1));
 
   return (
     <div>
@@ -8441,8 +8465,8 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
 
       <div className="space-y-5">
         {stages.map((s, i) => {
-          const drop = dropOf(vals, i);
-          const cDrop = compVals ? dropOf(compVals, i) : null;
+          const conv = convFromPrev(vals, i);
+          const cConv = compVals ? convFromPrev(compVals, i) : null;
           return (
             <div key={s.label} className="flex items-center gap-3">
               <div className="w-28 sm:w-32 shrink-0 text-right text-xs font-bold text-warm-text dark:text-dark-text">{s.label}</div>
@@ -8450,9 +8474,9 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
                 <div className="flex items-center gap-2">
                   <div className="h-8 rounded-md transition-all duration-500" style={{ width: `${widthPct(vals[i])}%`, background: primColor, minWidth: 6 }} />
                   <span className="text-xs font-extrabold text-warm-text dark:text-dark-text whitespace-nowrap">{fmt(vals[i])}/day</span>
-                  {drop !== null && (
-                    <span className="text-[11px] font-semibold text-red-600/90 dark:text-red-400/90 whitespace-nowrap hidden sm:inline">
-                      ▼ {drop.toFixed(1)}% drop-off
+                  {conv !== null && (
+                    <span className="text-[11px] font-semibold text-emerald-700/90 dark:text-emerald-400/90 whitespace-nowrap hidden sm:inline">
+                      {fmtPct(conv)}% of prev step
                     </span>
                   )}
                 </div>
@@ -8460,9 +8484,9 @@ function HorizontalFunnelBars({ stages, comparison, primaryLabel, comparisonLabe
                   <div className="flex items-center gap-2">
                     <div className="h-8 rounded-md transition-all duration-500" style={{ width: `${widthPct(compVals[i])}%`, background: compColor, minWidth: 6 }} />
                     <span className="text-xs font-bold text-warm-muted dark:text-dark-muted whitespace-nowrap">{fmt(compVals[i])}/day</span>
-                    {cDrop !== null && (
+                    {cConv !== null && (
                       <span className="text-[11px] font-semibold text-warm-muted dark:text-dark-muted whitespace-nowrap hidden sm:inline">
-                        ▼ {cDrop.toFixed(1)}%
+                        {fmtPct(cConv)}% of prev
                       </span>
                     )}
                   </div>
@@ -8766,7 +8790,7 @@ function ArpuReport({ isDark }) {
   const [error, setError] = useState(null);
 
   // Multi-Select Filter States (Array of strings, empty array [] = All)
-  const [datePreset, setDatePreset] = useState("Last 30 days");
+  const [datePreset, setDatePreset] = useState("Last 7 days");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
