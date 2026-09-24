@@ -1,4 +1,7 @@
 import { queryGeminiBI, getStoredApiKey } from '../services/geminiService.js';
+import { withInsightLines } from './insightLines.js';
+import { answerDataOverview, answerRealtime, answerFunnel, answerRenewals, answerSubscription, answerArpu, generalQAFacts } from './engineAnswers.js';
+import { resolveWindow, comparisonMonths, renewalsAgg, renewalsByPlatform, renewalsByPlan, renewalsByMonth, renewalsDaily, platformsWanted, filterPlatforms, pct as fmtPct } from './engineData.js';
 import { queryLlamaBI, getStoredLlamaConfig } from '../services/llamaService.js';
 
 /**
@@ -49,7 +52,7 @@ export function getActiveDomainFromHistory(conversationHistory = []) {
   if (!Array.isArray(conversationHistory) || conversationHistory.length === 0) return null;
   for (let i = conversationHistory.length - 1; i >= 0; i--) {
     const msg = conversationHistory[i];
-    if (msg.domain && ['SUBSCRIPTION', 'FUNNEL', 'RENEWALS', 'REALTIME'].includes(msg.domain)) {
+    if (msg.domain && ['SUBSCRIPTION', 'FUNNEL', 'RENEWALS', 'REALTIME', 'ARPU'].includes(msg.domain)) {
       return msg.domain;
     }
     if (msg.sender === 'bot' && msg.text) {
@@ -118,9 +121,9 @@ export function verifyAndEnforceRequirementMatch(result, rawQuery, contextData =
   const q = (rawQuery || '').toLowerCase().trim();
   if (!result || !result.text) return result;
 
-  const isMeta = result.domain === 'META' || 
-    q.includes('how are') || q.includes('how r') || q.includes('hello') || q.includes('hi') ||
-    q.includes('who are you') || q.includes('what data') || q.includes('haww');
+  // whole words only: "this month" and "which platform" must not read as "hi"
+  const isMeta = result.domain === 'META' || result.domain === 'DATA_OVERVIEW' ||
+    /\b(hello|hi|hey|how are you|how r u|who are you|haww)\b/.test(q);
 
   // Small-Talk / Meta Guard: Enforce null KPIs, chart, and table for simple greetings or meta questions
   if (isMeta) {
@@ -133,7 +136,7 @@ export function verifyAndEnforceRequirementMatch(result, rawQuery, contextData =
   const isRenewals = q.includes('renew') || q.includes('recurring') || result.domain === 'RENEWALS';
   const isFunnel = q.includes('funnel') || q.includes('paywall') || result.domain === 'FUNNEL';
 
-  if (isRenewals) {
+  if (isRenewals && result.domain !== 'SUBSCRIPTION') {
     result.domain = 'RENEWALS';
   } else if (isFunnel) {
     result.domain = 'FUNNEL';
@@ -146,14 +149,12 @@ export function verifyAndEnforceRequirementMatch(result, rawQuery, contextData =
   // Verification Failure Guard: User asked for weekly, but answer lacked week breakdown
   if (wantsWeekly && !hasWeekInTable && !hasWeekInText) {
     console.warn("⚠️ [Requirement Verification Guard] Output failed weekly requirement check. Re-building weekly response.");
-    const isAug = q.includes('august') || q.includes('aug') || JSON.stringify(result).toLowerCase().includes('august');
-
     if (isRenewals) {
-      return processRenewalsDomain(isAug ? 'august weekly renewals' : 'july weekly renewals', contextData.renewalsData);
+      return processRenewalsDomain(q, contextData.renewalsData, contextData);
     } else if (isFunnel) {
-      return processFunnelDomain('last 7 days day wise', contextData.funnelData);
+      return processFunnelDomain(q, contextData.funnelData);
     } else {
-      return processSubscriptionDomain('last 7 days day wise', contextData.subscriptionData);
+      return processSubscriptionDomain(q, contextData.subscriptionData, contextData);
     }
   }
 
@@ -247,6 +248,11 @@ function fuzzyContains(query, targets, maxDistance = 1) {
 }
 
 export function processConversationalQuery(rawQuery, contextData = {}) {
+  // Every deterministic answer opens with one or two lines read off its own data
+  return withInsightLines(processConversationalQueryCore(rawQuery, contextData));
+}
+
+function processConversationalQueryCore(rawQuery, contextData = {}) {
   const activeDomain = getActiveDomainFromHistory(contextData.conversationHistory);
   const resolvedQuery = resolveContextFromHistory(rawQuery, contextData.conversationHistory);
   const q = (resolvedQuery || '').toLowerCase().trim();
@@ -281,10 +287,10 @@ export function processConversationalQuery(rawQuery, contextData = {}) {
       chart: null,
       table: null,
       suggestedFollowups: [
-        "can you compare android vs ios renewals for the month of august and july",
-        "give me funnel data for the last 7 days day wise",
+        "Can you compare Android vs iOS renewals for August and July?",
+        "Give me funnel data for the last 7 days, day-wise",
         "Which platform leads sales?",
-        "Show realtime pacing forecast"
+        "Show the realtime pacing forecast"
       ]
     };
   }
@@ -293,30 +299,29 @@ export function processConversationalQuery(rawQuery, contextData = {}) {
   // 0B. CAPABILITIES / META / GENERAL HELP INTERCEPTOR
   // -------------------------------------------------------------------------
   const isGeneralMeta = 
-    q.includes('what data') || q.includes('haww') || q.includes('what do you have') ||
-    q.includes('what metrics') || q.includes('capabilities') || q.includes('how can you') ||
+    q.includes('haww') ||
+    q.includes('capabilities') || q.includes('how can you') ||
     q.includes('what can you') || q.includes('help') || q === 'help' || q.includes('options') ||
     q.includes('explain dashboard');
 
   if (isGeneralMeta) {
     return {
       domain: 'META',
-      text: `I am your **ET Prime Conversational BI Assistant**. I can analyze live ledger data across 4 core areas:\n\n` +
-            `• **Renewals & Recurring**: Multi-month comparisons (e.g. August vs July), platform renewals (iOS vs Android), 1-Yr vs 3-Yr retention, auto-renew share.\n` +
-            `• **User Acquisition Funnel**: DAU, Paywall hit rates, stage conversion rates, 7d vs 30d performance, day-wise trends.\n` +
-            `• **Subscription & Revenue**: Revenue trajectories, conversions, platform share (MWeb vs Android vs iOS), daily averages.\n` +
-            `• **Realtime Sales Pacing**: Today's live purchase pacing, hourly trends, and estimated EOD forecasts.\n\n` +
-            `Ask me any question in natural language! For example:\n` +
-            `• *"can you compare android vs ios renewals for the month of august and july"* \n` +
-            `• *"give me funnel data for the last 7 days day wise"*`,
+      text: `I am your **ET Prime Conversational BI Assistant**. Every answer is computed from the data loaded in the dashboard, for any window you name (last 7 days, this month, August, yesterday) and any cut the feeds carry:\n\n` +
+            `• **GTV & conversions**: by platform, plan, channel, sub-source, user type, country, marketing team, hour of day; daily trends; period comparisons (this week vs last week, August vs July).\n` +
+            `• **ARPU**: by campaign theme, offer, sale status, marketing team, platform or plan; daily trend.\n` +
+            `• **Renewals & recurring**: by platform, plan tenure, week, month; month comparisons; recurring share of fresh sales.\n` +
+            `• **Acquisition funnel**: step conversion and leakage, platform / team / India-vs-international splits, day-wise, 7 vs 30 days.\n` +
+            `• **Realtime**: today's purchases and EOD projection vs the 4-week same-weekday or last-7-day benchmark, by platform or team.\n\n` +
+            `Try: *"Telecalling GTV for the last 7 days"*, *"ARPU by campaign theme this month"*, *"India vs international funnel"*, *"Compare this week vs last week GTV"*.`,
       kpis: null,
       chart: null,
       table: null,
       suggestedFollowups: [
-        "can you compare android vs ios renewals for the month of august and july",
-        "give me funnel data for the last 7 days day wise",
+        "Can you compare Android vs iOS renewals for August and July?",
+        "Give me funnel data for the last 7 days, day-wise",
         "Which platform leads sales?",
-        "What is the renewal rate for the month of july'26?"
+        "What is the renewal rate for July'26?"
       ]
     };
   }
@@ -332,16 +337,19 @@ export function processConversationalQuery(rawQuery, contextData = {}) {
       rawResult = processDataOverviewDomain(rawQuery, contextData);
       break;
     case 'REALTIME':
-      rawResult = processRealtimeDomain(q, realtimeData);
+      rawResult = processRealtimeDomain(q, contextData);
       break;
     case 'FUNNEL':
       rawResult = processFunnelDomain(q, funnelData);
       break;
     case 'RENEWALS':
-      rawResult = processRenewalsDomain(q, renewalsData);
+      rawResult = processRenewalsDomain(q, renewalsData, contextData);
       break;
     case 'SUBSCRIPTION':
-      rawResult = processSubscriptionDomain(q, subscriptionData);
+      rawResult = processSubscriptionDomain(q, subscriptionData, contextData);
+      break;
+    case 'ARPU':
+      rawResult = processArpuDomain(q, contextData);
       break;
     case 'UNKNOWN':
     default:
@@ -357,10 +365,10 @@ export function processConversationalQuery(rawQuery, contextData = {}) {
         chart: null,
         table: null,
         suggestedFollowups: [
-          "can you compare android vs ios renewals for the month of august and july",
-          "give me funnel data for the last 7 days day wise",
+          "Can you compare Android vs iOS renewals for August and July?",
+          "Give me funnel data for the last 7 days, day-wise",
           "Which platform leads sales?",
-          "Show realtime pacing forecast"
+          "Show the realtime pacing forecast"
         ]
       };
       break;
@@ -398,22 +406,27 @@ export function routeQueryDomain(q, activeDomain = null) {
 
   // 1. Explicit domain triggers (User explicitly asks about another tab)
   const mentionsRealtime = fuzzyContains(q, ['realtime', 'pacing', 'hourly', 'forecast', 'eod', 'pacng', 'pasing']) || q.includes("today's sales") || q.includes("today's purchase") || q.includes("today purchases") || q.includes("today's performance") || q.includes("performance for today") || q.includes("today's funnel") || (q.includes('today') && (q.includes('funnel') || q.includes('performance') || q.includes('purchase')));
-  const mentionsFunnel = fuzzyContains(q, ['funnel', 'funel', 'dau', 'paywall', 'paywal', 'paywalling', 'pageload', 'dropoff', 'drop off']);
-  const mentionsRenewals = fuzzyContains(q, ['renewal rate', 'renewals', 'renewed', 'recurring cohort', 'auto-renew share', 'monthly renewal']) || (q.includes('renewal') && !q.includes('revenue') && !q.includes('split') && !q.includes('user'));
-  const mentionsSubscription = fuzzyContains(q, ['subscription', 'revenue', 'conversions', 'sales', 'arpu', 'sales platform', 'new vs renewal', 'mweb']) || q.includes('plan revenue');
+  const mentionsFunnel = fuzzyContains(q, ['funnel', 'funel', 'dau', 'paywall', 'paywal', 'paywalling', 'pageload', 'dropoff']) || q.includes('drop off') || q.includes('drop-off');
+  const mentionsRenewals = fuzzyContains(q, ['renewal', 'renewals', 'renewed', 'renew', 'renews', 'renewing']) || q.includes('renewal rate') || q.includes('recurring cohort') || q.includes('auto-renew') || q.includes('monthly renewal') || (q.includes('renewal') && !q.includes('revenue') && !q.includes('split') && !q.includes('user'));
+  const mentionsSubscription = fuzzyContains(q, ['subscription', 'revenue', 'conversions', 'sales', 'arpu', 'mweb', 'gtv', 'channel', 'roas', 'spend', 'campaign', 'tenure', 'sell', 'selling', 'sold']) || q.includes('sales platform') || q.includes('new vs renewal') || q.includes('plan revenue') || /\bgtv\b|\bchannel\b|\bcampaign|\broas\b|\bspend\b|user[\s-]?type|txn[\s-]?type|time of day|peak (hour|time)|hour of day/.test(q);
+  // A revenue / GTV split by user type is a ledger question even though it says "renewal"
+  const subscriptionSplit = mentionsSubscription && /new vs|user[\s-]?type|txn[\s-]?type|(revenue|gtv|sales) split/.test(q);
 
-  // PRIORITY: If query mentions BOTH "realtime"/"today" AND "funnel", realtime wins because user wants live data
-  if (mentionsRealtime && mentionsFunnel) return 'REALTIME';
+  const mentionsArpu = /\barpu\b|average revenue per|campaign theme|\btheme\b|\boffer\b|sale status|\byield\b/.test(q);
+
+  // PRIORITY: live-data words (today, pacing, forecast, hourly) win over everything else
+  if (mentionsRealtime) return 'REALTIME';
+  if (mentionsArpu && !mentionsFunnel && !mentionsRenewals) return 'ARPU';
+  if (subscriptionSplit) return 'SUBSCRIPTION';
 
   // If user explicitly asks for a domain, route accordingly:
-  if (mentionsRealtime && !mentionsFunnel && !mentionsSubscription) return 'REALTIME';
   if (mentionsFunnel && !mentionsSubscription) return 'FUNNEL';
   if (mentionsRenewals && !mentionsSubscription) return 'RENEWALS';
   if (mentionsSubscription && !mentionsFunnel && !mentionsRenewals) return 'SUBSCRIPTION';
 
   // 2. CONVERSATIONAL CONTEXT CONTINUITY:
   // If user is currently analyzing a particular tab and didn't explicitly ask for another tab, STAY in that tab!
-  if (activeDomain && ['SUBSCRIPTION', 'FUNNEL', 'RENEWALS', 'REALTIME'].includes(activeDomain)) {
+  if (activeDomain && ['SUBSCRIPTION', 'FUNNEL', 'RENEWALS', 'REALTIME', 'ARPU'].includes(activeDomain)) {
     console.log(`🧭 [Domain Continuity] Retaining active tab context: "${activeDomain}"`);
     return activeDomain;
   }
@@ -518,1497 +531,31 @@ function getTargetDates(data = [], days = 30) {
 // =========================================================================
 // 🌟 DOMAIN 0: DATA OVERVIEW & CATALOG PROCESSOR
 // =========================================================================
+// =========================================================================
+// DOMAIN ANSWERS — computed from the loaded datasets (see engineAnswers.js)
+// =========================================================================
 function processDataOverviewDomain(rawQuery, contextData = {}) {
-  return {
-    domain: 'SUBSCRIPTION',
-    text: `I have access to **4 synchronized live datasets** for the ET Prime Subscription Ledger:\n\n` +
-          `1. **User Acquisition Funnel**:\n` +
-          `   • Tracks full funnel flow: **DAU → Paywall Hits → Plan Page Loaded → Plan Selected → Pay Initiated → Purchased**\n` +
-          `   • Segments: View Type (Overall, By Platform), Platform (Combined, Main iOS, MWeb, Main Android), Country (India vs Worldwide), and Marketing Teams (Paid vs Product Marketing).\n\n` +
-          `2. **Subscription & Revenue Ledger**:\n` +
-          `   • **180 Days of Daily Transactions** (March 9, 2026 – September 4, 2026), 83,321 rows, **₹20.97 Cr Gross Revenue** (~₹4.23 Cr in the last 30 days at ₹14.10 L/day average).\n` +
-          `   • Segments: User Txn Type (New, Renewal, Upgrade, Expired), Platform (MWeb 41% volume leader, Main Android, Main iOS, Market Android, Market iOS, Web), Plan Category (1M, 1Y, 2Y), Channels, and Campaign Themes.\n\n` +
-          `3. **Renewals & Recurring Cohorts**:\n` +
-          `   • Monthly cohorts from **January to August 2026** tracking Subscriptions Due vs Renewed (Renewal rates range from **41.2% to 48.0%**).\n` +
-          `   • Breakdowns: Monthly trend, day-wise pacing, platform split, and plan category retention.\n\n` +
-          `4. **Realtime Sales Pacing**:\n` +
-          `   • Intra-day hourly purchases (00:00 to 23:00), run-rate pacing curve, EOD projection, and 4-week benchmark comparisons.\n\n` +
-          `You can ask me questions about any of these domains, or click the suggested queries below!`,
-    kpis: [
-      { label: "Total Revenue (30D)", value: "₹4.23 Cr", sub: "₹14.10 L/day" },
-      { label: "Top Sales Platform", value: "MWeb", sub: "41% Total Vol" },
-      { label: "Funnel Conversion", value: "1.56%", sub: "Page Load to Sale" },
-      { label: "Connected Datasets", value: "4 Live Sources", sub: "Sync Active" }
-    ],
-    chart: {
-      type: 'bar',
-      title: 'Gross Revenue Contribution by Platform (Last 30 Days)',
-      labels: ['MWeb', 'Main Android', 'Main iOS', 'Web', 'Market iOS', 'Market Android'],
-      values: [174.6, 112.4, 82.5, 38.7, 10.2, 5.1],
-      colors: ['#F59E0B', '#3B82F6', '#10B981', '#8B5CF6', '#6366F1', '#EC4899']
-    },
-    table: {
-      headers: ['Dataset / Domain', 'Primary Metrics', 'Key Dimensions', 'Coverage / Granularity'],
-      rows: [
-        ['User Acquisition Funnel', 'DAU, Paywall Hits, Plan Page, Purchases', 'Platform, Country, Marketing Team', 'Last 7D / 30D / Day-wise'],
-        ['Subscription & Revenue', 'Gross Revenue, ARPU, Conversions', 'User Txn Type, Platform, Plan, Campaign', '180 Days (Daily Ledger)'],
-        ['Renewals & Recurring', 'Renewal Due, Renewed, Renewal Rate %', 'Platform, Plan Duration (1Y, 3Y, 1M)', 'Jan - Aug 2026 Monthly & Daily'],
-        ['Realtime Sales Pacing', 'Hourly Purchases, EOD Forecast', 'Hourly (00:00 - 23:00), Platform', 'Today Live vs 4W Benchmark']
-      ]
-    },
-    suggestedFollowups: [
-      "give me funnel data for the last 7 days day wise",
-      "What is the renewal rate for the month of july'26?",
-      "Which platform leads sales in the last 30 days?",
-      "Show new user vs renewal user revenue split"
-    ]
-  };
+  return answerDataOverview(rawQuery, contextData);
 }
 
-// =========================================================================
-// 🟢 DOMAIN 1: REALTIME LIVE FORECAST PROCESSOR
-// =========================================================================
-function processRealtimeDomain(q, realtimeData) {
-  if (realtimeData) {
-    const { todayPurchases, projectedTotal, benchmarkTitle, benchmarkTotal, currentHour } = realtimeData;
-    const displayHour = `${String(currentHour + 1).padStart(2, '0')}:00`;
-    
-    return {
-      domain: 'REALTIME',
-      text: `Today's live forecast as of **${displayHour}** has recorded **${todayPurchases.toLocaleString()} purchases so far**, pacing toward an estimated EOD total of **${Math.round(projectedTotal).toLocaleString()} purchases**. Compared to the **${benchmarkTitle}** benchmark total of **${Math.round(benchmarkTotal).toLocaleString()}**, today is pacing strongly.`,
-      kpis: [
-        { label: "Today (So far)", value: todayPurchases.toLocaleString(), sub: `Up to ${displayHour}` },
-        { label: "Estimated EOD", value: Math.round(projectedTotal).toLocaleString(), sub: "Full Day Forecast" },
-        { label: benchmarkTitle, value: Math.round(benchmarkTotal).toLocaleString(), sub: "Historical Benchmark" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Today vs Historical Pacing',
-        labels: ['Today So Far', 'Estimated EOD', 'Benchmark EOD'],
-        values: [todayPurchases, Math.round(projectedTotal), Math.round(benchmarkTotal)],
-        colors: ['#F59E0B', '#3B82F6', '#64748B']
-      },
-      suggestedFollowups: [
-        "Compare today's performance against last 7 days avg",
-        "Show hourly pacing trend for today",
-        "give me funnel data for the last 7 days day wise"
-      ]
-    };
-  }
-
-  return {
-    domain: 'REALTIME',
-    text: "Realtime data is currently synchronizing. Today's purchases are pacing steadily against historical averages.",
-    kpis: [{ label: "Status", value: "Syncing", sub: "Live Feed" }],
-    suggestedFollowups: ["give me funnel data for the last 7 days day wise", "Which platform leads sales?"]
-  };
+function processRealtimeDomain(q, contextData = {}) {
+  return answerRealtime(q, contextData);
 }
 
-// =========================================================================
-// 🔵 DOMAIN 2: FUNNEL ANALYSIS PROCESSOR
-// =========================================================================
-function processFunnelDomain(q, funnelData = []) {
-  const isFunnelLeakage = q.includes('leak') || q.includes('dropoff') || q.includes('drop off') || (q.includes('payment selected') && q.includes('pay initiated')) || (q.includes('landed') && q.includes('pay'));
-  if (isFunnelLeakage) {
-    return {
-      domain: 'FUNNEL',
-      text: `Funnel leakage analysis across key acquisition stages reveals that the **largest drop-off occurs between Plan Page Loaded and Plan Selected (68.4% drop)**, followed by **Plan Selected to Pay Initiated (42.1% drop)**:\n\n` +
-            `• **Landed / DAU → Paywall Hits**: 97.4% drop (2.6% intent trigger rate)\n` +
-            `• **Paywall Hits → Plan Page Loaded**: 72.8% transition (27.2% immediate bounce)\n` +
-            `• **Plan Page Loaded → Plan Selected**: **68.4% leakage** (primary friction point — pricing & plan cognitive load)\n` +
-            `• **Plan Selected → Pay Initiated**: **42.1% leakage** (drop-off before payment gateway)\n` +
-            `• **Pay Initiated → Purchased**: 8.3% leakage (91.7% payment success rate)`,
-      kpis: [
-        { label: "Primary Leak Point", value: "Page to Plan", sub: "68.4% Drop-off" },
-        { label: "Payment Success Rate", value: "91.7%", sub: "Initiated to Paid" },
-        { label: "Overall End-to-End", value: "1.56%", sub: "Page Load to Sale" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Stage-by-Stage Funnel Retention (%)',
-        labels: ['DAU (100%)', 'Paywall Hits', 'Plan Loaded', 'Plan Selected', 'Pay Initiated', 'Purchased'],
-        values: [100, 2.6, 1.9, 0.6, 0.35, 0.32],
-        colors: ['#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981']
-      },
-      table: {
-        headers: ['Funnel Stage', 'Step Volume', 'Drop-off %', 'Stage Conversion %'],
-        rows: [
-          ['1. Daily Active Users (DAU)', '3,560,000', '—', '100%'],
-          ['2. Paywall Hits', '94,398', '97.35%', '2.65%'],
-          ['3. Plan Page Loaded', '68,720', '27.20%', '72.80%'],
-          ['4. Plan Selected', '21,715', '68.40%', '31.60%'],
-          ['5. Pay Initiated', '12,573', '42.10%', '57.90%'],
-          ['6. Purchased', '11,529', '8.30%', '91.70%']
-        ]
-      },
-      suggestedFollowups: [
-        "Compare Paid Marketing vs Product Marketing funnel conversion",
-        "Give me platform wise funnel breakdown",
-        "What is the DAU for India over the last 7 days?"
-      ]
-    };
-  }
-
-  const isPlatformFunnel = q.includes('platform') && (q.includes('split') || q.includes('breakdown') || q.includes('funnel') || q.includes('wise'));
-  if (isPlatformFunnel) {
-    const platforms = ['MWeb', 'Main iOS', 'Main Android', 'Market Android', 'Market iOS', 'Web'];
-    const platStats = {};
-    platforms.forEach(p => { platStats[p] = { hits: 0, loads: 0, purchased: 0, days: 0 }; });
-
-    if (funnelData && funnelData.length > 0) {
-      const dates = getTargetDates(funnelData, 7);
-      dates.forEach(d => {
-        platforms.forEach(plat => {
-          const row = funnelData.find(r =>
-            r.dateStr === d &&
-            String(r.ET_Platform || r.platform || '').trim().toLowerCase() === plat.toLowerCase() &&
-            String(r.Country || r.country || '').trim().toLowerCase() === 'overall' &&
-            String(r.Marketing_team || r.marketingTeam || '').trim().toLowerCase() === 'overall'
-          );
-          if (row) {
-            platStats[plat].hits += parseInt(row.paywalling_hits || row.paywall_hits || 0, 10);
-            platStats[plat].loads += parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load || 0, 10);
-            platStats[plat].purchased += parseInt(row.Purchased || 0, 10);
-            platStats[plat].days++;
-          }
-        });
-      });
-    }
-
-    const rows = platforms.map(plat => {
-      const stat = platStats[plat];
-      const dCount = stat.days || 1;
-      const dailyHits = Math.round(stat.hits / dCount);
-      const dailyLoads = Math.round(stat.loads / dCount);
-      const totalPurch = stat.purchased;
-      const conv = stat.loads > 0 ? ((stat.purchased / stat.loads) * 100).toFixed(2) : '0.00';
-      return {
-        plat,
-        dailyHits,
-        dailyLoads,
-        totalPurch,
-        convRate: conv
-      };
-    });
-
-    const sortedByConv = [...rows].sort((a, b) => parseFloat(b.convRate) - parseFloat(a.convRate));
-    const sortedByVol = [...rows].sort((a, b) => b.dailyHits - a.dailyHits);
-    const topEff = sortedByConv[0] || { plat: 'Web', convRate: '2.88' };
-    const topVol = sortedByVol[0] || { plat: 'MWeb', dailyHits: 34871 };
-
-    const bulletPoints = rows.map(r =>
-      `• **${r.plat}**: **${r.dailyHits.toLocaleString()} Daily Hits** | **${r.totalPurch.toLocaleString()} Purchases (7d)** | **${r.convRate}% Conversion**`
-    ).join('\n');
-
-    return {
-      domain: 'FUNNEL',
-      text: `Here is the **platform-wise conversion split across key funnel stages (last 7 days)**:\n\n` +
-            bulletPoints,
-      kpis: [
-        { label: "Top Funnel Efficiency", value: topEff.plat, sub: `${topEff.convRate}% Purchase Conv` },
-        { label: "Top Volume Driver", value: topVol.plat, sub: `${topVol.dailyHits.toLocaleString()} Hits/day` },
-        { label: "Tracked Platforms", value: `${platforms.length} Platforms`, sub: "Across all devices" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Platform-Wise Funnel Conversion Rate (Page Load to Purchase %)',
-        labels: rows.map(r => r.plat),
-        values: rows.map(r => parseFloat(r.convRate)),
-        colors: ['#10B981', '#F59E0B', '#3B82F6', '#6366F1', '#EC4899', '#8B5CF6']
-      },
-      table: {
-        headers: ['Platform', 'Daily Paywall Hits', 'Daily Page Loads', 'Purchased (7d)', 'Conversion %'],
-        rows: rows.map(r => [
-          r.plat,
-          r.dailyHits.toLocaleString(),
-          r.dailyLoads.toLocaleString(),
-          r.totalPurch.toLocaleString(),
-          `${r.convRate}%`
-        ])
-      },
-      suggestedFollowups: [
-        "give me funnel data for the last 7 days day wise",
-        "What is the Paywall Hit rate breakdown?",
-        "Compare funnel conversion for last 7 days vs 30 days"
-      ]
-    };
-  }
-
-  const isPaywallHitQuery = q.includes('paywall hit') || (q.includes('hit rate') && q.includes('breakdown'));
-  if (isPaywallHitQuery) {
-    return {
-      domain: 'FUNNEL',
-      text: `Across **3.56M daily active users (DAU)**, the overall **Paywall Hit Rate is 2.65%** (~94,398 hits/day).\n\n` +
-            `• **Organic / Direct In-App Hits**: **54%** (~50,974 hits/day)\n` +
-            `• **Marketing & Push Campaign Hits**: **28%** (~26,431 hits/day)\n` +
-            `• **Referral & External Article Links**: **18%** (~16,993 hits/day)`,
-      kpis: [
-        { label: "Overall Paywall Hit Rate", value: "2.65%", sub: "Of Total DAU" },
-        { label: "Daily Paywall Hits", value: "94,398", sub: "Hits per day" },
-        { label: "Top Source", value: "Organic / Direct", sub: "54% Total Hits" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Paywall Hit Share by Traffic Source (%)',
-        labels: ['Organic / Direct', 'Marketing & Push', 'Referral / External'],
-        values: [54, 28, 18],
-        colors: ['#F59E0B', '#3B82F6', '#10B981']
-      },
-      table: {
-        headers: ['Traffic Channel', 'Daily Paywall Hits', 'Share of Hits %', 'Conv Rate %'],
-        rows: [
-          ['Organic / Direct', '50,974', '54.0%', '1.85%'],
-          ['Marketing & Push', '26,431', '28.0%', '1.32%'],
-          ['Referral / External', '16,993', '18.0%', '0.98%']
-        ]
-      },
-      suggestedFollowups: [
-        "Show platform-wise split of the funnel",
-        "Compare funnel conversion for last 7 days vs 30 days"
-      ]
-    };
-  }
-
-  const isFunnelComp = q.includes('compare') && (q.includes('7 days') || q.includes('7d')) && (q.includes('30 days') || q.includes('30d'));
-  if (isFunnelComp) {
-    return {
-      domain: 'FUNNEL',
-      text: `**Comparison: Last 7 Days vs Last 30 Days Funnel Performance**\n\n` +
-            `• **Paywall Hit Rate**: **2.72%** (Last 7d) vs **2.65%** (Last 30d) — **+0.07% Improvement**\n` +
-            `• **Plan Page Load to Purchase**: **1.62%** (Last 7d) vs **1.55%** (Last 30d) — **+0.07% Conversion Lift**\n` +
-            `• **Daily Average Purchases**: **288/day** (Last 7d) vs **270/day** (Last 30d) — **+6.7% Volume Growth**`,
-      kpis: [
-        { label: "Last 7d Conversion", value: "1.62%", sub: "288 purchases/day" },
-        { label: "Last 30d Conversion", value: "1.55%", sub: "270 purchases/day" },
-        { label: "Conversion Lift", value: "+0.07%", sub: "+6.7% Volume Growth" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Funnel Stage Conversion Comparison (% Rate)',
-        labels: ['Paywall Hit Rate %', 'Page Load to Purchase %'],
-        values: [2.72, 1.62],
-        colors: ['#10B981', '#F59E0B']
-      },
-      table: {
-        headers: ['Metric', 'Last 7 Days', 'Last 30 Days', 'Variance / Lift'],
-        rows: [
-          ['Daily Avg DAU', '3,580,000', '3,563,211', '+0.47%'],
-          ['Daily Paywall Hits', '97,376', '94,398', '+3.15%'],
-          ['Daily Purchases', '288', '270', '+6.67%'],
-          ['Page Load to Purchase %', '1.62%', '1.55%', '+0.07%']
-        ]
-      },
-      suggestedFollowups: [
-        "give me funnel data for the last 7 days day wise",
-        "Show platform-wise split of the funnel"
-      ]
-    };
-  }
-
-  const isDaily = q.includes('day wise') || q.includes('daily') || q.includes('by date') || q.includes('day by day') || q.includes('each day') || q.includes('trend');
-  const days = extractDaysFromQuery(q);
-
-  if (isDaily || days <= 15) {
-    const dates = getTargetDates(funnelData, days > 0 ? days : 7);
-    const dateMap = {};
-
-    // Detect if user specified a particular platform or marketing team
-    const platforms = ['Main Android', 'Market Android', 'Main iOS', 'Market iOS', 'MWeb', 'Web'];
-    const matchedPlatform = platforms.find(p => q.toLowerCase().includes(p.toLowerCase()));
-    const mktTeams = ['Paid Marketing', 'telecalling', 'Product Marketing'];
-    const matchedMkt = mktTeams.find(m => q.toLowerCase().includes(m.toLowerCase()));
-
-    dates.forEach(d => {
-      dateMap[d] = { dateStr: d, DAU: 3500000, paywalling_hits: 94000, Plan_Page_Load: 17500, Purchased: 270 };
-    });
-
-    if (funnelData && funnelData.length > 0) {
-      dates.forEach(d => {
-        const dayRows = funnelData.filter(r => r.dateStr === d);
-        if (dayRows.length === 0) return;
-
-        let best = null;
-        let bestScore = -1;
-
-        dayRows.forEach(r => {
-          const vt = String(r.viewType || r.view_type || '').trim().toLowerCase();
-          const plat = String(r.ET_Platform || r.platform || '').trim();
-          const cntry = String(r.Country || r.country || '').trim().toLowerCase();
-          const mkt = String(r.Marketing_team || r.marketingTeam || '').trim().toLowerCase();
-
-          if (matchedPlatform) {
-            // Specific platform query
-            if (plat.toLowerCase() === matchedPlatform.toLowerCase()) {
-              let score = 0;
-              if (mkt === (matchedMkt ? matchedMkt.toLowerCase() : 'overall')) score += 10;
-              if (cntry === 'overall') score += 5;
-              else if (cntry === 'india') score += 2;
-              if (score > bestScore) {
-                bestScore = score;
-                best = r;
-              }
-            }
-          } else if (matchedMkt) {
-            // Specific marketing team query
-            if (plat.toLowerCase() === 'combined') {
-              let score = 0;
-              if (mkt === matchedMkt.toLowerCase()) score += 10;
-              if (vt === 'overall') score += 5;
-              if (cntry === 'overall') score += 5;
-              else if (cntry === 'india') score += 2;
-              if (score > bestScore) {
-                bestScore = score;
-                best = r;
-              }
-            }
-          } else {
-            // Overall Combined aggregate across all platforms and marketing teams
-            if (plat.toLowerCase() === 'combined' && (vt === 'overall' || !vt)) {
-              let score = 0;
-              if (mkt === 'overall') score += 10;
-              if (cntry === 'overall') score += 5;
-              else if (cntry === 'india') score += 2;
-              if (score > bestScore) {
-                bestScore = score;
-                best = r;
-              }
-            }
-          }
-        });
-
-        if (best) {
-          dateMap[d].DAU = parseInt(best.DAU || best.dau || 0, 10);
-          dateMap[d].paywalling_hits = parseInt(best.paywalling_hits || best.paywall_hits || 0, 10);
-          dateMap[d].Plan_Page_Load = parseInt(best.Plan_Page_Loaded || best.Plan_Page_Load || 0, 10);
-          dateMap[d].Purchased = parseInt(best.Purchased || 0, 10);
-        }
-      });
-    }
-
-    const chartDates = dates.map(d => {
-      const parts = d.split('-');
-      return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
-    });
-
-    const dauVals = dates.map(d => Math.round((dateMap[d].DAU || 0) / 1000000 * 100) / 100);
-    const purchaseVals = dates.map(d => dateMap[d].Purchased || 0);
-
-    const totalPurchases = purchaseVals.reduce((a,b) => a+b, 0);
-    const avgDau = (dauVals.reduce((a,b) => a+b, 0) / dauVals.length).toFixed(2);
-    const avgPurchases = Math.round(totalPurchases / purchaseVals.length);
-
-    const tableRows = dates.map(d => [
-      d,
-      (dateMap[d].DAU || 0).toLocaleString(),
-      (dateMap[d].paywalling_hits || 0).toLocaleString(),
-      (dateMap[d].Plan_Page_Load || 0).toLocaleString(),
-      (dateMap[d].Purchased || 0).toLocaleString()
-    ]);
-
-    const titlePrefix = matchedPlatform ? `${matchedPlatform} ` : (matchedMkt ? `${matchedMkt} ` : '');
-
-    return {
-      domain: 'FUNNEL',
-      text: `Here is the **${titlePrefix}day-wise funnel breakdown** for the **last ${dates.length} days** (${dates[0]} to ${dates[dates.length - 1]}):\n\n` +
-            `• **Average Daily DAU**: **${avgDau}M users/day**\n` +
-            `• **Average Daily Purchases**: **${avgPurchases} purchases/day**\n` +
-            `• **Total Purchases (${dates.length}d)**: **${totalPurchases.toLocaleString()} transactions**`,
-      kpis: [
-        { label: `Total Purchases (${dates.length}d)`, value: totalPurchases.toLocaleString(), sub: `${avgPurchases}/day avg` },
-        { label: "Daily Avg DAU", value: `${avgDau}M`, sub: "Active users/day" },
-        { label: "Timeframe", value: `${dates.length} Days`, sub: "Custom day view" }
-      ],
-      chart: {
-        type: 'line',
-        title: `${titlePrefix}Day-Wise Funnel Volume (${dates[0]} to ${dates[dates.length - 1]})`,
-        labels: chartDates,
-        values: purchaseVals,
-        colors: '#F59E0B'
-      },
-      table: {
-        headers: ['Date', 'DAU', 'Paywall Hits', 'Plan Page Load', 'Purchased'],
-        rows: tableRows
-      },
-      suggestedFollowups: [
-        "Show platform-wise split of the funnel",
-        "What is the Paywall Hit rate breakdown?",
-        "Compare funnel conversion for last 7 days vs 30 days"
-      ]
-    };
-  }
-
-  // General summary view for > 15 days or non-daily overall requests
-  let overallAvgDau = 3563211;
-  let overallHits = 94398;
-  let overallLoads = 17500;
-  let overallPurchases = 270;
-
-  if (funnelData && funnelData.length > 0) {
-    const dates = getTargetDates(funnelData, days > 0 ? days : 30);
-    let totDau = 0, totHits = 0, totLoads = 0, totPurch = 0, validDays = 0;
-    dates.forEach(d => {
-      const row = funnelData.find(r =>
-        r.dateStr === d &&
-        String(r.ET_Platform || r.platform || '').trim().toLowerCase() === 'combined' &&
-        String(r.Country || r.country || '').trim().toLowerCase() === 'overall' &&
-        String(r.Marketing_team || r.marketingTeam || '').trim().toLowerCase() === 'overall'
-      );
-      if (row) {
-        totDau += parseInt(row.DAU || 0, 10);
-        totHits += parseInt(row.paywalling_hits || 0, 10);
-        totLoads += parseInt(row.Plan_Page_Loaded || row.Plan_Page_Load || 0, 10);
-        totPurch += parseInt(row.Purchased || 0, 10);
-        validDays++;
-      }
-    });
-    if (validDays > 0) {
-      overallAvgDau = Math.round(totDau / validDays);
-      overallHits = Math.round(totHits / validDays);
-      overallLoads = Math.round(totLoads / validDays);
-      overallPurchases = Math.round(totPurch / validDays);
-    }
-  }
-
-  const hitRate = overallAvgDau > 0 ? ((overallHits / overallAvgDau) * 100).toFixed(2) + '%' : '2.65%';
-  const convRate = overallLoads > 0 ? ((overallPurchases / overallLoads) * 100).toFixed(2) + '%' : '1.55%';
-
-  return {
-    domain: 'FUNNEL',
-    text: `Across the overall subscription funnel for the past **${days} days**:\n\n` +
-          `• **Daily Average DAU**: **${(overallAvgDau / 1000000).toFixed(2)}M users/day**\n` +
-          `• **Paywall Hit Rate**: **${hitRate}** of DAU (${overallHits.toLocaleString()} hits/day)\n` +
-          `• **Plan Page Load to Purchase Conversion**: **${convRate}** overall (${overallPurchases.toLocaleString()} purchases/day)`,
-    kpis: [
-      { label: "Daily Avg DAU", value: `${(overallAvgDau / 1000000).toFixed(2)}M`, sub: "Users per day" },
-      { label: "Paywall Hit Rate", value: hitRate, sub: `${(overallHits / 1000).toFixed(1)}k hits/day` },
-      { label: "Purchased Conversion", value: convRate, sub: "Of Plan Page Loads" }
-    ],
-    chart: {
-      type: 'bar',
-      title: `Funnel Stage Volumes (${days} Days Avg)`,
-      labels: ['DAU (in M)', 'Paywall Hits (k)', 'Page Load (k)', 'Purchased (hundreds)'],
-      values: [
-        parseFloat((overallAvgDau / 1000000).toFixed(2)),
-        parseFloat((overallHits / 1000).toFixed(1)),
-        parseFloat((overallLoads / 1000).toFixed(1)),
-        parseFloat((overallPurchases / 100).toFixed(1))
-      ],
-      colors: ['#F59E0B', '#FBBF24', '#FCD34D', '#FDE047']
-    },
-    suggestedFollowups: [
-      "give me funnel data for the last 7 days day wise",
-      "Show platform-wise split of the funnel",
-      "What is the Paywall Hit rate breakdown?"
-    ]
-  };
+export function processFunnelDomain(q, funnelData = []) {
+  return answerFunnel(q, funnelData);
 }
 
-// =========================================================================
-// 🟠 DOMAIN 4: RENEWALS & RECURRING PROCESSOR
-// =========================================================================
-export function processRenewalsDomain(q, renewalsData = []) {
-  const isWeeklyQuery = q.includes('weekly') || q.includes('week') || q.includes('split into weekly') || q.includes('by week') || q.includes('per week');
-
-  if (isWeeklyQuery) {
-    if (q.includes('august') || q.includes('aug')) {
-      return {
-        domain: 'RENEWALS',
-        text: `Here is the **weekly renewal trend for August 2026** (Overall August Rate: **45.0%** | 6,848 Renewed / 15,226 Due):\n\n` +
-              `• **Week 1 (Aug 1 - Aug 7)**: **45.0%** renewal rate (1,575 renewed / 3,500 due)\n` +
-              `• **Week 2 (Aug 8 - Aug 14)**: **46.0%** renewal rate (1,748 renewed / 3,800 due)\n` +
-              `• **Week 3 (Aug 15 - Aug 21)**: **48.0%** renewal rate (1,872 renewed / 3,900 due)\n` +
-              `• **Week 4 (Aug 22 - Aug 31)**: **41.1%** renewal rate (1,653 renewed / 4,026 due)\n\n` +
-              `Renewal efficiency peaked in **Week 3 (48.0%)**, driven by targeted end-of-month engagement campaigns.`,
-        kpis: [
-          { label: "Peak Week (Week 3)", value: "48.0%", sub: "1,872 Renewed" },
-          { label: "August Total Renewed", value: "6,848", sub: "15,226 Up for Renewal" },
-          { label: "August Overall Rate", value: "45.0%", sub: "Monthly Average" }
-        ],
-        chart: {
-          type: 'line',
-          title: 'August 2026 Weekly Renewal Rate Trend (%)',
-          labels: ['Week 1 (Aug 1-7)', 'Week 2 (Aug 8-14)', 'Week 3 (Aug 15-21)', 'Week 4 (Aug 22-31)'],
-          values: [45.0, 46.0, 48.0, 41.1],
-          colors: '#F59E0B'
-        },
-        table: {
-          headers: ['Week Period', 'Subscriptions Due', 'Renewed', 'Renewal Rate %'],
-          rows: [
-            ['Week 1 (Aug 1 - Aug 7)', '3,500', '1,575', '45.0%'],
-            ['Week 2 (Aug 8 - Aug 14)', '3,800', '1,748', '46.0%'],
-            ['Week 3 (Aug 15 - Aug 21)', '3,900', '1,872', '48.0%'],
-            ['Week 4 (Aug 22 - Aug 31)', '4,026', '1,653', '41.1%'],
-            ['August Total', '15,226', '6,848', '45.0%']
-          ]
-        },
-        suggestedFollowups: [
-          "Compare August weekly renewals vs July weekly renewals",
-          "Give me platform wise breakup of renewals for the month of august'26",
-          "What is the renewal rate for Main iOS in August'26?"
-        ]
-      };
-    } else {
-      return {
-        domain: 'RENEWALS',
-        text: `Here is the **weekly renewal trend for July 2026** (Overall July Rate: **47.5%** | 21,855 Renewed / 46,011 Due):\n\n` +
-              `• **Week 1 (Jul 1 - Jul 7)**: **46.0%** renewal rate (4,830 renewed / 10,500 due)\n` +
-              `• **Week 2 (Jul 8 - Jul 14)**: **47.0%** renewal rate (5,264 renewed / 11,200 due)\n` +
-              `• **Week 3 (Jul 15 - Jul 21)**: **49.0%** renewal rate (5,782 renewed / 11,800 due)\n` +
-              `• **Week 4 (Jul 22 - Jul 31)**: **47.8%** renewal rate (5,979 renewed / 12,511 due)\n\n` +
-              `July renewal rate peaked during **Week 3 (49.0%)**.`,
-        kpis: [
-          { label: "Peak Week (Week 3)", value: "49.0%", sub: "5,782 Renewed" },
-          { label: "July Total Renewed", value: "21,855", sub: "46,011 Up for Renewal" },
-          { label: "July Overall Rate", value: "47.5%", sub: "Monthly Average" }
-        ],
-        chart: {
-          type: 'line',
-          title: 'July 2026 Weekly Renewal Rate Trend (%)',
-          labels: ['Week 1 (Jul 1-7)', 'Week 2 (Jul 8-14)', 'Week 3 (Jul 15-21)', 'Week 4 (Jul 22-31)'],
-          values: [46.0, 47.0, 49.0, 47.8],
-          colors: '#10B981'
-        },
-        table: {
-          headers: ['Week Period', 'Subscriptions Due', 'Renewed', 'Renewal Rate %'],
-          rows: [
-            ['Week 1 (Jul 1 - Jul 7)', '10,500', '4,830', '46.0%'],
-            ['Week 2 (Jul 8 - Jul 14)', '11,200', '5,264', '47.0%'],
-            ['Week 3 (Jul 15 - Jul 21)', '11,800', '5,782', '49.0%'],
-            ['Week 4 (Jul 22 - Jul 31)', '12,511', '5,979', '47.8%'],
-            ['July Total', '46,011', '21,855', '47.5%']
-          ]
-        },
-        suggestedFollowups: [
-          "can you give me weekly renewals trend for the month of august.",
-          "Give me platform wise breakup of renewals for the month of july'26"
-        ]
-      };
-    }
-  }
-
-  const isMultiMonthQuery = 
-    q.includes('montly') || q.includes('monthly') || q.includes('mthly') ||
-    (q.includes('jan') && (q.includes('august') || q.includes('aug') || q.includes('july') || q.includes('jul') || q.includes('till') || q.includes('now'))) ||
-    q.includes('all months') || q.includes('month wise') || q.includes('month by month');
-
-  if (isMultiMonthQuery) {
-    return {
-      domain: 'RENEWALS',
-      text: `Here is the **monthly renewal rate trend from Jan 2026 to August 2026**:\n\n` +
-            `• **Jan 2026**: **41.2%** (15,870 renewed / 38,500 due)\n` +
-            `• **Feb 2026**: **42.0%** (16,884 renewed / 40,200 due)\n` +
-            `• **Mar 2026**: **43.5%** (18,313 renewed / 42,100 due)\n` +
-            `• **Apr 2026**: **43.1%** (18,015 renewed / 41,800 due)\n` +
-            `• **May 2026**: **44.0%** (19,140 renewed / 43,500 due)\n` +
-            `• **Jun 2026**: **42.1%** (18,608 renewed / 44,200 due)\n` +
-            `• **Jul 2026**: **47.5%** (21,855 renewed / 46,011 due)\n` +
-            `• **Aug 2026**: **48.0%** (22,656 renewed / 47,200 due)\n\n` +
-            `Overall, subscription renewal rate peaked in **August 2026 (48.0%)**, representing a **+6.8% overall lift** from Jan 2026.`,
-      kpis: [
-        { label: "Highest Rate (Aug '26)", value: "48.0%", sub: "22,656 Renewed" },
-        { label: "Lowest Rate (Jan '26)", value: "41.2%", sub: "15,870 Renewed" },
-        { label: "8-Month Avg Rate", value: "43.9%", sub: "Jan - Aug 2026" }
-      ],
-      chart: {
-        type: 'line',
-        title: 'Monthly Renewal Rate Trend (Jan 2026 - Aug 2026)',
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
-        values: [41.2, 42.0, 43.5, 43.1, 44.0, 42.1, 47.5, 48.0],
-        colors: '#F59E0B'
-      },
-      table: {
-        headers: ['Month', 'Subscriptions Due', 'Renewed', 'Renewal Rate %'],
-        rows: [
-          ['Jan 2026', '38,500', '15,870', '41.2%'],
-          ['Feb 2026', '40,200', '16,884', '42.0%'],
-          ['Mar 2026', '42,100', '18,313', '43.5%'],
-          ['Apr 2026', '41,800', '18,015', '43.1%'],
-          ['May 2026', '43,500', '19,140', '44.0%'],
-          ['Jun 2026', '44,200', '18,608', '42.1%'],
-          ['Jul 2026', '46,011', '21,855', '47.5%'],
-          ['Aug 2026', '47,200', '22,656', '48.0%']
-        ]
-      },
-      suggestedFollowups: [
-        "Give me platform wise breakup of renewals for the month of august'26",
-        "Compare August renewals vs July renewals"
-      ]
-    };
-  }
-
-  const isPlanDuration = q.includes('plan duration') || q.includes('1-year') || q.includes('3-year') || q.includes('duration') || q.includes('plan category') || q.includes('plan wise');
-  if (isPlanDuration) {
-    let year1Due = 7694, year1Ren = 2369, year1Rate = "30.8%";
-    let year3Due = 1060, year3Ren = 193, year3Rate = "18.2%";
-
-    if (renewalsData && renewalsData.length > 0) {
-      const catMap = {};
-      renewalsData.forEach(r => {
-        const cat = (r.plan_category || '').toUpperCase().trim();
-        if (!catMap[cat]) catMap[cat] = { due: 0, renewed: 0 };
-        catMap[cat].due += (parseInt(r.renewal_due, 10) || 0);
-        catMap[cat].renewed += (parseInt(r.renewed, 10) || 0);
-      });
-
-      if (catMap['1 YEAR']) {
-        year1Due = catMap['1 YEAR'].due;
-        year1Ren = catMap['1 YEAR'].renewed;
-        year1Rate = year1Due > 0 ? ((year1Ren / year1Due) * 100).toFixed(1) + '%' : "30.8%";
-      }
-      if (catMap['3 YEAR']) {
-        year3Due = catMap['3 YEAR'].due;
-        year3Ren = catMap['3 YEAR'].renewed;
-        year3Rate = year3Due > 0 ? ((year3Ren / year3Due) * 100).toFixed(1) + '%' : "18.2%";
-      }
-    }
-
-    return {
-      domain: 'RENEWALS',
-      text: `**1-Year Plans** achieve a higher renewal rate (**${year1Rate}**) than **3-Year Plans** (**${year3Rate}**):\n\n` +
-            `• **1-Year Subscription Plans**: **${year1Rate} renewal rate** (${year1Ren.toLocaleString()} renewed out of ${year1Due.toLocaleString()} due)\n` +
-            `• **3-Year Subscription Plans**: **${year3Rate} renewal rate** (${year3Ren.toLocaleString()} renewed out of ${year3Due.toLocaleString()} due)\n` +
-            `• **1-Month Subscription Plans**: **81.1% renewal rate** (3,166 renewed out of 3,902 due — Highest overall retention)\n\n` +
-            `1-Year Plans exhibit **+12.6% higher retention** compared to 3-Year Plans.`,
-      kpis: [
-        { label: "1-Year Renewal Rate", value: year1Rate, sub: `${year1Ren.toLocaleString()} Renewed` },
-        { label: "3-Year Renewal Rate", value: year3Rate, sub: `${year3Ren.toLocaleString()} Renewed` },
-        { label: "Highest Category", value: "1-Month", sub: "81.1% Renewal Rate" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Renewal Rate by Plan Category (%)',
-        labels: ['1-Month Plan', '1-Year Plan', '3-Year Plan', '2-Year Plan'],
-        values: [81.1, parseFloat(year1Rate), parseFloat(year3Rate), 18.2],
-        colors: ['#10B981', '#3B82F6', '#F59E0B', '#EC4899']
-      },
-      table: {
-        headers: ['Plan Category', 'Renewal Due', 'Renewed', 'Renewal Rate %'],
-        rows: [
-          ['1 YEAR', year1Due.toLocaleString(), year1Ren.toLocaleString(), year1Rate],
-          ['1 MONTH', '3,902', '3,166', '81.1%'],
-          ['3 YEAR', year3Due.toLocaleString(), year3Ren.toLocaleString(), year3Rate],
-          ['2 MONTH', '719', '454', '63.1%'],
-          ['2 YEAR', '578', '105', '18.2%'],
-          ['6 MONTH', '378', '157', '41.5%']
-        ]
-      },
-      suggestedFollowups: [
-        "What is the auto-renew opt-in share for new sales?",
-        "Compare July renewals vs June renewals"
-      ]
-    };
-  }
-
-  const isAutoRenew = q.includes('auto-renew') || q.includes('opt-in') || q.includes('opt in') || q.includes('recurring share') || q.includes('recurring plans') || q.includes('recurring');
-  if (isAutoRenew) {
-    return {
-      domain: 'RENEWALS',
-      text: `Across overall plans sold, **16.4% are recurring plans** (1,495 recurring out of 9,099 total sold | ₹35.36L Recurring Revenue):\n\n` +
-            `• **Main - iOS**: **100.0% Recurring Share** (724 / 724 sold | ₹17.00L Revenue)\n` +
-            `• **Market - iOS**: **100.0% Recurring Share** (163 / 163 sold | ₹2.80L Revenue)\n` +
-            `• **Market - Android**: **21.7% Recurring Share** (103 / 475 sold | ₹1.78L Revenue)\n` +
-            `• **Main - Android**: **17.7% Recurring Share** (160 / 903 sold | ₹2.54L Revenue)\n` +
-            `• **WEB**: **6.6% Recurring Share** (138 / 2,100 sold | ₹3.87L Revenue)\n` +
-            `• **WAP**: **4.4% Recurring Share** (207 / 4,734 sold | ₹7.38L Revenue)`,
-      kpis: [
-        { label: "Overall Recurring Share", value: "16.4%", sub: "1,495 / 9,099 Total Sold" },
-        { label: "iOS Recurring Share", value: "100.0%", sub: "Main iOS & Market iOS" },
-        { label: "Recurring Revenue", value: "₹35.36 L", sub: "Period Total" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Platform-wise Recurring Share (% of Total Sold)',
-        labels: ['Main - iOS', 'Market - iOS', 'Market - Android', 'Main - Android', 'WEB', 'WAP'],
-        values: [100.0, 100.0, 21.7, 17.7, 6.6, 4.4],
-        colors: ['#10B981', '#6366F1', '#3B82F6', '#6366F1', '#F59E0B', '#EC4899']
-      },
-      table: {
-        headers: ['Platform', 'Total Sold', 'Recurring', 'Non-Recurring', 'Recurring Share %', 'Recurring Rev'],
-        rows: [
-          ['Main - iOS', '724', '724', '0', '100.0%', '₹17.00 L'],
-          ['WAP', '4,734', '207', '4,527', '4.4%', '₹7.38 L'],
-          ['Market - iOS', '163', '163', '0', '100.0%', '₹2.80 L'],
-          ['Main - Android', '903', '160', '743', '17.7%', '₹2.54 L'],
-          ['WEB', '2,100', '138', '1,962', '6.6%', '₹3.87 L'],
-          ['Market - Android', '475', '103', '372', '21.7%', '₹1.78 L']
-        ]
-      },
-      suggestedFollowups: [
-        "Which plan duration (1-Year vs 3-Year) has highest renewal rate?",
-        "Compare July renewals vs June renewals"
-      ]
-    };
-  }
-
-  const hasAugust = q.includes('august') || q.includes('aug');
-  const hasJuly = q.includes('july') || q.includes('jul');
-  const hasJune = q.includes('june') || q.includes('jun');
-
-  const isComparisonQuery = 
-    q.includes('compare') || q.includes('vs') || q.includes('versus') || 
-    q.includes('difference') || q.includes('variance') || 
-    (hasAugust && hasJuly) || (hasJuly && hasJune);
-
-  if (isComparisonQuery) {
-    if (hasAugust && hasJuly) {
-      return {
-        domain: 'RENEWALS',
-        text: `**Comparison: July 2026 vs August 2026 Renewals (Android vs iOS)**\n\n` +
-              `• **Main - iOS**: **64.0%** (July) ➔ **65.2%** (August) (**+1.2% MoM Lift**)\n` +
-              `• **Market - iOS**: **54.9%** (July) ➔ **56.0%** (August) (**+1.1% MoM Lift**)\n` +
-              `• **Main - Android**: **52.4%** (July) ➔ **53.0%** (August) (**+0.6% MoM Lift**)\n` +
-              `• **Market - Android**: **49.8%** (July) ➔ **51.0%** (August) (**+1.2% MoM Lift**)\n` +
-              `• **WEB**: **26.1%** (July) ➔ **27.0%** (August) (**+0.9% MoM Lift**)\n` +
-              `• **WAP**: **23.4%** (July) ➔ **25.0%** (August) (**+1.6% MoM Lift**)\n\n` +
-              `Across both months, **iOS platforms maintain ~12.2% higher renewal efficiency** compared to Android platforms, with overall renewals growing from **47.5%** in July to **48.0%** in August.`,
-        kpis: [
-          { label: "July 2026 Renewal Rate", value: "47.5%", sub: "21,855 Renewed" },
-          { label: "August 2026 Renewal Rate", value: "48.0%", sub: "22,656 Renewed" },
-          { label: "MoM Renewal Lift", value: "+0.5%", sub: "+801 Additional Renewals" }
-        ],
-        chart: {
-          type: 'bar',
-          title: 'Platform Renewal Rates: July vs August 2026 (%)',
-          labels: ['Main iOS (Jul)', 'Main iOS (Aug)', 'Market iOS (Jul)', 'Market iOS (Aug)', 'Main Android (Jul)', 'Main Android (Aug)', 'Market Android (Jul)', 'Market Android (Aug)'],
-          values: [64.0, 65.2, 54.9, 56.0, 52.4, 53.0, 49.8, 51.0],
-          colors: ['#3B82F6', '#1D4ED8', '#6366F1', '#4338CA', '#10B981', '#047857', '#F59E0B', '#B45309']
-        },
-        table: {
-          headers: ['Platform', 'July 2026 Rate', 'August 2026 Rate', 'MoM Variance / Lift'],
-          rows: [
-            ['Main iOS', '64.0%', '65.2%', '+1.2%'],
-            ['Market iOS', '54.9%', '56.0%', '+1.1%'],
-            ['Main Android', '52.4%', '53.0%', '+0.6%'],
-            ['Market Android', '49.8%', '51.0%', '+1.2%'],
-            ['WEB', '26.1%', '27.0%', '+0.9%'],
-            ['WAP', '23.4%', '25.0%', '+1.6%'],
-            ['Overall Total', '47.5%', '48.0%', '+0.5%']
-          ]
-        },
-        suggestedFollowups: [
-          "What is the renewal rate for Main iOS in July'26?",
-          "Which plan duration (1-Year vs 3-Year) has highest renewal rate?",
-          "What is the auto-renew opt-in share for new sales?"
-        ]
-      };
-    }
-
-    // Fallback: June vs July comparison
-    return {
-      domain: 'RENEWALS',
-      text: `**Comparison: June 2026 vs July 2026 Renewals**\n\n` +
-            `• **July 2026**: Overall renewal rate was **47.5%** (21,855 renewed out of 46,011 due)\n` +
-            `• **June 2026**: Overall renewal rate was **42.1%** (18,608 renewed out of 44,200 due)\n\n` +
-            `July saw a **+5.4%** increase in overall renewal rate compared to June, driven primarily by strong performance on Main iOS.`,
-      kpis: [
-        { label: "July 2026 Rate", value: "47.5%", sub: "21,855 Renewals" },
-        { label: "June 2026 Rate", value: "42.1%", sub: "18,608 Renewals" },
-        { label: "Month-over-Month", value: "+5.4%", sub: "Growth in Rate" }
-      ],
-      chart: {
-        type: 'bar',
-        title: `Overall Renewal Rate Comparison`,
-        labels: ['June 2026', 'July 2026'],
-        values: [42.1, 47.5],
-        colors: ['#64748B', '#10B981']
-      },
-      table: {
-        headers: ['Metric', 'June 2026', 'July 2026', 'Growth/Change'],
-        rows: [
-          ['Overall Rate', '42.1%', '47.5%', '+5.4%'],
-          ['Total Due', '44,200', '46,011', '+4.1%'],
-          ['Total Renewed', '18,608', '21,855', '+17.4%']
-        ]
-      },
-      suggestedFollowups: [
-        "can you compare android vs ios renewals for the month of august and july",
-        "Give me platform wise breakup of renewals for the month of july'26"
-      ]
-    };
-  }
-
-  let monthTarget = null;
-  let monthName = '';
-  if (q.includes('july') || q.includes('jul')) { monthTarget = '07'; monthName = 'July 2026'; }
-  else if (q.includes('june') || q.includes('jun')) { monthTarget = '06'; monthName = 'June 2026'; }
-  else if (q.includes('may')) { monthTarget = '05'; monthName = 'May 2026'; }
-  else if (q.includes('august') || q.includes('aug')) { monthTarget = '08'; monthName = 'August 2026'; }
-
-  const platforms = [];
-  if (q.includes('main ios')) platforms.push('Main iOS');
-  if (q.includes('market ios')) platforms.push('Market iOS');
-  if (q.includes('main android')) platforms.push('Main Android');
-  if (q.includes('market android')) platforms.push('Market Android');
-  if (q.includes('mweb')) platforms.push('MWeb');
-
-  let filteredRecords = renewalsData;
-
-  if (monthTarget && renewalsData.length > 0) {
-    filteredRecords = renewalsData.filter(r => {
-      const dStr = String(r.renew_date || '');
-      const mStr = String(r.renew_month || '');
-      return dStr.startsWith(`2026-${monthTarget}-`) || 
-             mStr.startsWith(`2026-${monthTarget}`) || 
-             mStr === `2026-${monthTarget}-01` ||
-             (monthTarget === '07' && (mStr.toLowerCase().includes('jul') || dStr.startsWith('2026-07')));
-    });
-  }
-
-  if (platforms.length > 0 && filteredRecords.length > 0) {
-    const matchPlats = platforms.map(p => p.toLowerCase());
-    filteredRecords = filteredRecords.filter(r => {
-      const pNorm = (r.platform || '').toLowerCase();
-      return matchPlats.some(mp => pNorm.includes(mp.replace('main ', '').replace('market ', '')));
-    });
-  }
-
-  let totalDue = 0;
-  let totalRenewed = 0;
-  const platformBreakdownMap = {};
-
-  if (filteredRecords.length > 0) {
-    filteredRecords.forEach(r => {
-      const dueVal = parseInt(r.renewal_due, 10) || 0;
-      const renVal = parseInt(r.renewed, 10) || 0;
-
-      totalDue += dueVal;
-      totalRenewed += renVal;
-
-      const pName = r.platform || 'Other';
-      if (!platformBreakdownMap[pName]) platformBreakdownMap[pName] = { due: 0, renewed: 0 };
-      platformBreakdownMap[pName].due += dueVal;
-      platformBreakdownMap[pName].renewed += renVal;
-    });
-  }
-
-  if (totalDue === 0) {
-    totalDue = 46011;
-    totalRenewed = 20329;
-    platformBreakdownMap['MWeb'] = { due: 22410, renewed: 9940 };
-    platformBreakdownMap['Main Android'] = { due: 12100, renewed: 5350 };
-    platformBreakdownMap['Main iOS'] = { due: 6150, renewed: 2980 };
-    platformBreakdownMap['Market Android'] = { due: 3400, renewed: 1320 };
-    platformBreakdownMap['Market iOS'] = { due: 1951, renewed: 739 };
-  }
-
-  const overallRate = totalDue > 0 ? ((totalRenewed / totalDue) * 100).toFixed(1) : "44.3";
-  const isBreakupQuery = q.includes('breakup') || q.includes('breakdown') || q.includes('platform') || q.includes('by platform');
-
-  const platKeys = Object.keys(platformBreakdownMap).sort((a,b) => {
-    const rateA = platformBreakdownMap[a].due > 0 ? platformBreakdownMap[a].renewed / platformBreakdownMap[a].due : 0;
-    const rateB = platformBreakdownMap[b].due > 0 ? platformBreakdownMap[b].renewed / platformBreakdownMap[b].due : 0;
-    return rateB - rateA;
-  });
-  
-  const topPlat = platKeys[0] || 'MWeb';
-  const topPlatObj = platformBreakdownMap[topPlat] || { due: 1, renewed: 0 };
-  const topPlatRate = topPlatObj.due > 0 ? ((topPlatObj.renewed / topPlatObj.due) * 100).toFixed(1) : "44.4";
-
-  const tableRows = platKeys.map(plat => {
-    const d = platformBreakdownMap[plat].due;
-    const r = platformBreakdownMap[plat].renewed;
-    const rate = d > 0 ? ((r / d) * 100).toFixed(1) + '%' : '0.0%';
-    return [plat, d.toLocaleString(), r.toLocaleString(), rate];
-  });
-
-  const chartLabels = platKeys;
-  const chartValues = platKeys.map(plat => {
-    const d = platformBreakdownMap[plat].due;
-    const r = platformBreakdownMap[plat].renewed;
-    return d > 0 ? parseFloat(((r / d) * 100).toFixed(1)) : 0;
-  });
-
-  if (isBreakupQuery) {
-    return {
-      domain: 'RENEWALS',
-      text: `Here is the **platform-wise breakdown of renewals** for **${monthName || 'July 2026'}** (Overall Renewal Rate: **${overallRate}%**):\n\n` +
-            platKeys.map(p => {
-              const d = platformBreakdownMap[p].due;
-              const r = platformBreakdownMap[p].renewed;
-              const rate = d > 0 ? ((r / d) * 100).toFixed(1) : 0;
-              return `• **${p}**: **${rate}%** renewal rate (${r.toLocaleString()} renewed out of ${d.toLocaleString()} due)`;
-            }).join('\n'),
-      kpis: [
-        { label: "Overall Renewal Rate", value: `${overallRate}%`, sub: monthName || "July 2026" },
-        { label: "Total Renewal Due", value: totalDue.toLocaleString(), sub: "Subscriptions Due" },
-        { label: "Total Renewed", value: totalRenewed.toLocaleString(), sub: "Successfully Renewed" }
-      ],
-      chart: {
-        type: 'bar',
-        title: `Platform-wise Renewal Rates (${monthName || 'July 2026'})`,
-        labels: chartLabels,
-        values: chartValues,
-        colors: ['#F59E0B', '#3B82F6', '#10B981', '#6366F1', '#EC4899']
-      },
-      table: {
-        headers: ['Platform', 'Subscriptions Due', 'Renewed', 'Renewal Rate %'],
-        rows: tableRows
-      },
-      suggestedFollowups: [
-        "Which plan duration (1-Year vs 3-Year) has highest renewal rate?",
-        "Compare July renewals vs June renewals",
-        "What is the auto-renew opt-in share for new sales?"
-      ]
-    };
-  }
-
-  return {
-    domain: 'RENEWALS',
-    text: `For **${monthName || 'July 2026'}**, the overall subscription renewal rate is **${overallRate}%**.\n\n` +
-          `• **Total Subscriptions Up for Renewal**: **${totalDue.toLocaleString()}**\n` +
-          `• **Total Subscriptions Successfully Renewed**: **${totalRenewed.toLocaleString()}**\n` +
-          `• **Top Performing Renewal Platform**: **${topPlat}** (${topPlatRate}% renewal rate)`,
-    kpis: [
-      { label: "Overall Renewal Rate", value: `${overallRate}%`, sub: monthName || "July 2026" },
-      { label: "Total Renewal Due", value: totalDue.toLocaleString(), sub: "Due in Month" },
-      { label: "Total Renewed", value: totalRenewed.toLocaleString(), sub: "Renewed in Month" }
-    ],
-    chart: {
-      type: 'bar',
-      title: `Renewal Rate by Platform (${monthName || 'July 2026'})`,
-      labels: chartLabels,
-      values: chartValues,
-      colors: ['#F59E0B', '#3B82F6', '#10B981', '#6366F1', '#EC4899']
-    },
-    suggestedFollowups: [
-      "Give me platform wise breakup of renewals for the month of july'26",
-      "Which plan duration has highest renewal rate?",
-      "Compare July renewals vs June renewals"
-    ]
-  };
+export function processRenewalsDomain(q, renewalsData = [], contextData = {}) {
+  return answerRenewals(q, { ...contextData, renewalsData });
 }
 
-// =========================================================================
-// 🟣 DOMAIN 3: SUBSCRIPTION REPORT (REVENUE & CONVERSIONS) PROCESSOR
-// =========================================================================
-function processSubscriptionDomain(q, subscriptionData = []) {
-  const isRoasQuery = q.includes('roas') || (q.includes('spend') && (q.includes('revenue') || q.includes('delivery')));
-  if (isRoasQuery) {
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `**Marketing Efficiency & ROAS Diagnostic Analysis**:\n\n` +
-            `• **Yesterday's ROAS vs Same Date Last Month**: Blended ROAS was **2.84x yesterday** compared to **2.61x last month (+8.8% efficiency lift)**.\n` +
-            `• **Spend vs Revenue Diagnostics**: When marketing spend increased (+18%), top-of-funnel reach (DAU) expanded proportionally, but **revenue growth moderated due to conversion leakage between Plan Selected and Payment Initiated (42.1% drop)** rather than ad delivery fatigue.\n` +
-            `• **Primary Channel Attribution**: Paid Meta campaigns generated 58% of new subscriber acquisitions, while Google Search captured the highest intent with 3.42x ROAS on 1-Year plans.`,
-      kpis: [
-        { label: "Yesterday Blended ROAS", value: "2.84x", sub: "+8.8% MoM" },
-        { label: "Gross Revenue Yesterday", value: "₹12.36 L", sub: "489 Conversions" },
-        { label: "Bottleneck Stage", value: "Checkout Friction", sub: "42.1% Drop at Payment" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'ROAS Comparison by Acquisition Channel',
-        labels: ['Google Search', 'Meta Performance', 'Google Display', 'Affiliates', 'Blended Total'],
-        values: [3.42, 2.76, 1.85, 2.45, 2.84],
-        colors: ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899']
-      },
-      table: {
-        headers: ['Channel', 'Spend (Lakhs)', 'Revenue (Lakhs)', 'ROAS', 'Conversions'],
-        rows: [
-          ['Google Search', '₹1.80 L', '₹6.15 L', '3.42x', '245'],
-          ['Meta Performance', '₹2.20 L', '₹6.07 L', '2.76x', '241'],
-          ['Google Display', '₹0.60 L', '₹1.11 L', '1.85x', '44'],
-          ['Affiliates / Partners', '₹0.40 L', '₹0.98 L', '2.45x', '39'],
-          ['Total / Blended', '₹5.00 L', '₹14.31 L', '2.84x', '569']
-        ]
-      },
-      suggestedFollowups: [
-        "give me funnel data for the last 7 days day wise",
-        "Which platform leads sales in the last 30 days?",
-        "Show me new user vs renewal user revenue split"
-      ]
-    };
-  }
-
-  const isCampaignQuery = q.includes('campaign') || (q.includes('google') && q.includes('meta'));
-  if (isCampaignQuery) {
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `**Top 3 Campaigns by Pay Initiated (Last 7 Days: Google vs Meta)**:\n\n` +
-            `• **Google Search - Brand & Prime Keywords**: **4,820 Pay Initiated** (91.4% completion to paid, ₹18.40 L revenue)\n` +
-            `• **Meta Advantage+ App Retargeting**: **3,490 Pay Initiated** (88.2% completion to paid, ₹12.80 L revenue)\n` +
-            `• **Meta Lookalike - High-LTV Readers**: **2,610 Pay Initiated** (85.6% completion to paid, ₹9.65 L revenue)\n\n` +
-            `Google Search demonstrates higher intent-to-purchase completion (+3.2% completion lift over Meta), while Meta drives higher top-of-funnel reach.`,
-      kpis: [
-        { label: "Top Campaign (Google)", value: "4,820", sub: "Pay Initiated" },
-        { label: "Top Campaign (Meta)", value: "3,490", sub: "Pay Initiated" },
-        { label: "Completion Rate", value: "90.2%", sub: "Initiated to Paid" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Top Campaigns: Pay Initiated vs Completed Purchases',
-        labels: ['Google Brand & Prime', 'Meta App Retargeting', 'Meta Lookalike LTV', 'Google Non-Brand Search', 'Meta Broad News'],
-        series: [
-          { name: 'Pay Initiated', values: [4820, 3490, 2610, 1890, 1420], color: '#3B82F6', type: 'bar' },
-          { name: 'Purchases', values: [4405, 3078, 2234, 1610, 1180], color: '#10B981', type: 'bar' }
-        ]
-      },
-      table: {
-        headers: ['Campaign Name', 'Network', 'Pay Initiated', 'Purchased', 'Completion %'],
-        rows: [
-          ['Google Brand & Prime Keywords', 'Google Search', '4,820', '4,405', '91.4%'],
-          ['Meta Advantage+ Retargeting', 'Meta Ads', '3,490', '3,078', '88.2%'],
-          ['Meta Lookalike High-LTV', 'Meta Ads', '2,610', '2,234', '85.6%'],
-          ['Google Non-Brand Market Search', 'Google Search', '1,890', '1,610', '85.2%'],
-          ['Meta Broad Readers Prospecting', 'Meta Ads', '1,420', '1,180', '83.1%']
-        ]
-      },
-      suggestedFollowups: [
-        "give me funnel data for the last 7 days day wise",
-        "What is the renewal rate for the month of july'26?",
-        "Which platform leads sales in the last 30 days?"
-      ]
-    };
-  }
-
-  const isPlatformBreakdown = q.includes('platform') || q.includes('leads') || q.includes('lead') || q.includes('top') || q.includes('share') || q.includes('split') || q.includes('best');
-
-  if (isPlatformBreakdown) {
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `**MWeb** is the leading sales platform, contributing **68% of total subscription volume** (~9,832 sales/month).\n\n` +
-            `• **MWeb**: **68% share** (9,832 conversions | ₹174.60 Lakhs revenue)\n` +
-            `• **Main Android**: **18% share** (2,603 conversions | ₹46.20 Lakhs revenue)\n` +
-            `• **Main iOS**: **9% share** (1,301 conversions | ₹23.10 Lakhs revenue)\n` +
-            `• **Market iOS**: **3% share** (434 conversions | ₹7.70 Lakhs revenue)\n` +
-            `• **Market Android**: **2% share** (290 conversions | ₹5.10 Lakhs revenue)`,
-      kpis: [
-        { label: "Top Sales Platform", value: "MWeb", sub: "68% Total Volume" },
-        { label: "MWeb Conversions (30d)", value: "9,832", sub: "₹174.60 L Revenue" },
-        { label: "App Share (iOS+Android)", value: "32%", sub: "4,628 conversions" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Subscription Sales Volume Share by Platform (%)',
-        labels: ['MWeb', 'Main Android', 'Main iOS', 'Market iOS', 'Market Android'],
-        values: [68, 18, 9, 3, 2],
-        colors: ['#F59E0B', '#3B82F6', '#10B981', '#6366F1', '#EC4899']
-      },
-      table: {
-        headers: ['Platform', 'Sales Share %', 'Conversions (30d)', 'Revenue (Lakhs)'],
-        rows: [
-          ['MWeb', '68.0%', '9,832', '₹174.60 L'],
-          ['Main Android', '18.0%', '2,603', '₹46.20 L'],
-          ['Main iOS', '9.0%', '1,301', '₹23.10 L'],
-          ['Market iOS', '3.0%', '434', '₹7.70 L'],
-          ['Market Android', '2.0%', '290', '₹5.10 L']
-        ]
-      },
-      suggestedFollowups: [
-        "Compare 1 Year vs 1 Month plan revenue",
-        "How much revenue did iOS generate in last 7 days?",
-        "Show new user vs renewal user revenue split"
-      ]
-    };
-  }
-
-  // Plan Revenue & Comparison Handler (e.g. 1 Year vs 1 Month plan revenue)
-  const isPlanQuery = q.includes('plan') || q.includes('1 year') || q.includes('1 month') || q.includes('2 year') || q.includes('annual') || q.includes('tenure');
-  if (isPlanQuery) {
-    let totalRev = 0, totalConv = 0;
-    const planMap = {};
-    if (subscriptionData && subscriptionData.length > 0) {
-      subscriptionData.forEach(r => {
-        const p = r.plan_category || r.plan || 'Other';
-        const rev = parseFloat(r.revenue || r.net_amount || 0);
-        const conv = parseInt(r.conversions || r.purchase_count || 1, 10);
-        if (!planMap[p]) planMap[p] = { rev: 0, conv: 0 };
-        planMap[p].rev += rev;
-        planMap[p].conv += conv;
-        totalRev += rev;
-        totalConv += conv;
-      });
-    }
-
-    if (Object.keys(planMap).length === 0 || totalRev === 0) {
-      planMap['1 Year'] = { rev: 142500000, conv: 48900 };
-      planMap['1 Month'] = { rev: 41200000, conv: 35200 };
-      planMap['2 Year'] = { rev: 18500000, conv: 5400 };
-      planMap['3 Year'] = { rev: 7500000, conv: 1609 };
-      totalRev = 209700000;
-      totalConv = 91109;
-    }
-
-    const sortedPlans = Object.entries(planMap).sort((a, b) => b[1].rev - a[1].rev);
-    const plan1Y = planMap['1 Year'] || planMap['1-Year'] || sortedPlans[0]?.[1] || { rev: 142500000, conv: 48900 };
-    const plan1M = planMap['1 Month'] || planMap['1-Month'] || sortedPlans[1]?.[1] || { rev: 41200000, conv: 35200 };
-
-    const rev1YStr = (plan1Y.rev / 10000000).toFixed(2) + ' Cr';
-    const rev1MStr = (plan1M.rev / 10000000).toFixed(2) + ' Cr';
-    const pct1Y = ((plan1Y.rev / totalRev) * 100).toFixed(1) + '%';
-    const pct1M = ((plan1M.rev / totalRev) * 100).toFixed(1) + '%';
-    const ratio = (plan1Y.rev / (plan1M.rev || 1)).toFixed(1);
-
-    const labels = sortedPlans.map(([p]) => p);
-    const values = sortedPlans.map(([, data]) => parseFloat((data.rev / 10000000).toFixed(2)));
-
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `**Plan Revenue & Conversion Breakdown (Subscription Report)**:\n\n` +
-            `• **1 Year Plan**: Generated **₹${rev1YStr}** (${pct1Y} of total revenue) across **${plan1Y.conv.toLocaleString()} conversions**.\n` +
-            `• **1 Month Plan**: Generated **₹${rev1MStr}** (${pct1M} of total revenue) across **${plan1M.conv.toLocaleString()} conversions**.\n` +
-            `• **Dominance**: The 1 Year plan delivers **${ratio}x higher revenue** than the 1 Month plan, anchoring recurring long-term reader retention.\n` +
-            `• **Total Ledger Revenue**: ₹${(totalRev / 10000000).toFixed(2)} Cr across ${totalConv.toLocaleString()} total transactions.`,
-      kpis: [
-        { label: "1 Year Plan Revenue", value: `₹${rev1YStr}`, sub: `${pct1Y} share (${plan1Y.conv.toLocaleString()} conv)` },
-        { label: "1 Month Plan Revenue", value: `₹${rev1MStr}`, sub: `${pct1M} share (${plan1M.conv.toLocaleString()} conv)` },
-        { label: "1Y vs 1M Dominance", value: `${ratio}x`, sub: "Annual vs Monthly Multiple" }
-      ],
-      chart: {
-        type: 'bar',
-        title: 'Plan Revenue Contribution (₹ Crores)',
-        labels: labels,
-        values: values,
-        colors: ['#059669', '#D97706', '#EA580C', '#B45309']
-      },
-      table: {
-        headers: ['Plan Category', 'Revenue (₹ Cr)', 'Revenue (Lakhs)', 'Conversions', 'Share %'],
-        rows: sortedPlans.map(([p, d]) => [
-          p,
-          `₹${(d.rev / 10000000).toFixed(2)} Cr`,
-          `₹${(d.rev / 100000).toFixed(2)} L`,
-          d.conv.toLocaleString(),
-          `${((d.rev / totalRev) * 100).toFixed(1)}%`
-        ])
-      },
-      suggestedFollowups: [
-        "Which platform leads sales in the last 30 days?",
-        "Show new user vs renewal user revenue split",
-        "How much revenue did iOS generate in last 7 days?"
-      ]
-    };
-  }
-
-  // ─── SINGLE-DATE REVENUE HANDLER (yesterday, specific date) ───
-  const allSubDates = subscriptionData && subscriptionData.length > 0
-    ? Array.from(new Set(subscriptionData.map(r => r.dateStr || '').filter(Boolean))).sort()
-    : [];
-  const singleDateInfo = parseSpecificDateOrRange(q, allSubDates);
-
-  if (singleDateInfo.isSingleDate && singleDateInfo.dates.length > 0 && allSubDates.length > 0) {
-    const targetDate = singleDateInfo.dates[0];
-    const dayRows = subscriptionData.filter(r => r.dateStr === targetDate);
-
-    let dayRev = 0, dayConv = 0;
-    const platMap = {};
-    const txnMap = {};
-    const planMap = {};
-
-    dayRows.forEach(r => {
-      const rev = parseFloat(r.revenue || r.net_amount || 0);
-      const conv = parseInt(r.conversions || r.purchase_count || 1, 10);
-      dayRev += rev;
-      dayConv += conv;
-
-      const p = r.platform || r.rawPlatform || 'Other';
-      if (!platMap[p]) platMap[p] = { rev: 0, conv: 0 };
-      platMap[p].rev += rev;
-      platMap[p].conv += conv;
-
-      const txn = r.user_txn_type || 'other';
-      if (!txnMap[txn]) txnMap[txn] = { rev: 0, conv: 0 };
-      txnMap[txn].rev += rev;
-      txnMap[txn].conv += conv;
-
-      const plan = r.plan_category || 'Unknown';
-      if (!planMap[plan]) planMap[plan] = { rev: 0, conv: 0 };
-      planMap[plan].rev += rev;
-      planMap[plan].conv += conv;
-    });
-
-    const fmtCr = val => val >= 10000000 ? '₹' + (val / 10000000).toFixed(2) + ' Cr' : '₹' + (val / 100000).toFixed(2) + ' L';
-    const sortedPlats = Object.entries(platMap).sort((a, b) => b[1].rev - a[1].rev);
-    const topPlat = sortedPlats[0] ? sortedPlats[0][0] : 'N/A';
-    const topPlatPct = dayRev > 0 && sortedPlats[0] ? ((sortedPlats[0][1].rev / dayRev) * 100).toFixed(1) : '0';
-
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `**Revenue for ${singleDateInfo.label}** (${targetDate}):\n\n` +
-            `• **Total Revenue**: **${fmtCr(dayRev)}**\n` +
-            `• **Total Paid Conversions**: **${dayConv.toLocaleString()}**\n` +
-            `• **Top Platform**: **${topPlat}** (${topPlatPct}% of revenue)\n` +
-            `• **Avg Revenue/Txn**: **₹${dayConv > 0 ? Math.round(dayRev / dayConv).toLocaleString() : '0'}**`,
-      kpis: [
-        { label: `Revenue (${singleDateInfo.label})`, value: fmtCr(dayRev), sub: targetDate },
-        { label: "Paid Conversions", value: dayConv.toLocaleString(), sub: `${dayRows.length} transactions` },
-        { label: "Top Platform", value: topPlat, sub: `${topPlatPct}% share` }
-      ],
-      chart: {
-        type: 'bar',
-        title: `Revenue by Platform — ${singleDateInfo.label}`,
-        labels: sortedPlats.map(([p]) => p),
-        values: sortedPlats.map(([, d]) => parseFloat((d.rev / 100000).toFixed(2))),
-        colors: ['#F59E0B', '#3B82F6', '#10B981', '#6366F1', '#EC4899', '#8B5CF6']
-      },
-      table: {
-        headers: ['Platform', 'Revenue', 'Conversions', 'Share %'],
-        rows: sortedPlats.map(([p, d]) => [
-          p,
-          fmtCr(d.rev),
-          d.conv.toLocaleString(),
-          dayRev > 0 ? ((d.rev / dayRev) * 100).toFixed(1) + '%' : '0.0%'
-        ])
-      },
-      suggestedFollowups: [
-        "Show daily revenue trend for last 7 days",
-        "Which platform leads sales in the last 30 days?",
-        "Compare new user vs renewal revenue for yesterday"
-      ]
-    };
-  }
-
-  // Extract custom day count (5, 15, 45, 10, etc.)
-  const days = extractDaysFromQuery(q);
-  const isDaily = q.includes('day wise') || q.includes('daily') || q.includes('by date') || q.includes('day by day') || q.includes('each day') || q.includes('trend');
-
-  const platforms = [];
-  if (q.includes('main ios') || q.includes('main_ios')) platforms.push('Main iOS');
-  if (q.includes('market ios') || q.includes('mkt_ios') || q.includes('mkt ios')) platforms.push('Market iOS');
-  if (q.includes('main android') || q.includes('main_android')) platforms.push('Main Android');
-  if (q.includes('market android') || q.includes('mkt_android') || q.includes('mkt android')) platforms.push('Market Android');
-  if (q.includes('mweb')) platforms.push('MWeb');
-  if (q.includes('web') && !q.includes('mweb')) platforms.push('Web');
-
-  const isIosQuery = q.includes('ios') && platforms.length === 0;
-  const isAndroidQuery = q.includes('android') && platforms.length === 0;
-
-  if (isIosQuery) platforms.push('Main iOS', 'Market iOS');
-  if (isAndroidQuery) platforms.push('Main Android', 'Market Android');
-
-  // Multi-Day / Custom Day-Wise Revenue & Conversions Trend Handler
-  if (isDaily || (days > 0 && days <= 60)) {
-    const dates = getTargetDates(subscriptionData, days > 0 ? days : 5);
-
-    const platTarget = platforms.length > 0 ? platforms : ['Overall'];
-    const dailyRevMap = {};
-    const dailyConvMap = {};
-
-    dates.forEach((d) => {
-      dailyRevMap[d] = 0;
-      dailyConvMap[d] = 0;
-    });
-
-    if (subscriptionData && subscriptionData.length > 0) {
-      subscriptionData.forEach(r => {
-        if (dates.includes(r.dateStr)) {
-          const p = r.platform || r.ET_Platform || r.Platform;
-          if (matchPlatformName(platTarget, p)) {
-            const rVal = parseFloat(r.revenue || r.rev || 0);
-            const cVal = parseInt(r.conversions || r.conv || 0, 10);
-            if (!isNaN(rVal) && rVal > 0) dailyRevMap[r.dateStr] = (dailyRevMap[r.dateStr] || 0) + rVal;
-            if (!isNaN(cVal) && cVal > 0) dailyConvMap[r.dateStr] = (dailyConvMap[r.dateStr] || 0) + cVal;
-          }
-        }
-      });
-    }
-
-    const chartDates = dates.map(d => {
-      const parts = d.split('-');
-      return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
-    });
-
-    const revLakhsVals = dates.map(d => parseFloat(((dailyRevMap[d] || 0) / 100000).toFixed(2)));
-    const convVals = dates.map(d => dailyConvMap[d] || 0);
-
-    const totalRevVal = dates.reduce((sum, d) => sum + (dailyRevMap[d] || 0), 0);
-    const totalConvVal = dates.reduce((sum, d) => sum + (dailyConvMap[d] || 0), 0);
-
-    const totalLakhs = (totalRevVal / 100000).toFixed(2);
-    const totalCr = (totalRevVal / 10000000).toFixed(2);
-    const avgDailyLakhs = (totalRevVal / dates.length / 100000).toFixed(2);
-    const avgDailyConv = Math.round(totalConvVal / dates.length);
-
-    const tableRows = dates.map(d => [
-      d,
-      (dailyConvMap[d] || 0).toLocaleString(),
-      `₹${((dailyRevMap[d] || 0) / 100000).toFixed(2)} L`,
-      `₹${(dailyRevMap[d] || 0).toLocaleString()}`
-    ]);
-
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `Over the **last ${dates.length} days** (${dates[0]} to ${dates[dates.length - 1]}), ET Prime recorded total subscription revenue of **₹${totalLakhs} Lakhs** (₹${totalCr} Cr) across **${totalConvVal.toLocaleString()} conversions**:\n\n` +
-            `• **Total Paid Conversions (${dates.length}d)**: **${totalConvVal.toLocaleString()} transactions** (${avgDailyConv} conv/day)\n` +
-            `• **Total Subscription Revenue (${dates.length}d)**: **₹${totalLakhs} Lakhs** (avg **₹${avgDailyLakhs} L/day**)\n` +
-            `• **Selected Target**: **${platTarget.join(', ')}**`,
-      kpis: [
-        { label: `Total Revenue (${dates.length}d)`, value: `₹${totalLakhs} L`, sub: `Avg ₹${avgDailyLakhs} L/day` },
-        { label: `Total Conversions (${dates.length}d)`, value: totalConvVal.toLocaleString(), sub: `${avgDailyConv}/day avg` },
-        { label: "Timeframe", value: `${dates.length} Days`, sub: "Daily trend view" }
-      ],
-      chart: {
-        type: 'line',
-        title: `Daily Trend: Revenue (Lakhs) & Conversions - Last ${dates.length} Days`,
-        labels: chartDates,
-        values: revLakhsVals,
-        colors: '#3B82F6'
-      },
-      table: {
-        headers: ['Date', 'Conversions Count', 'Revenue (Lakhs)', 'Exact Gross Revenue (₹)'],
-        rows: tableRows
-      },
-      suggestedFollowups: [
-        "Which platform leads sales?",
-        "Show daily MWeb revenue for last 7 days",
-        "Compare Main iOS vs Market iOS conversions"
-      ]
-    };
-  }
-
-  // iOS Specific Revenue Handler (Targeted follow-ups)
-  if (isIosQuery || (platforms.includes('Main iOS') && platforms.includes('Market iOS'))) {
-    const targetPlatforms = ['Main iOS', 'Market iOS'];
-    const results = queryPlatformRevenue(subscriptionData, targetPlatforms, days);
-    
-    const mainIosRev = results['Main iOS'] || 0;
-    const mktIosRev = results['Market iOS'] || 0;
-    const totalIosRev = mainIosRev + mktIosRev;
-
-    const mainIosLakhs = (mainIosRev / 100000).toFixed(2);
-    const mktIosLakhs = (mktIosRev / 100000).toFixed(2);
-    const totalIosLakhs = (totalIosRev / 100000).toFixed(2);
-
-    const mainIosPct = totalIosRev > 0 ? ((mainIosRev / totalIosRev) * 100).toFixed(1) : 0;
-    const mktIosPct = totalIosRev > 0 ? ((mktIosRev / totalIosRev) * 100).toFixed(1) : 0;
-
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `In the **last ${days} days**, iOS generated total revenue of **₹${totalIosLakhs} Lakhs**. Here is the platform breakdown:\n\n` +
-            `• **Main iOS**: **₹${mainIosLakhs} Lakhs** (${mainIosPct}% of iOS total)\n` +
-            `• **Market iOS**: **₹${mktIosLakhs} Lakhs** (${mktIosPct}% of iOS total)`,
-      kpis: [
-        { label: "Total iOS Revenue", value: `₹${totalIosLakhs} L`, sub: `Last ${days} Days` },
-        { label: "Main iOS Share", value: `₹${mainIosLakhs} L`, sub: `${mainIosPct}% Share` },
-        { label: "Market iOS Share", value: `₹${mktIosLakhs} L`, sub: `${mktIosPct}% Share` }
-      ],
-      chart: {
-        type: 'bar',
-        title: `iOS Revenue Breakdown (Last ${days} Days)`,
-        labels: ['Main iOS', 'Market iOS'],
-        values: [parseFloat(mainIosLakhs), parseFloat(mktIosLakhs)],
-        colors: ['#3B82F6', '#60A5FA']
-      },
-      table: {
-        headers: ['Platform', `Revenue (Last ${days} Days)`, 'Contribution %'],
-        rows: [
-          ['Main iOS', `₹${mainIosLakhs} L`, `${mainIosPct}%`],
-          ['Market iOS', `₹${mktIosLakhs} L`, `${mktIosPct}%`],
-          ['Total iOS', `₹${totalIosLakhs} L`, '100.0%']
-        ]
-      },
-      suggestedFollowups: [
-        "Show daily iOS revenue trend for last 7 days",
-        "Compare Main iOS vs Market iOS conversions",
-        "Compare iOS revenue vs Android revenue"
-      ]
-    };
-  }
-
-  // Platform Lead / Sales Share Prompt
-  if (q.includes('lead') || q.includes('top platform') || q.includes('which platform') || (q.includes('platform') && q.includes('sale'))) {
-    const allPlatforms = ['MWeb', 'Main Android', 'Main iOS', 'Market Android', 'Market iOS', 'Web'];
-    const results = queryPlatformRevenue(subscriptionData, allPlatforms, days);
-    
-    const sorted = Object.keys(results).map(p => ({ plat: p, rev: results[p] })).sort((a,b) => b.rev - a.rev);
-    const topPlat = sorted[0] || { plat: 'MWeb', rev: 0 };
-    const secondPlat = sorted[1] || { plat: 'Main Android', rev: 0 };
-    const totalRev = sorted.reduce((sum, item) => sum + item.rev, 0);
-
-    const topLakhs = (topPlat.rev / 100000).toFixed(2);
-    const topPct = totalRev > 0 ? ((topPlat.rev / totalRev) * 100).toFixed(1) : 0;
-    const totalCr = (totalRev / 10000000).toFixed(2);
-
-    return {
-      domain: 'SUBSCRIPTION',
-      text: `**${topPlat.plat}** leads overall subscription sales, generating **₹${topLakhs} Lakhs** (${topPct}% of total revenue) in the last ${days} days. **${secondPlat.plat}** follows as the second largest contributor.`,
-      kpis: [
-        { label: "Top Platform", value: topPlat.plat, sub: `₹${topLakhs} L (${topPct}%)` },
-        { label: "Runner Up", value: secondPlat.plat, sub: `₹${(secondPlat.rev / 100000).toFixed(2)} L` },
-        { label: "Total Revenue", value: `₹${totalCr} Cr`, sub: `Last ${days} Days` }
-      ],
-      chart: {
-        type: 'bar',
-        title: `Platform Revenue Share (Last ${days} Days)`,
-        labels: sorted.slice(0, 5).map(item => item.plat),
-        values: sorted.slice(0, 5).map(item => parseFloat((item.rev / 100000).toFixed(2))),
-        colors: ['#F59E0B', '#3B82F6', '#10B981', '#6366F1', '#EC4899']
-      },
-      table: {
-        headers: ['Platform', 'Revenue (Lakhs)', 'Revenue Share %'],
-        rows: sorted.map(item => [
-          item.plat,
-          `₹${(item.rev / 100000).toFixed(2)} L`,
-          `${totalRev > 0 ? ((item.rev / totalRev) * 100).toFixed(1) : 0}%`
-        ])
-      },
-      suggestedFollowups: [
-        "How much revenue did iOS generate in last 7 days?",
-        "Show daily MWeb revenue for last 7 days",
-        "Compare Main Android vs MWeb revenue"
-      ]
-    };
-  }
-
-  // Default Total Revenue Query
-  const allRev = queryPlatformRevenue(subscriptionData, ['MWeb', 'Main Android', 'Main iOS', 'Market Android', 'Market iOS', 'Web'], days);
-  const totalVal = Object.values(allRev).reduce((a,b) => a + b, 0);
-  const totalLakhs = (totalVal / 100000).toFixed(2);
-  const totalCr = (totalVal / 10000000).toFixed(2);
-  const dailyAvg = (totalVal / days / 100000).toFixed(2);
-
-  return {
-    domain: 'SUBSCRIPTION',
-    text: `Total subscription revenue for the selected **last ${days} days** is **₹${totalCr} Cr** (₹${totalLakhs} Lakhs), with a daily average revenue of **₹${dailyAvg} L/day**.`,
-    kpis: [
-      { label: "Total Revenue", value: `₹${totalCr} Cr`, sub: `Last ${days} Days` },
-      { label: "Daily Avg Revenue", value: `₹${dailyAvg} L`, sub: "Per Day" },
-      { label: "Active Timeframe", value: `${days} Days`, sub: "Selected Period" }
-    ],
-    suggestedFollowups: [
-      "Which platform leads sales?",
-      "How much revenue did iOS generate in last 7 days?",
-      "Show daily MWeb revenue for last 7 days"
-    ]
-  };
+export function processSubscriptionDomain(q, subscriptionData = [], contextData = {}) {
+  return answerSubscription(q, { ...contextData, subscriptionData });
 }
 
-// Helper function to query platform revenue from subscriptionData array
-function queryPlatformRevenue(data = [], targetPlatforms = [], days = 30) {
-  const platformSums = {};
-  targetPlatforms.forEach(p => { platformSums[p] = 0; });
-
-  if (!data || !data.length) {
-    const baseline = {
-      'MWeb': 24500000,
-      'Main Android': 12800000,
-      'Main iOS': 4200000,
-      'Market Android': 1100000,
-      'Market iOS': 680000,
-      'Web': 1800000
-    };
-    targetPlatforms.forEach(p => {
-      platformSums[p] = Math.round((baseline[p] || 1000000) * (days / 30));
-    });
-    return platformSums;
-  }
-
-  const dates = [...new Set(data.map(r => r.dateStr))].sort((a,b) => parseDateStrToMs(b) - parseDateStrToMs(a));
-  const selectedDates = dates.slice(0, days);
-
-  data.forEach(r => {
-    if (selectedDates.includes(r.dateStr)) {
-      const plat = r.platform || r.ET_Platform || r.Platform;
-      const rev = parseFloat(r.revenue || r.Revenue || r.rev || 0);
-
-      targetPlatforms.forEach(tp => {
-        if (matchPlatformName([tp], plat)) {
-          platformSums[tp] = (platformSums[tp] || 0) + rev;
-        }
-      });
-    }
-  });
-
-  return platformSums;
+function processArpuDomain(q, contextData = {}) {
+  return answerArpu(q, contextData);
 }
 
 // =========================================================================
@@ -2204,7 +751,7 @@ export function executeToolByName(name, args = {}, contextData = {}) {
     case 'query_realtime':
       return executeRealtimeTool(args, contextData);
     case 'query_general_qa':
-      return executeGeneralQATool(args);
+      return executeGeneralQATool(args, contextData);
     default:
       return { status: "unknown_tool", message: `Tool '${name}' is not recognized.` };
   }
@@ -2231,183 +778,59 @@ function matchPlanName(rowPlan, targetPlan) {
 }
 
 export function executeRenewalsTool(args = {}, contextData = {}) {
-  const period = (args.period || 'August 2026').trim();
-  const platform = (args.platform || 'All').trim();
-  const planCategory = (args.planCategory || 'All').trim();
-  const granularity = (args.granularity || 'monthly').trim().toLowerCase();
-  const lower = period.toLowerCase();
   const { renewalsData = [] } = contextData;
-
   if (!renewalsData || renewalsData.length === 0) {
     return { status: "data_unavailable", message: "Renewals dataset is not loaded yet. Please wait for the dashboard to finish loading and try again." };
   }
-
-  // Month mapping
-  const monthMap = {
-    'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'jun': '06',
-    'jul': '07', 'july': '07', 'aug': '08', 'august': '08', 'sep': '09', 'oct': '10', 'nov': '11', 'dec': '12'
+  const period = String(args.period || '').trim();
+  const platform = String(args.platform || 'All').trim();
+  const planCategory = String(args.planCategory || 'All').trim();
+  const granularity = String(args.granularity || '').trim().toLowerCase();
+  const lower = period.toLowerCase();
+  const wanted = /^(all|overall|combined)?$/i.test(platform) ? [] : platformsWanted(platform);
+  const applyFilters = (recs) => filterPlatforms(recs, wanted).filter(r => matchPlanName(r.plan_category, planCategory));
+  const shape = (recs) => {
+    const a = renewalsAgg(recs);
+    return {
+      due: a.due, renewed: a.renewed, rate: fmtPct(a.rate),
+      platforms: renewalsByPlatform(recs).map(x => ({ platform: x.name, due: x.due, renewed: x.renewed, rate: fmtPct(x.rate) })),
+      plans: renewalsByPlan(recs).map(x => ({ planCategory: x.name, due: x.due, renewed: x.renewed, rate: fmtPct(x.rate) })),
+    };
   };
 
-  // Helper: filter records by month target string, platform, and plan category
-  function filterRecords(data, monthNum, filterPlat = 'All', filterPlan = 'All') {
-    return data.filter(r => {
-      const dStr = String(r.renew_date || r.raw_renew_date || '');
-      const mStr = String(r.renew_month || '');
-      const matchesMonth = monthNum ? (dStr.startsWith(`2026-${monthNum}`) || mStr.startsWith(`2026-${monthNum}`) || mStr.includes(`-${monthNum}-`) || dStr.includes(`/${monthNum}/`) || dStr.startsWith(`${monthNum}/`)) : true;
-      if (!matchesMonth) return false;
-      if (!isPlatformMatch(r.platform || r.rawPlatform, filterPlat)) return false;
-      if (!matchPlanName(r.plan_category, filterPlan)) return false;
-      return true;
-    });
-  }
-
-  // Helper: aggregate records
-  function aggregateRecords(records) {
-    let due = 0, renewed = 0;
-    const pMap = {};
-    const planMap = {};
-    records.forEach(rec => {
-      const dueVal = parseInt(rec.renewal_due, 10) || 0;
-      const renVal = parseInt(rec.renewed, 10) || 0;
-      due += dueVal;
-      renewed += renVal;
-
-      const pName = rec.platform || rec.rawPlatform || 'Other';
-      if (!pMap[pName]) pMap[pName] = { due: 0, renewed: 0 };
-      pMap[pName].due += dueVal;
-      pMap[pName].renewed += renVal;
-
-      const plName = rec.plan_category || 'Unknown';
-      if (!planMap[plName]) planMap[plName] = { due: 0, renewed: 0 };
-      planMap[plName].due += dueVal;
-      planMap[plName].renewed += renVal;
-    });
-
-    const rate = due > 0 ? ((renewed / due) * 100).toFixed(1) + '%' : '0.0%';
-    const platforms = Object.keys(pMap).map(p => ({
-      platform: p,
-      due: pMap[p].due,
-      renewed: pMap[p].renewed,
-      rate: pMap[p].due > 0 ? ((pMap[p].renewed / pMap[p].due) * 100).toFixed(1) + '%' : '0.0%'
-    }));
-    const plans = Object.keys(planMap).map(pl => ({
-      planCategory: pl,
-      due: planMap[pl].due,
-      renewed: planMap[pl].renewed,
-      rate: planMap[pl].due > 0 ? ((planMap[pl].renewed / planMap[pl].due) * 100).toFixed(1) + '%' : '0.0%'
-    }));
-
-    return { due, renewed, rate, platforms, plans };
-  }
-
-  // Determine target month
-  let targetMonthNum = '08';
-  for (const [key, num] of Object.entries(monthMap)) {
-    if (lower.includes(key)) { targetMonthNum = num; break; }
-  }
-
-  // 1. Day-wise / Daily breakdown
-  const isDaily = granularity === 'daily' || lower.includes('day wise') || lower.includes('daily') || lower.includes('day-wise');
-  if (isDaily) {
-    const matched = filterRecords(renewalsData, targetMonthNum, platform, planCategory);
-    const dateMap = {};
-    matched.forEach(r => {
-      const d = r.renew_date || r.raw_renew_date || 'Unknown';
-      if (!dateMap[d]) dateMap[d] = { date: d, due: 0, renewed: 0 };
-      dateMap[d].due += parseInt(r.renewal_due, 10) || 0;
-      dateMap[d].renewed += parseInt(r.renewed, 10) || 0;
-    });
-
-    const dailyBreakdown = Object.keys(dateMap).sort().map(d => ({
-      date: d,
-      due: dateMap[d].due,
-      renewed: dateMap[d].renewed,
-      rate: dateMap[d].due > 0 ? ((dateMap[d].renewed / dateMap[d].due) * 100).toFixed(1) + '%' : '0.0%'
-    }));
-
-    const agg = aggregateRecords(matched);
-    const monthLabel = Object.keys(monthMap).find(k => monthMap[k] === targetMonthNum) || 'Aug';
-    const monthFull = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1) + ' 2026';
-
-    return {
-      query_period: period,
-      type: "daily_trend",
-      period: monthFull,
-      platform: platform,
-      planCategory: planCategory,
-      metrics: { period: monthFull, due: agg.due, renewed: agg.renewed, rate: agg.rate },
-      dailyBreakdown,
-      platformBreakdown: agg.platforms,
-      planBreakdown: agg.plans
-    };
-  }
-
-  // 2. Plan breakdown or Comparison between plans (e.g. 1 Year vs 1 Month)
-  const isPlanBreakdown = granularity === 'plan_breakdown' || lower.includes('plan wise') || lower.includes('plan-wise') || lower.includes('1 month vs 1 year') || lower.includes('1 year vs 1 month') || lower.includes('plan category');
-  if (isPlanBreakdown) {
-    const matched = filterRecords(renewalsData, targetMonthNum, platform, 'All');
-    const agg = aggregateRecords(matched);
-    const monthLabel = Object.keys(monthMap).find(k => monthMap[k] === targetMonthNum) || 'Aug';
-    const monthFull = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1) + ' 2026';
-
-    return {
-      query_period: period,
-      type: "plan_breakdown",
-      period: monthFull,
-      platform: platform,
-      metrics: { period: monthFull, due: agg.due, renewed: agg.renewed, rate: agg.rate },
-      planBreakdown: agg.plans,
-      platformBreakdown: agg.platforms
-    };
-  }
-
-  // 3. Multi-month range classification
-  const isMultiMonth = lower.includes('trend') || lower.includes('all months') || lower.includes('month wise') ||
-    (lower.includes('jan') && (lower.includes('aug') || lower.includes('jul'))) ||
-    lower.includes('range') || lower.includes('since jan') || lower.includes('till now') ||
-    lower.includes('monthly');
-
-  if (isMultiMonth && !lower.includes('vs') && !lower.includes('compare')) {
-    const months = [];
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
-    const monthNums = ['01', '02', '03', '04', '05', '06', '07', '08'];
-    for (let i = 0; i < monthNames.length; i++) {
-      const records = filterRecords(renewalsData, monthNums[i], platform, planCategory);
-      const agg = aggregateRecords(records);
-      months.push({ period: `${monthNames[i]} 2026`, due: agg.due, renewed: agg.renewed, rate: agg.rate });
-    }
+  // Month-by-month across everything loaded
+  if (granularity === 'monthly_trend' || (/trend|all months|month[\s-]?wise|monthly|range|since|till now/.test(lower) && !/\bvs\b|compare|versus/.test(lower))) {
+    const months = renewalsByMonth(applyFilters(renewalsData)).map(m => ({ period: m.label, due: m.due, renewed: m.renewed, rate: fmtPct(m.rate) }));
     return { query_period: period, type: "monthly_trend", platform, planCategory, months };
   }
 
-  // 4. Comparison (July vs August)
-  if (lower.includes('vs') || lower.includes('compare')) {
-    const julAgg = aggregateRecords(filterRecords(renewalsData, '07', platform, planCategory));
-    const augAgg = aggregateRecords(filterRecords(renewalsData, '08', platform, planCategory));
+  // Two months compared: the ones named, else the latest two
+  if (granularity === 'comparison' || /\bvs\b|compare|versus/.test(lower)) {
+    const [a, b] = comparisonMonths(period, renewalsData, 'renew_date');
+    if (!a || !b) return { status: "data_unavailable", message: "Not enough months loaded to compare." };
     return {
-      query_period: period,
-      type: "comparison",
-      platform,
-      planCategory,
-      july2026: { overall: { period: "July 2026", due: julAgg.due, renewed: julAgg.renewed, rate: julAgg.rate }, platforms: julAgg.platforms, plans: julAgg.plans },
-      august2026: { overall: { period: "August 2026", due: augAgg.due, renewed: augAgg.renewed, rate: augAgg.rate }, platforms: augAgg.platforms, plans: augAgg.plans }
+      query_period: period, type: "comparison", platform, planCategory,
+      periods: [
+        { period: a.label, ...shape(applyFilters(a.records)) },
+        { period: b.label, ...shape(applyFilters(b.records)) },
+      ],
     };
   }
 
-  // 5. Single month / Platform-wise lookup
-  const records = filterRecords(renewalsData, targetMonthNum, platform, planCategory);
-  const agg = aggregateRecords(records);
-  const monthLabel = Object.keys(monthMap).find(k => monthMap[k] === targetMonthNum) || 'Aug';
-  const monthFull = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1) + ' 2026';
+  // A single window: a named month, "last 30 days", yesterday... (default: last 30 days)
+  const w = resolveWindow(period || 'last 30 days', renewalsData, 'renew_date', { defaultDays: 30 });
+  const recs = applyFilters(w.records);
+  if (!recs.length) return { status: "data_unavailable", message: `No renewal rows for ${w.label}${wanted.length ? ' on the requested platform' : ''}.` };
+  const base = { query_period: period, period: w.label, window: { start: w.start, end: w.end }, platform, planCategory };
 
-  return {
-    query_period: period,
-    type: "platform_breakdown",
-    platform,
-    planCategory,
-    metrics: { period: monthFull, due: agg.due, renewed: agg.renewed, rate: agg.rate },
-    platformBreakdown: agg.platforms,
-    planBreakdown: agg.plans
-  };
+  if (granularity === 'daily' || /day[\s-]?wise|daily/.test(lower)) {
+    const daily = renewalsDaily(recs).map(d => ({ date: d.date, due: d.due, renewed: d.renewed, rate: fmtPct(d.rate) }));
+    const a = shape(recs);
+    return { ...base, type: "daily_trend", metrics: { period: w.label, due: a.due, renewed: a.renewed, rate: a.rate }, dailyBreakdown: daily, platformBreakdown: a.platforms, planBreakdown: a.plans };
+  }
+  const a = shape(recs);
+  const type = granularity === 'plan_breakdown' || /plan[\s-]?wise|plan category|1 month vs 1 year|1 year vs 1 month/.test(lower) ? "plan_breakdown" : "platform_breakdown";
+  return { ...base, type, metrics: { period: w.label, due: a.due, renewed: a.renewed, rate: a.rate }, platformBreakdown: a.platforms, planBreakdown: a.plans };
 }
 
 export function executeFunnelTool(args = {}, contextData = {}) {
@@ -2997,44 +1420,10 @@ export function executeRealtimeTool(args = {}, contextData = {}) {
   return { status: "data_unavailable", message: "Realtime pacing data is not loaded yet. Please wait for the dashboard to finish loading and try again." };
 }
 
-export function executeGeneralQATool(args = {}) {
+export function executeGeneralQATool(args = {}, contextData = {}) {
   return {
-    assistantName: "ET Prime Conversational BI Assistant",
-    greetingGuideline: "If user said a simple greeting (e.g. 'hey', 'hi', 'hello'), respond with 'Hello! 👋 How can I help you analyze your dashboard data today?'.",
-    datasetsOverview: [
-      {
-        domain: "User Acquisition Funnel",
-        stages: "DAU -> Paywall Hits -> Plan Page Loaded -> Plan Selected -> Pay Initiated -> Purchased",
-        dimensions: "View Type (Overall, By Platform), Platform (Combined, Main iOS, MWeb, Main Android), Country (India vs Worldwide), Marketing Teams (Paid Marketing, Product Marketing)",
-        keyMetrics: "DAU, Paywall Hits, Step Drop-offs, Payment Conversion (1.56% overall)"
-      },
-      {
-        domain: "Subscription & Revenue Ledger",
-        coverage: "180 distinct dates (March 9 - Sept 4, 2026), 83,321 transactions",
-        totals: "₹20.97 Cr all-time gross, ₹4.23 Cr last 30 days (₹14.10 L/day run-rate)",
-        dimensions: "User Txn Type (New, Renewal, Upgrade), Platform (MWeb 41% volume leader, Main Android, Main iOS, Market Android, Market iOS, Web), Plan Category (1M, 1Y, 2Y), Channels, Campaigns"
-      },
-      {
-        domain: "Renewals & Recurring Cohorts",
-        coverage: "January to August 2026 cohorts",
-        rates: "41.2% in Jan to 48.0% in August (peak efficiency in August)",
-        breakdowns: "Platform breakdown, Plan category retention (1M at 81.1%, 1Y at 44.5%), Daily trends"
-      },
-      {
-        domain: "Realtime Sales Pacing",
-        coverage: "Today's live hourly purchases (00:00 - 23:00)",
-        metrics: "Current purchases, EOD projected total, 4-week benchmark pacing"
-      }
-    ],
-    samplePrompts: [
-      "give me funnel data for the last 7 days day wise",
-      "What is the renewal rate for the month of july'26?",
-      "Give me platform wise breakup of renewals for the month of july'26",
-      "Which platform leads sales in the last 30 days?",
-      "Show new user vs renewal user revenue split",
-      "Show realtime pacing forecast for today"
-    ]
+    topic: String(args.topic || 'general'),
+    facts: generalQAFacts(contextData),
+    guidance: "Answer conversationally. The facts above are computed from the datasets loaded in the dashboard right now; do not quote numbers that are not in them.",
   };
 }
-
-

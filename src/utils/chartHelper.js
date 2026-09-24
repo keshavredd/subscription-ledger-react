@@ -66,8 +66,7 @@ export function buildPlotlyConfig(chart, isDark = false) {
         line: traceType === 'scatter' ? { color: color, width: 2.5 } : undefined,
         marker: { color: color, size: traceType === 'scatter' ? 6 : undefined },
         yaxis: s.yAxis || undefined,
-        text: sVals.map(v => v.toLocaleString()),
-        hoverinfo: 'x+y+name'
+        hovertemplate: `<b>${s.name || `Series ${idx + 1}`}</b>: %{y:,.0f}<extra></extra>`
       };
     });
   } 
@@ -120,7 +119,11 @@ export function buildPlotlyConfig(chart, isDark = false) {
       const cleanVals = chart.values.map(cleanNumericValue);
       const isBar = chartType.includes('bar');
       const traceType = isBar ? 'bar' : 'scatter';
-      const color = chart.colors || CHART_PALETTE[0];
+      // One colour per chart: per-bar palettes produced near-black bars on the
+      // dark theme and said nothing the x label doesn't already say.
+      const color = typeof chart.colors === 'string' ? chart.colors : (isDark ? '#60A5FA' : '#F59E0B');
+      const suffix = /%|rate|share|conversion/i.test(chart.title || '') ? '%' : '';
+      const labelColor = isDark ? '#E2E8F0' : '#1E293B';
 
       traces = [
         {
@@ -129,10 +132,13 @@ export function buildPlotlyConfig(chart, isDark = false) {
           y: cleanVals,
           type: traceType,
           mode: isBar ? undefined : 'lines+markers',
-          line: isBar ? undefined : { color: typeof color === 'string' ? color : CHART_PALETTE[0], width: 2.5 },
-          marker: { color: color, size: isBar ? undefined : 6 },
-          text: cleanVals.map(v => v.toLocaleString()),
-          hoverinfo: 'x+y+name'
+          line: isBar ? undefined : { color, width: 2.5 },
+          marker: { color, size: isBar ? undefined : 6 },
+          text: cleanVals.map(v => `${v.toLocaleString('en-IN')}${suffix}`),
+          textposition: isBar ? 'outside' : 'none',
+          cliponaxis: false,
+          textfont: { size: 10, color: labelColor, weight: 'bold' },
+          hovertemplate: `<b>%{x}</b><br>%{y:,.1f}${suffix}<extra></extra>`
         }
       ];
     }
@@ -164,6 +170,8 @@ export function buildPlotlyConfig(chart, isDark = false) {
 
   const textColor = isDark ? '#cbd5e1' : '#475569';
   const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const singleBar = traces.length === 1 && traces[0].type === 'bar';
+  const barMax = singleBar ? Math.max(0, ...(traces[0].y || [0])) : 0;
 
   const layout = {
     autosize: true,
@@ -177,17 +185,22 @@ export function buildPlotlyConfig(chart, isDark = false) {
       y: 1.18,
       font: { size: 10, color: textColor }
     },
-    hovermode: 'x unified',
+    hovermode: singleBar ? 'closest' : 'x unified',
+    hoverlabel: { bgcolor: '#ffffff', bordercolor: '#e2e8f0', font: { size: 11, color: '#0f172a' } },
     barmode: chartType === 'grouped_bar' || chart.barmode === 'group' ? 'group' : undefined,
+    bargap: 0.35,
     xaxis: {
       tickfont: { size: 10, color: textColor },
-      showgrid: false
+      showgrid: false,
+      automargin: true
     },
     yaxis: {
       tickfont: { size: 10, color: textColor },
       showgrid: true,
       gridcolor: gridColor,
-      zeroline: false
+      zeroline: false,
+      // room above the tallest bar for its label
+      range: singleBar && barMax > 0 ? [0, barMax * 1.18] : undefined
     }
   };
 

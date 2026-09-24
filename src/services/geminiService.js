@@ -99,7 +99,30 @@ const GEMINI_TOOLS_DECLARATION = [
 ];
 
 /**
- * Queries Gemini 3.6 Flash Function Calling Agent
+ * Parse a model reply as JSON, tolerating ```json fences, leading prose and
+ * trailing text. Returns null when no object can be recovered.
+ */
+function parseModelJson(raw) {
+  if (!raw) return null;
+  let t = String(raw).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  try { return JSON.parse(t); } catch (_) { /* try the first {...} block */ }
+  const start = t.indexOf('{');
+  const end = t.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try { return JSON.parse(t.slice(start, end + 1)); } catch (_) { /* give up */ }
+  }
+  return null;
+}
+
+/** A reply is worth showing only if it carries prose or at least one data block. */
+function hasRenderableContent(r) {
+  return !!(r && ((r.text && r.text.trim()) || r.kpis || r.chart || r.table));
+}
+
+/**
+ * Queries Gemini 3.6 Flash Function Calling Agent.
+ * Returns null when Gemini produced nothing renderable, so the caller can fall
+ * back to the deterministic local engine instead of showing an empty answer.
  */
 export async function queryGeminiBI(rawQuery, contextData = {}) {
   const apiKey = getStoredApiKey();
@@ -196,9 +219,7 @@ Adhere STRICTLY to this JSON format (no outer text or markdown wrappers):
     "type": "bar" | "line" | "grouped_bar",
     "title": "Chart Title",
     "labels": ["Label 1", "Label 2"],
-    // Single-metric:
     "values": [10.5, 20.3],
-    // OR Multi-metric / multi-series (e.g. daily DAU, Paywall Hits, Purchases):
     "series": [
       { "name": "DAU", "values": [2720041, 3059039], "color": "#3B82F6", "type": "line" },
       { "name": "Paywall Hits", "values": [78872, 91838], "color": "#F59E0B", "type": "line" }
@@ -206,6 +227,7 @@ Adhere STRICTLY to this JSON format (no outer text or markdown wrappers):
   },
   "suggestedFollowups": ["Followup Question 1", "Followup Question 2"]
 }
+Use "values" for a single metric, or "series" (and omit "values") for several metrics over time. Do not write comments inside the JSON.
 
 CHART RULES:
 - Every value in "values" MUST BE A STRICT NUMBER (e.g. 1500, 24000).
@@ -251,12 +273,13 @@ Guidelines & Verification:
 
     if (responsePass2.ok) {
       const dataPass2 = await responsePass2.json();
-      const rawTextPass2 = dataPass2?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      try {
-        const parsed = JSON.parse(rawTextPass2);
-        return {
+      const cand2 = dataPass2?.candidates?.[0];
+      const rawTextPass2 = (cand2?.content?.parts || []).map(p => p.text || '').join('\n');
+      const parsed = parseModelJson(rawTextPass2);
+      if (parsed) {
+        const result = {
           domain: 'GEMINI_AI',
-          text: parsed.text || 'Analysis completed.',
+          text: parsed.text || '',
           kpis: parsed.kpis || null,
           chart: parsed.chart || null,
           table: parsed.table || null,
@@ -265,32 +288,34 @@ Guidelines & Verification:
             "Compare Q1 vs Q2 performance"
           ]
         };
-      } catch (err) {
-        console.warn("Failed to parse Pass 2 JSON from Gemini response:", err, rawTextPass2);
+        if (hasRenderableContent(result)) return result;
       }
+      console.warn("[Gemini Agent] Pass 2 returned nothing renderable (finishReason:", cand2?.finishReason, ") — using the local engine.", rawTextPass2.slice(0, 200));
+    } else {
+      console.warn("[Gemini Agent] Pass 2 HTTP", responsePass2.status, "— using the local engine.");
     }
+    return null;
   }
 
-  // Fallback if no function call returned or for direct response
-  const rawTextPass1 = messagePartsPass1.map(p => p.text || '').join('\n');
-  try {
-    const parsed = JSON.parse(rawTextPass1);
-    return {
+  // Direct reply (no function call): structured JSON if the model sent it,
+  // plain prose otherwise. Nothing at all -> null, and the local engine answers.
+  const rawTextPass1 = messagePartsPass1.map(p => p.text || '').join('\n').trim();
+  const defaultFollowups = ["Compare August vs July renewals, platform-wise", "Show the funnel breakdown"];
+  const parsed1 = parseModelJson(rawTextPass1);
+  if (parsed1 && typeof parsed1 === 'object') {
+    const result = {
       domain: 'GEMINI_AI',
-      text: parsed.text || rawTextPass1,
-      kpis: parsed.kpis || null,
-      chart: parsed.chart || null,
-      table: parsed.table || null,
-      suggestedFollowups: parsed.suggestedFollowups || ["Compare August vs July renewals platform wise", "Show funnel breakdown"]
+      text: parsed1.text || '',
+      kpis: parsed1.kpis || null,
+      chart: parsed1.chart || null,
+      table: parsed1.table || null,
+      suggestedFollowups: parsed1.suggestedFollowups || defaultFollowups
     };
-  } catch (err) {
-    return {
-      domain: 'GEMINI_AI',
-      text: rawTextPass1 || "Here is the summary of your query analysis.",
-      kpis: null,
-      chart: null,
-      table: null,
-      suggestedFollowups: ["Compare August vs July renewals platform wise", "Show funnel breakdown"]
-    };
+    if (hasRenderableContent(result)) return result;
   }
+  if (rawTextPass1) {
+    return { domain: 'GEMINI_AI', text: rawTextPass1, kpis: null, chart: null, table: null, suggestedFollowups: defaultFollowups };
+  }
+  console.warn("[Gemini Agent] Pass 1 returned no text and no tool call (finishReason:", candidatePass1?.finishReason, ") — using the local engine.");
+  return null;
 }

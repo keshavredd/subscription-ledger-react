@@ -4579,7 +4579,7 @@ function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, o
 }
 
 export default function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [activeTab, setActiveTab] = useState('Realtime');
   const isDark = theme === 'dark';
 
@@ -4883,6 +4883,7 @@ function ConversationalAnalytics({ isDark, currentUser, embedded = false, onMini
   const [funnelData, setFunnelData] = useState([]);
   const [renewalsData, setRenewalsData] = useState([]);
   const [realtimeData, setRealtimeData] = useState([]);
+  const [arpuData, setArpuData] = useState([]); // arpu_data sheet: marketing team, offer, campaign theme, sale status
 
   const [apiKey, setApiKeyState] = useState(getStoredApiKey());
   const [llamaConfigState, setLlamaConfigState] = useState(getStoredLlamaConfig());
@@ -4933,6 +4934,7 @@ function ConversationalAnalytics({ isDark, currentUser, embedded = false, onMini
             plan_category: String(row.plan_category || '').trim(),
             country_name: String(row.country_name || '').trim(),
             acq_source: String(row.acq_source || '').trim(),
+            acq_sub_source: String(row.acq_sub_source || '').trim(),
             channel: String(row.channel || '').trim(),
             auto_renew: String(row.auto_renew || '').trim(),
             transaction_id: String(row.transaction_id || '').trim(),
@@ -5037,6 +5039,31 @@ function ConversationalAnalytics({ isDark, currentUser, embedded = false, onMini
       }
     }
 
+    async function fetchArpuDataForChat() {
+      try {
+        const results = await fetchDatasetCached('arpu', ARPU_GSHEET_URL);
+        const parsed = (results.data || []).map(row => {
+          const dateStr = formatArpuDate(row.txn_date || row.Date || row.date);
+          if (!dateStr) return null;
+          return {
+            dateStr,
+            platform: normalizePlatformName(String(row.platform || '').toLowerCase().trim()) || String(row.platform || '').trim(),
+            plan_category: String(row.plan_category || 'UNKNOWN').trim(),
+            user_txn_type: String(row.user_txn_type || '').trim(),
+            marketing_team: String(row.marketing_team || 'Others').trim(),
+            conversions: parseInt(row.conversion || row.Conversions || row.conversions || 0, 10) || 0,
+            revenue: parseFloat(row.revenue || row.Revenue || 0) || 0,
+            offer: String(row.Offer || row.offer || 'Standard').trim(),
+            theme: String(row.Theme || row.theme || 'Regular').trim(),
+            sale_status: String(row['Sale status'] || row.sale_status || 'Active').trim()
+          };
+        }).filter(Boolean);
+        setArpuData(parsed);
+      } catch (err) {
+        console.warn('[Chat] ARPU sheet load failed:', err);
+      }
+    }
+
     async function fetchRealtimeData() {
       try {
         const results = await fetchDatasetCached('realtime', REALTIME_GSHEET_URL);
@@ -5052,13 +5079,14 @@ function ConversationalAnalytics({ isDark, currentUser, embedded = false, onMini
     fetchFunnelData();
     fetchRenewalsData();
     fetchRealtimeData();
+    fetchArpuDataForChat();
   }, []);
 
   const INITIAL_BOT_PROMPTS = [
-    "give me funnel data for the last 7 days day wise",
-    "What is the renewal rate for the month of july'26?",
-    "Give me platform wise breakup of renewals for the month of july'26",
-    "Which platform leads sales?"
+    "Give me funnel data for the last 7 days, day-wise",
+    "Telecalling GTV for the last 7 days",
+    "ARPU by campaign theme this month",
+    "Compare this week vs last week GTV"
   ];
 
   const [messages, setMessages] = useState([
@@ -5198,6 +5226,7 @@ function ConversationalAnalytics({ isDark, currentUser, embedded = false, onMini
         funnelData,
         realtimeData,
         renewalsData,
+        arpuData,
         conversationHistory: messages
       });
 
@@ -7728,6 +7757,8 @@ function Realtime({ isDark }) {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [realtimeCompMode, setRealtimeCompMode] = useState("4-Week"); // "4-Week" | "7-Day"
+  // Today's hourly line draws itself left to right: number of hours currently revealed
+  const [revealHours, setRevealHours] = useState(0);
 
   const parseRealtimeRows = (rows) => {
     if (!rows || !Array.isArray(rows)) return [];
@@ -8015,6 +8046,27 @@ function Realtime({ isDark }) {
     };
   }, [rawData, realtimeCompMode]);
 
+  // Draw-in of today's line whenever the data changes (tab load, sync, auto-poll).
+  // Reveals one hour at a time along an ease-out curve; reduced-motion shows it at once.
+  const revealTarget = processedData ? processedData.hourlyTrend.filter(h => h.today !== null && h.today !== undefined).length : 0;
+  useEffect(() => {
+    if (!revealTarget) { setRevealHours(0); return undefined; }
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { setRevealHours(revealTarget); return undefined; }
+    const DURATION = 1400;
+    let raf = 0;
+    const start = performance.now();
+    setRevealHours(0);
+    const tick = (now) => {
+      const t = Math.min((now - start) / DURATION, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setRevealHours(Math.max(1, Math.round(eased * revealTarget)));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [revealTarget, rawData]);
+
   if (loading && (!rawData || rawData.length === 0)) {
     return (
       <div className="animate-in fade-in duration-300 pb-12">
@@ -8175,12 +8227,22 @@ function Realtime({ isDark }) {
               data={[
                 {
                   x: hours,
-                  y: hourlyTrend.map(h => h.today),
+                  y: hourlyTrend.map((h, i) => (i < revealHours ? h.today : null)),
                   type: 'scatter',
                   mode: 'lines',
                   name: 'Today',
                   line: { color: isDark ? '#60a5fa' : '#d97706', width: 3, shape: 'spline' },
                   hovertemplate: '  <b>%{y}</b>  <extra></extra>'
+                },
+                {
+                  // the pen tip while the line is drawing
+                  x: revealHours > 0 && revealHours <= hourlyTrend.length ? [hours[revealHours - 1]] : [],
+                  y: revealHours > 0 && revealHours <= hourlyTrend.length ? [hourlyTrend[revealHours - 1].today] : [],
+                  type: 'scatter',
+                  mode: 'markers',
+                  marker: { color: isDark ? '#93c5fd' : '#f59e0b', size: 9, line: { color: isDark ? '#0f172a' : '#ffffff', width: 2 } },
+                  showlegend: false,
+                  hoverinfo: 'skip'
                 },
                 {
                   x: hours,

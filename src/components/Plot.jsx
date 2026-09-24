@@ -24,8 +24,17 @@ const BasePlot = createPlotlyComponent(Plotly);
 
 const AXIS_KEY = /^[xy]axis\d*$/;
 
+// The dashboard's typeface (DM Sans, set on body and in Tailwind). Plotly
+// defaults to Open Sans, so every chart gets this unless its layout says
+// otherwise; a chart's own `font` values still win.
+const CHART_FONT_FAMILY = '"DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
 export default function Plot({ layout, config, lockZoom = false, ...rest }) {
-  let mergedLayout = { uirevision: 'et-prime', ...(layout || {}) };
+  let mergedLayout = {
+    uirevision: 'et-prime',
+    ...(layout || {}),
+    font: { family: CHART_FONT_FAMILY, ...((layout && layout.font) || {}) },
+  };
   let mergedConfig = config;
 
   if (lockZoom) {

@@ -247,6 +247,24 @@ export default function InsightsHub({ isDark, currentUser }) {
   }, [reports, rangeStart, rangeEnd]);
 
   // ---- Gemini cross-week summarization -------------------------------------
+  /** Deterministic stand-in for the Gemini synthesis: the stored narrative of each week, newest first. */
+  const buildStoredSummary = (reports) => {
+    const strip = (s) => String(s || '').replace(/<[^>]+>/g, '').replace(/\*\*/g, '').trim();
+    const weeks = [...(reports || [])].sort((a, b) => String(b.weekEnd).localeCompare(String(a.weekEnd)));
+    const blocks = weeks.map((r) => {
+      const n = r.narrative || {};
+      const lines = [];
+      (n.key_highlights || []).slice(0, 3).forEach((h) => lines.push(`- ${strip(h)}`));
+      const wins = (n.wins || n.top_wins || []).slice(0, 1).map(strip).filter(Boolean);
+      const watch = (n.watch_outs || n.focus_area || []).slice(0, 1).map(strip).filter(Boolean);
+      if (wins.length) lines.push(`- Win: ${wins[0]}`);
+      if (watch.length) lines.push(`- Watch-out: ${watch[0]}`);
+      if (n.takeaway) lines.push(`- Takeaway: ${strip(n.takeaway)}`);
+      return lines.length ? `Week ${r.weekStart} to ${r.weekEnd}\n${lines.join('\n')}` : '';
+    }).filter(Boolean);
+    return blocks.length ? blocks.join('\n\n') : '';
+  };
+
   const summarizeHighlights = async () => {
     const apiKey = getStoredApiKey() || import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) { setSummaryError('No Gemini API key configured.'); return; }
@@ -287,7 +305,16 @@ ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
       setSummary(text.trim());
     } catch (err) {
       console.warn('[InsightsHub] Summarize error:', err);
-      setSummaryError(`Could not generate the summary. ${err.message || ''}`.trim());
+      // Gemini is optional: the reports already carry their own highlights,
+      // wins and watch-outs, so summarise from those instead of failing.
+      const fallback = buildStoredSummary(rangedReports);
+      if (fallback) {
+        setSummary(fallback);
+        const why = /429|quota/i.test(err.message || '') ? 'the Gemini API quota is exhausted' : `Gemini is unavailable (${(err.message || 'error').slice(0, 90)})`;
+        setSummaryError(`Cross-week synthesis skipped because ${why}. Showing the highlights stored with each report instead.`);
+      } else {
+        setSummaryError(`Could not generate the summary. ${err.message || ''}`.trim());
+      }
     } finally {
       setSummarizing(false);
     }
@@ -495,7 +522,7 @@ ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
               </div>
               <div className="text-sm font-black text-warm-text dark:text-dark-text group-hover/rt:text-amber-accent transition-colors">{rt.name}</div>
             </div>
-            <p className="text-xs text-warm-muted dark:text-dark-muted leading-relaxed max-h-0 opacity-0 overflow-hidden group-hover/rt:max-h-24 group-hover/rt:opacity-100 group-hover/rt:mt-1.5 transition-all duration-300 ease-out">{rt.desc}</p>
+            <p className="text-xs text-warm-muted dark:text-dark-muted leading-relaxed mt-1.5">{rt.desc}</p>
             <div className="mt-3 text-[11px] font-bold text-amber-accent flex items-center gap-1">
               View reports <ChevronRight className="h-3 w-3 group-hover/rt:translate-x-0.5 transition-transform" />
             </div>

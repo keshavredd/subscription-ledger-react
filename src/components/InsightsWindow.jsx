@@ -15,10 +15,11 @@
  */
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-const OPEN_MS = 520;
-const CLOSE_MS = 420;
-const EASE_OPEN = 'cubic-bezier(0.22, 1, 0.36, 1)';   // fast out, soft landing
-const EASE_CLOSE = 'cubic-bezier(0.55, 0, 0.55, 0.2)'; // gathers speed into the dock
+const OPEN_MS = 560;
+const CLOSE_MS = 400;
+// One gentle curve each way: no overshoot, no snap at either end
+const EASE_OPEN = 'cubic-bezier(0.2, 0.85, 0.25, 1)';
+const EASE_CLOSE = 'cubic-bezier(0.4, 0, 0.55, 1)';
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -38,16 +39,17 @@ function genieGeometry(panel, anchor) {
 }
 
 /**
- * Keyframes from the dock to rest. The mid-frame is deliberately taller than
- * wide and still displaced toward the dock — that stretch is what reads as
- * "being pulled out of the icon" rather than a plain zoom.
+ * Keyframes from the dock to rest: the panel grows out of the button with a
+ * single uniform scale while it travels to its resting spot. (An earlier
+ * version stretched taller than wide mid-flight, which read as a stutter on
+ * some machines; a uniform zoom along one curve is what looks smooth.)
  */
 function genieFrames({ dx, dy, sx, sy }) {
+  const s0 = Math.max(Math.min(sx, sy), 0.04);
   return [
-    { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`, opacity: 0.35, borderRadius: '999px', offset: 0 },
-    { transform: `translate(${dx * 0.55}px, ${dy * 0.42}px) scale(${Math.min(0.42, sx + 0.35)}, ${Math.min(0.78, sy + 0.7)})`, opacity: 1, borderRadius: '28px', offset: 0.45 },
-    { transform: `translate(${dx * 0.08}px, ${dy * 0.06}px) scale(0.97, 0.99)`, opacity: 1, borderRadius: '18px', offset: 0.85 },
-    { transform: 'translate(0px, 0px) scale(1, 1)', opacity: 1, borderRadius: '16px', offset: 1 },
+    { transform: `translate(${dx}px, ${dy}px) scale(${s0})`, opacity: 0, borderRadius: '32px', offset: 0 },
+    { transform: `translate(${dx * 0.6}px, ${dy * 0.6}px) scale(${0.25 + s0})`, opacity: 1, borderRadius: '24px', offset: 0.3 },
+    { transform: 'translate(0px, 0px) scale(1)', opacity: 1, borderRadius: '16px', offset: 1 },
   ];
 }
 
@@ -81,10 +83,9 @@ export default function InsightsWindow({ open, onClose, anchorRef, title = 'Ask 
     const duration = prefersReducedMotion() ? 0 : (opening ? OPEN_MS : CLOSE_MS);
     const frames = genieFrames(genieGeometry(panel, anchorRef?.current));
     if (!opening) {
-      // Same path back into the dock: reverse the frames and re-space them so
-      // the panel lingers near rest briefly, then accelerates into the icon.
+      // Same path back into the dock, mirrored: shrink smoothly, fade at the end
       frames.reverse();
-      [0, 0.15, 0.55, 1].forEach((offset, i) => { frames[i].offset = offset; });
+      [0, 0.7, 1].forEach((offset, i) => { frames[i].offset = offset; });
     }
 
     const panelAnim = panel.animate(frames, {
@@ -94,7 +95,7 @@ export default function InsightsWindow({ open, onClose, anchorRef, title = 'Ask 
     });
     const backdropAnim = backdrop.animate(
       opening ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }],
-      { duration: Math.max(duration * 0.7, 0), easing: 'ease-out', fill: 'both', delay: opening ? 0 : duration * 0.15 }
+      { duration, easing: 'ease-in-out', fill: 'both' }
     );
     anims.current = [panelAnim, backdropAnim];
 
@@ -102,14 +103,26 @@ export default function InsightsWindow({ open, onClose, anchorRef, title = 'Ask 
     const finish = () => {
       if (done) return;
       done = true;
-      stopAnims(); // back to stylesheet values: no transform at rest
-      setPhase(opening ? 'open' : 'closed');
+      if (opening) {
+        stopAnims(); // back to stylesheet values: no transform at rest
+        setPhase('open');
+      } else {
+        // Hide first, reset after. Cancelling here would snap the panel back to
+        // full size for the one frame before React applies `invisible`.
+        setPhase('closed');
+      }
     };
     panelAnim.onfinish = finish;
     panelAnim.oncancel = () => { /* superseded by a newer phase */ };
     if (duration === 0) finish();
     return () => { panelAnim.onfinish = null; };
   }, [phase, anchorRef, stopAnims]);
+
+  // Once the window is hidden, drop the finished close animation so the panel
+  // sits at its stylesheet values for the next open.
+  useEffect(() => {
+    if (phase === 'closed') stopAnims();
+  }, [phase, stopAnims]);
 
   const visible = phase !== 'closed';
 
@@ -148,7 +161,7 @@ export default function InsightsWindow({ open, onClose, anchorRef, title = 'Ask 
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative w-full max-w-[1180px] h-[min(88vh,900px)] rounded-2xl overflow-hidden shadow-2xl bg-white dark:bg-dark-card outline-none will-change-transform"
+        className="relative w-full max-w-[900px] h-[min(86vh,860px)] rounded-2xl overflow-hidden shadow-2xl bg-white dark:bg-dark-card outline-none will-change-transform"
       >
         {children}
       </div>
