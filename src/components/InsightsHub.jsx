@@ -14,7 +14,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../services/firebaseService';
 import { collection, query, where, orderBy, getDocs, setDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { getStoredApiKey, GEMINI_MODEL } from '../services/geminiService';
+import { getStoredApiKey } from '../services/geminiService';
+import { getStoredLlamaConfig } from '../services/llamaService';
+import { generateText } from '../services/aiText';
 import { FileText, Bell, Sparkles, ChevronDown, ChevronRight, ChevronLeft, Loader2, Check, IndianRupee, Filter, RefreshCw, Users, Zap, BarChart3 } from 'lucide-react';
 
 const REPORT_TYPES = [
@@ -114,6 +116,8 @@ export default function InsightsHub({ isDark, currentUser }) {
   const [summary, setSummary] = useState(null);
   const [summarizing, setSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState(null);
+  const [summaryNote, setSummaryNote] = useState(null); // informational, not an error
+  const [summaryProvider, setSummaryProvider] = useState(null); // e.g. 'Gemini · gemini-3.6-flash-lite'
 
   const [alerts, setAlerts] = useState([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
@@ -267,12 +271,14 @@ export default function InsightsHub({ isDark, currentUser }) {
 
   const summarizeHighlights = async () => {
     const apiKey = getStoredApiKey() || import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) { setSummaryError('No Gemini API key configured.'); return; }
+    if (!apiKey && !getStoredLlamaConfig().apiKey) { setSummaryError('No Gemini or Groq API key configured.'); return; }
     if (rangedReports.length === 0) { setSummaryError('No reports in the selected range.'); return; }
 
     setSummarizing(true);
     setSummary(null);
     setSummaryError(null);
+    setSummaryNote(null);
+    setSummaryProvider(null);
     try {
       const weeks = rangedReports.map(r => ({
         week: `${r.weekStart} to ${r.weekEnd}`,
@@ -288,21 +294,11 @@ Use plain text with the three section titles, hyphen bullets, no markdown symbol
 WEEKLY NARRATIVES (JSON):
 ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
 
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      });
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => '');
-        let errMsg = '';
-        try { errMsg = JSON.parse(errBody)?.error?.message || ''; } catch { errMsg = errBody; }
-        throw new Error(`Gemini HTTP ${res.status}${errMsg ? ` — ${errMsg.slice(0, 180)}` : ''}`);
-      }
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error(`Empty response from Gemini (finishReason: ${data?.candidates?.[0]?.finishReason || 'unknown'})`);
-      setSummary(text.trim());
+      // Same providers as Conversational Analytics: Groq if configured, else the
+      // Gemini models this key can actually use (discovered, not guessed).
+      const { text, provider, model } = await generateText(prompt, { temperature: 0.3 });
+      setSummary(text);
+      setSummaryProvider(`${provider} · ${model}`);
     } catch (err) {
       console.warn('[InsightsHub] Summarize error:', err);
       // Gemini is optional: the reports already carry their own highlights,
@@ -310,8 +306,12 @@ ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
       const fallback = buildStoredSummary(rangedReports);
       if (fallback) {
         setSummary(fallback);
-        const why = /429|quota/i.test(err.message || '') ? 'the Gemini API quota is exhausted' : `Gemini is unavailable (${(err.message || 'error').slice(0, 90)})`;
-        setSummaryError(`Cross-week synthesis skipped because ${why}. Showing the highlights stored with each report instead.`);
+        if (err.attempts) console.warn('[InsightsHub] Models tried:', err.attempts);
+        const why = err.status === 429 || /quota/i.test(err.message || '')
+          ? `the Gemini API key has used up its quota for now (HTTP 429${err.attempts ? `, ${err.attempts.length} model${err.attempts.length === 1 ? '' : 's'} tried` : ''})`
+          : `no AI model answered (${(err.message || 'error').slice(0, 90)})`;
+        setSummaryNote(`AI synthesis is off: ${why}. Below are the highlights stored with each week's report; the numbers are the same, only the cross-week narrative is missing.`);
+        setSummaryError(null);
       } else {
         setSummaryError(`Could not generate the summary. ${err.message || ''}`.trim());
       }
@@ -373,12 +373,14 @@ ${JSON.stringify(weeks, null, 1).slice(0, 28000)}`;
         </div>
 
         {summaryError && <div className="mb-4 p-3 rounded-xl text-xs font-semibold bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300">{summaryError}</div>}
+        {summaryNote && <div className="mb-4 p-3 rounded-xl text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200">{summaryNote}</div>}
 
         {summary && (
           <div className={`${cardCls} p-5 mb-6 border-amber-500/40`}>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-amber-accent" />
               <h3 className="text-sm font-black text-warm-text dark:text-dark-text uppercase tracking-wider">Cross-Week Summary ({rangedReports.length} reports)</h3>
+              {summaryProvider && <span className="ml-auto text-[10px] font-semibold text-warm-muted dark:text-dark-muted">via {summaryProvider}</span>}
             </div>
             <pre className="whitespace-pre-wrap text-[13px] leading-relaxed font-sans text-warm-text dark:text-dark-text">{summary}</pre>
           </div>

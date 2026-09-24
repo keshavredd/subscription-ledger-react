@@ -9,6 +9,27 @@ import { executeToolByName } from '../utils/aiDataEngine.js';
 // Single place to bump the model when Google retires one
 // (gemini-2.0-flash was shut down ~Sep 2026 with an HTTP 404 pointing here).
 export const GEMINI_MODEL = 'gemini-3.6-flash';
+// Tried in turn when the main model answers 429 (each model has its own quota bucket)
+export const GEMINI_FALLBACK_MODELS = ['gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest'];
+
+/**
+ * POST a generateContent body, rotating through the fallback models when the
+ * reply is a quota (429), retired-model (404) or overload (503) response.
+ */
+export async function geminiPost(apiKey, body) {
+  let last = null;
+  for (const model of [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS]) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok || ![429, 404, 503].includes(res.status)) return res;
+    console.warn(`[Gemini Agent] ${model}: HTTP ${res.status} — trying the next model`);
+    last = res;
+  }
+  return last;
+}
 
 export function getStoredApiKey() {
   if (typeof import.meta !== 'undefined' && import.meta?.env?.VITE_GEMINI_API_KEY) {
@@ -130,7 +151,6 @@ export async function queryGeminiBI(rawQuery, contextData = {}) {
     throw new Error("NO_API_KEY");
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const systemInstructionPass1 = `You are the Conversational BI Agent for ET Prime Subscription Ledger.
 Analyze the user's prompt alongside conversation history.
@@ -167,11 +187,7 @@ CONTEXT & MULTI-TURN RULES:
     tools: GEMINI_TOOLS_DECLARATION
   };
 
-  const responsePass1 = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(pass1Body)
-  });
+  const responsePass1 = await geminiPost(apiKey, pass1Body);
 
   if (!responsePass1.ok) {
     const errorText = await responsePass1.text();
@@ -265,11 +281,7 @@ Guidelines & Verification:
       }
     };
 
-    const responsePass2 = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pass2Body)
-    });
+    const responsePass2 = await geminiPost(apiKey, pass2Body);
 
     if (responsePass2.ok) {
       const dataPass2 = await responsePass2.json();
