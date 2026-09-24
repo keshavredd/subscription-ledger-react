@@ -8082,6 +8082,12 @@ function Realtime({ isDark }) {
     }
     return pts;
   })();
+  // Y axis pinned to the whole day (today + benchmark) so it does not rescale while the line draws
+  const realtimeYMax = (() => {
+    const src = processedData ? processedData.hourlyTrend : [];
+    const vals = src.flatMap(h => [h.today ?? 0, h.past4Avg || 0, h.last7Avg || 0]).filter(v => Number.isFinite(v));
+    return Math.max(1, ...vals) * 1.15;
+  })();
 
   if (loading && (!rawData || rawData.length === 0)) {
     return (
@@ -8288,6 +8294,8 @@ function Realtime({ isDark }) {
                 yaxis: { 
                   title: 'Purchases',
                   automargin: true,
+                  range: [0, realtimeYMax],
+                  fixedrange: true,
                   zeroline: true,
                   zerolinecolor: isDark ? '#334155' : '#E2E8F0',
                   gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
