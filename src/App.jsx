@@ -19,7 +19,7 @@ import { RenewalHeatmap, RenewalRateVsVolumeChart, RecurringDonutsSection } from
 import InsightsHub from './components/InsightsHub';
 import InsightsWindow from './components/InsightsWindow';
 import MISReports from './components/MISReports';
-import GuidedTour from './components/GuidedTour';
+import GuidedTour, { ASK_INSIGHTS_STEP } from './components/GuidedTour';
 import { shouldOfferTour, markTourSeen } from './services/tourService';
 
 // Local calendar date as YYYY-MM-DD. Never use toISOString() for this: it
@@ -4709,8 +4709,8 @@ export default function App() {
   }, [handleSetUser]);
 
   const isAdmin = isAdminEmail(currentUser?.email);
-  // Conversational Analytics left the nav on purpose: admins reach it via the
-  // floating "Ask Insights" CTA until it's ready for everyone.
+  // Conversational Analytics is not a nav tab: every signed-in user reaches it
+  // through the floating "Ask Insights" CTA, as a window over the current tab.
   const baseTabs = ['Realtime', 'Funnel Analysis', 'Subscription Report', 'Renewals & Recurring', 'ARPU', 'MIS', 'Insights Hub'];
   const navTabs = baseTabs;
 
@@ -4848,19 +4848,17 @@ export default function App() {
 
         {/* Conversational Analytics as a window over the current tab. Stays
             mounted while minimised so the conversation is kept. */}
-        {isAdmin && (
-          <InsightsWindow open={insightsOpen} onClose={() => setInsightsOpen(false)} anchorRef={insightsCtaRef}>
-            <ConversationalAnalytics isDark={isDark} currentUser={currentUser} embedded onMinimize={() => setInsightsOpen(false)} />
-          </InsightsWindow>
-        )}
+        <InsightsWindow open={insightsOpen} onClose={() => setInsightsOpen(false)} anchorRef={insightsCtaRef}>
+          <ConversationalAnalytics isDark={isDark} currentUser={currentUser} embedded onMinimize={() => setInsightsOpen(false)} />
+        </InsightsWindow>
 
-        {/* Floating "Ask Insights" dock button (admin-only while Conversational
-            Analytics is under development). Hover expands the label; it tucks
-            away while the window is open and returns as the window lands. */}
-        {isAdmin && (
-          <button
+        {/* Floating "Ask Insights" dock button, for every signed-in user. Hover
+            expands the label; it tucks away while the window is open and
+            returns as the window lands. */}
+        <button
             ref={insightsCtaRef}
             type="button"
+            data-tour-tab={ASK_INSIGHTS_STEP}
             onClick={() => setInsightsOpen(true)}
             title="Conversational Analytics — Ask your questions"
             aria-expanded={insightsOpen}
@@ -4871,7 +4869,6 @@ export default function App() {
               Ask Insights
             </span>
           </button>
-        )}
       </div>
     </div>
   );

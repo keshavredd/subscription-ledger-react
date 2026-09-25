@@ -9,7 +9,7 @@
  */
 import { getUserTourStateFS, setUserTourStateFS } from './firestoreService';
 
-export const TOUR_VERSION = 1;
+export const TOUR_VERSION = 2; // 2: Ask Insights added to the tour
 
 const localKey = (email) => `et_tour_v${TOUR_VERSION}_${String(email || '').toLowerCase().trim()}`;
 

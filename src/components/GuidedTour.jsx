@@ -5,7 +5,9 @@
  * tour. `tour` walks the nav pills one tab at a time: the app switches to that
  * tab, the pill is spotlighted (a dimmed overlay with a cut-out around it) and
  * a popover under the pill says what the tab is for. Only tabs present in the
- * `tabs` prop are covered, so the admin-only Ask Insights window never appears.
+ * `tabs` prop are covered. The last step is not a tab: it spotlights the
+ * floating Ask Insights button (also tagged `data-tour-tab`) with the popover
+ * above it, since the button sits at the bottom of the screen.
  *
  * The spotlight is measured from the live pill (`data-tour-tab` attribute) and
  * re-measured on resize and scroll, so it tracks the sticky header and the
@@ -46,6 +48,13 @@ export const TOUR_COPY = {
   },
 };
 
+/** The closing step: the floating Ask Insights button, not a nav tab. */
+export const ASK_INSIGHTS_STEP = 'Ask Insights';
+TOUR_COPY[ASK_INSIGHTS_STEP] = {
+  title: 'Ask Insights',
+  body: 'Ask questions in plain English — "Telecalling GTV for the last 7 days", "team-wise funnel", "compare this month vs last month" — and get the numbers, a chart and a table computed from the same data as the tabs. Open it any time from this button.',
+};
+
 const POPOVER_W = 320;
 const GAP = 12;
 
@@ -55,7 +64,8 @@ export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSele
   const [rect, setRect] = useState(null);
   const returnTabRef = useRef(activeTab);
 
-  const steps = useMemo(() => (tabs || []).filter((t) => TOUR_COPY[t]), [tabs]);
+  const steps = useMemo(() => [...(tabs || []).filter((t) => TOUR_COPY[t] && t !== ASK_INSIGHTS_STEP), ASK_INSIGHTS_STEP], [tabs]);
+  const tabCount = steps.length - 1;
   const current = steps[step];
 
   // Reset whenever the tour is (re)opened; remember where the user was.
@@ -72,9 +82,9 @@ export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSele
     onClose?.(outcome);
   }, [onClose, onSelectTab]);
 
-  // Show the tab being explained.
+  // Show the tab being explained (the Ask Insights step keeps the current tab).
   useEffect(() => {
-    if (!open || phase !== 'tour' || !current) return;
+    if (!open || phase !== 'tour' || !current || current === ASK_INSIGHTS_STEP) return;
     if (activeTab !== current && onSelectTab) onSelectTab(current);
   }, [open, phase, current, activeTab, onSelectTab]);
 
@@ -136,7 +146,7 @@ export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSele
             </div>
           </div>
           <p className="text-sm text-warm-text dark:text-dark-text leading-relaxed mb-5">
-            Would you like a quick tour of the {steps.length} tabs? It takes under a minute, and you can replay it any time from your profile menu.
+            Would you like a quick tour of the {tabCount} tabs and Ask Insights? It takes under a minute, and you can replay it any time from your profile menu.
           </p>
           <div className="flex items-center gap-2">
             <button
@@ -165,11 +175,16 @@ export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSele
   const copy = TOUR_COPY[current];
   const isLast = step === steps.length - 1;
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
   const popW = Math.min(POPOVER_W, vw - 32);
   const anchorCenter = rect ? rect.left + rect.width / 2 : vw / 2;
   const popLeft = Math.max(16, Math.min(anchorCenter - popW / 2, vw - popW - 16));
-  const popTop = rect ? rect.bottom + GAP : 96;
+  // Below the anchor unless it sits in the lower half of the screen (the
+  // floating Ask Insights button), then above it.
+  const placeAbove = !!rect && rect.top > vh / 2;
+  const popPos = placeAbove ? { bottom: vh - rect.top + GAP } : { top: rect ? rect.bottom + GAP : 96 };
   const arrowLeft = Math.max(18, Math.min(anchorCenter - popLeft, popW - 18));
+  const stepKind = 'Step';
 
   return (
     <div className="fixed inset-0 z-[200]" role="dialog" aria-modal="true" aria-labelledby="tour-step-title">
@@ -194,15 +209,15 @@ export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSele
       {/* popover under the pill */}
       <div
         className="absolute bg-white dark:bg-dark-card border border-warm-border dark:border-dark-border rounded-2xl shadow-2xl p-4 transition-all duration-300 ease-out"
-        style={{ top: popTop, left: popLeft, width: popW }}
+        style={{ ...popPos, left: popLeft, width: popW }}
       >
         <div
-          className="absolute -top-2 h-4 w-4 rotate-45 bg-white dark:bg-dark-card border-l border-t border-warm-border dark:border-dark-border"
+          className={`absolute h-4 w-4 rotate-45 bg-white dark:bg-dark-card border-warm-border dark:border-dark-border ${placeAbove ? '-bottom-2 border-r border-b' : '-top-2 border-l border-t'}`}
           style={{ left: arrowLeft - 8 }}
         />
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-wider text-amber-accent">Tab {step + 1} of {steps.length}</p>
+            <p className="text-[10px] font-black uppercase tracking-wider text-amber-accent">{stepKind} {step + 1} of {steps.length}</p>
             <h3 id="tour-step-title" className="text-sm font-black text-warm-text dark:text-dark-text leading-tight mt-0.5">{copy.title}</h3>
           </div>
           <button
