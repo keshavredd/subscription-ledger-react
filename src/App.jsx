@@ -5,7 +5,7 @@ import { getStoredLlamaConfig, setStoredLlamaConfig } from './services/llamaServ
 import { buildPlotlyConfig } from './utils/chartHelper';
 import { themedColorMap, themedColorList, softLightColorMap, softLightColorList } from './utils/themePalettes';
 import Papa from 'papaparse';
-import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, MessageSquare, Key, Check, LogOut, ShieldCheck, X, Download, Minus } from 'lucide-react';
+import { Sun, Moon, ChevronDown, ChevronRight, Loader2, Bot, User, Send, Sparkles, Trash2, HelpCircle, RefreshCw, BarChart2, Globe, ShieldAlert, ArrowRight, ArrowUp, MessageSquare, Key, Check, LogOut, ShieldCheck, X, Download, Minus } from 'lucide-react';
 import Plot from './components/Plot';
 import useIsMobile from './hooks/useIsMobile';
 import { phoneTraces } from './utils/phoneCharts';
@@ -4462,6 +4462,35 @@ function RenewalsAndRecurring({ isDark }) {
 }
 
 
+/**
+ * Back-to-top button, docked above the Ask Insights CTA. It appears only once the
+ * page has been scrolled a good way down (a viewport's worth, at least 600px) and
+ * fades out again near the top, so it never competes with the header.
+ */
+function ScrollToTopButton({ hidden = false }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > Math.max(600, window.innerHeight * 0.9));
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  const show = visible && !hidden;
+  return (
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      title="Back to top"
+      aria-label="Back to top"
+      aria-hidden={!show}
+      tabIndex={show ? 0 : -1}
+      className={`fixed bottom-[5.75rem] right-6 z-[94] h-11 w-11 rounded-full flex items-center justify-center bg-white dark:bg-dark-card text-warm-text dark:text-dark-text border border-warm-border dark:border-dark-border shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer ${show ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'}`}
+    >
+      <ArrowUp className="h-5 w-5" />
+    </button>
+  );
+}
+
 function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, onStartTour, isDark }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
@@ -4624,6 +4653,23 @@ export default function App() {
   // tab (genie animation anchored to the dock button); it is never a nav tab.
   const [insightsOpen, setInsightsOpen] = useState(false);
   const insightsCtaRef = useRef(null);
+  // A deep link straight into Ask Insights (the release mail's second button):
+  // /?ask=1 or /#ask-insights opens the window once the user is signed in, and
+  // the marker is dropped from the URL so a reload does not reopen it.
+  const askViaUrlRef = useRef(
+    typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('ask') === '1' || window.location.hash === '#ask-insights')
+  );
+  useEffect(() => {
+    if (!currentUser || !askViaUrlRef.current) return;
+    askViaUrlRef.current = false;
+    setInsightsOpen(true);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('ask');
+      url.hash = '';
+      window.history.replaceState({}, '', `${url.pathname}${url.search}`);
+    } catch (_) { /* ignore */ }
+  }, [currentUser]);
 
   // Guided tour of the tabs: null (closed) | 'ask' (first sign-in prompt) | 'tour' (replay)
   const [tourState, setTourState] = useState(null);
@@ -4851,6 +4897,10 @@ export default function App() {
         <InsightsWindow open={insightsOpen} onClose={() => setInsightsOpen(false)} anchorRef={insightsCtaRef}>
           <ConversationalAnalytics isDark={isDark} currentUser={currentUser} embedded onMinimize={() => setInsightsOpen(false)} />
         </InsightsWindow>
+
+        {/* Back to top, docked above the Ask Insights button; hidden while the
+            Ask Insights window is open so the two never overlap it. */}
+        <ScrollToTopButton hidden={insightsOpen} />
 
         {/* Floating "Ask Insights" dock button, for every signed-in user. Hover
             expands the label; it tucks away while the window is open and
