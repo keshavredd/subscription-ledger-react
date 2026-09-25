@@ -7757,8 +7757,6 @@ function Realtime({ isDark }) {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [realtimeCompMode, setRealtimeCompMode] = useState("4-Week"); // "4-Week" | "7-Day"
-  // Today's hourly line draws itself left to right: pen position in hours (fractional)
-  const [revealPos, setRevealPos] = useState(0);
 
   const parseRealtimeRows = (rows) => {
     if (!rows || !Array.isArray(rows)) return [];
@@ -8046,48 +8044,6 @@ function Realtime({ isDark }) {
     };
   }, [rawData, realtimeCompMode]);
 
-  // Draw-in of today's line whenever the data changes (tab load, sync, auto-poll).
-  // Reveals one hour at a time along an ease-out curve; reduced-motion shows it at once.
-  const revealTarget = processedData ? processedData.hourlyTrend.filter(h => h.today !== null && h.today !== undefined).length : 0;
-  useEffect(() => {
-    if (!revealTarget) { setRevealPos(0); return undefined; }
-    const last = revealTarget - 1; // pen travels from hour 0 to the latest hour with data
-    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) { setRevealPos(last); return undefined; }
-    const DURATION = 3000;
-    let raf = 0;
-    let lastDrawn = -1;
-    const start = performance.now();
-    setRevealPos(0);
-    const tick = (now) => {
-      const t = Math.min((now - start) / DURATION, 1);
-      const eased = 0.5 - Math.cos(Math.PI * t) / 2; // ease in-out: gentle start, gentle landing
-      const pos = eased * last;
-      if (pos - lastDrawn >= 0.04 || t === 1) { lastDrawn = pos; setRevealPos(pos); }
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [revealTarget, rawData]);
-  // Points of today's line up to the pen, plus the pen itself interpolated between hours
-  const revealedToday = (() => {
-    const src = processedData ? processedData.hourlyTrend : [];
-    const pts = [];
-    const lo = Math.floor(revealPos);
-    for (let i = 0; i <= lo && i < src.length; i++) { if (src[i].today === null || src[i].today === undefined) break; pts.push([i, src[i].today]); }
-    const hi = lo + 1;
-    if (hi < src.length && src[hi].today !== null && src[hi].today !== undefined && revealPos > lo) {
-      const f = revealPos - lo;
-      pts.push([revealPos, src[lo].today + (src[hi].today - src[lo].today) * f]);
-    }
-    return pts;
-  })();
-  // Y axis pinned to the whole day (today + benchmark) so it does not rescale while the line draws
-  const realtimeYMax = (() => {
-    const src = processedData ? processedData.hourlyTrend : [];
-    const vals = src.flatMap(h => [h.today ?? 0, h.past4Avg || 0, h.last7Avg || 0]).filter(v => Number.isFinite(v));
-    return Math.max(1, ...vals) * 1.15;
-  })();
 
   if (loading && (!rawData || rawData.length === 0)) {
     return (
@@ -8248,23 +8204,13 @@ function Realtime({ isDark }) {
               lockZoom
               data={[
                 {
-                  x: revealedToday.map(p => p[0]),
-                  y: revealedToday.map(p => p[1]),
+                  x: hours,
+                  y: hourlyTrend.map(h => h.today),
                   type: 'scatter',
                   mode: 'lines',
                   name: 'Today',
                   line: { color: isDark ? '#60a5fa' : '#d97706', width: 3, shape: 'spline' },
-                  hovertemplate: '  <b>%{y:.0f}</b>  <extra></extra>'
-                },
-                {
-                  // the pen tip while the line is drawing
-                  x: revealedToday.length ? [revealedToday[revealedToday.length - 1][0]] : [],
-                  y: revealedToday.length ? [revealedToday[revealedToday.length - 1][1]] : [],
-                  type: 'scatter',
-                  mode: 'markers',
-                  marker: { color: isDark ? '#93c5fd' : '#f59e0b', size: 9, line: { color: isDark ? '#0f172a' : '#ffffff', width: 2 } },
-                  showlegend: false,
-                  hoverinfo: 'skip'
+                  hovertemplate: '  <b>%{y}</b>  <extra></extra>'
                 },
                 {
                   x: hours,
@@ -8294,8 +8240,6 @@ function Realtime({ isDark }) {
                 yaxis: { 
                   title: 'Purchases',
                   automargin: true,
-                  range: [0, realtimeYMax],
-                  fixedrange: true,
                   zeroline: true,
                   zerolinecolor: isDark ? '#334155' : '#E2E8F0',
                   gridcolor: isDark ? 'rgba(226, 232, 240, 0.05)' : 'rgba(226, 232, 240, 0.6)',
