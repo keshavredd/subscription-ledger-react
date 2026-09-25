@@ -13,8 +13,8 @@ import {
   canonPlatform, platformLabel, platformsWanted, filterPlatforms,
   renewalsAgg, renewalsByPlatform, renewalsByPlan, renewalsByMonth, renewalsByWeek, renewalsDaily,
   funnelOverallRows, funnelPlatformRows, funnelTeamRows, funnelDates, lastN, funnelDaily, funnelAverages, funnelByKey, FUNNEL_STEPS,
-  teamWanted, teamLabelOf, funnelTeamRowsFor, funnelTeamPlatformRows,
-  subAgg, subBy, subByPlatform, subByPlan, subByChannel, subByTxnType, subDaily, recurringShareBy, planOf, channelOf,
+  teamWanted, teamsWanted, rowInTeams, teamLabelOf, funnelTeamRowsFor, funnelTeamPlatformRows,
+  subAgg, subBy, subByPlatform, subByPlan, subByChannel, subByTxnType, subDaily, recurringShareBy, planOf, channelOf, ledgerTeamOf, ledgerRowInTeam,
   realtimeSummary, realtimeEventsToday, overviewStats,
   geoWanted, funnelCountryRows, funnelCountryPlatformRows,
   txnTypesWanted, countryOf, subSourceOf, subByHour, filterTxnTypes, filterCountry, plansWanted, filterPlans, planKeyOf, comparisonWindows,
@@ -126,7 +126,8 @@ export function answerFunnel(q, funnelData = []) {
   const overall = funnelOverallRows(funnelData);
   if (!overall.length) return NO_DATA('acquisition funnel data', 'the Funnel Analysis tab loads it shortly after sign-in.');
   const t = String(q || '').toLowerCase();
-  const team = teamWanted(t);
+  const teamsNamed = teamsWanted(t);
+  const team = teamsNamed.length === 1 ? teamsNamed[0] : null;
   const geo = team ? null : geoWanted(t);
   const followups = team
     ? [`Platform-wise split of the ${team.label} funnel for the last 7 days`, 'Team-wise funnel for the last 7 days', 'Give me funnel data for the last 7 days, day-wise']
@@ -174,16 +175,18 @@ export function answerFunnel(q, funnelData = []) {
     };
   }
 
-  // 1. team-wise split
-  if (!team && /team[\s-]?wise|by team|per team|across teams|marketing teams?|which team/.test(t)) {
+  // 1. team-wise split (all teams, or just the ones named when several are)
+  if (!team && (teamsNamed.length >= 2 || /team[\s-]?wise|by team|per team|across teams|marketing teams?|which team/.test(t))) {
     const { dates, label } = funnelWindowDates(q, overall, 7);
-    const teams = funnelByKey(funnelTeamRows(funnelData), dates, (r) => teamLabelOf(r.Marketing_team ?? r.marketingTeam));
+    let teams = funnelByKey(funnelTeamRows(funnelData), dates, (r) => teamLabelOf(r.Marketing_team ?? r.marketingTeam));
+    if (teamsNamed.length >= 2) teams = teams.filter((r) => rowInTeams(teamsNamed, r.name));
     if (!teams.length) return NO_DATA(`marketing-team funnel rows for ${label}`);
     const a = funnelAverages(funnelDaily(overall, dates));
     const org = { name: 'Organic / unattributed' };
     ['loads', 'selected', 'initiated', 'purchased'].forEach((k) => { org[k] = Math.max(a[k] - teams.reduce((s2, r) => s2 + r[k], 0), 0); });
     org.loadsToPurchase = rate(org.purchased, org.loads);
-    const rows = [...teams, org].sort((x, y) => y.purchased - x.purchased);
+    const wantOrganic = teamsNamed.length < 2 || teamsNamed.some((tm) => !tm.isRow);
+    const rows = (wantOrganic ? [...teams, org] : [...teams]).sort((x, y) => y.purchased - x.purchased);
     const total = rows.reduce((s2, r) => s2 + r.purchased, 0);
     const best = [...teams].sort((x, y) => y.loadsToPurchase - x.loadsToPurchase)[0];
     return {
@@ -493,7 +496,7 @@ export function answerSubscription(q, ctx = {}) {
   if (/\broas\b|ad spend|\bspend\b|cost per|\bcac\b|\bcpa\b/.test(t)) {
     return notAvailable('SUBSCRIPTION', 'Marketing spend (and therefore ROAS / CAC)', 'I can show GTV and conversions by acquisition channel or marketing team — ask "GTV by channel" or "GTV by marketing team".', ['GTV by channel for the last 30 days', 'GTV by marketing team for the last 7 days']);
   }
-  if (/campaign(?!\s*theme)/.test(t)) {
+  if (/(?<!marketing[\s_-])campaign(?!\s*theme)/.test(t)) {
     return notAvailable('SUBSCRIPTION', 'Campaign-level performance', 'The ledger carries the acquisition channel and sub-source per transaction, and the ARPU sheet carries the campaign theme — ask "GTV by channel", "GTV by sub-source" or "ARPU by campaign theme".', ['GTV by channel for the last 30 days', 'ARPU by campaign theme this month']);
   }
 
@@ -511,6 +514,44 @@ export function answerSubscription(q, ctx = {}) {
     plans.length ? `${plans.map(nicePlan).join(' + ')} plans` : null,
   ].filter(Boolean);
   const scope = scopeBits.length ? ` on ${scopeBits.join(', ')}` : '';
+
+  // Team GTV: the ledger's `channel` column carries the marketing team on every
+  // transaction, so team answers use the same rows (and the same window) as every
+  // other GTV answer. The ARPU sheet is only a fallback when the ledger has no
+  // team labels at all.
+  const ledgerHasTeams = sub.some((r) => teamLabelOf(String(r.channel || '')) !== String(r.channel || '').trim());
+  const teamRows = (teams) => {
+    if (ledgerHasTeams) {
+      const rows = applyScopes(w.records).filter((r) => teams.some((tm) => ledgerRowInTeam(r, tm)));
+      return { rows, label: w.label, teamOf: ledgerTeamOf, source: 'ledger' };
+    }
+    if (!arpuRows.length) return { rows: [], label: w.label, teamOf: arpuTeamOf, source: 'none' };
+    const wa = resolveWindow(q, arpuRows, 'dateStr', { defaultDays: 30 });
+    const rows = filterPlans(filterTxnTypes(filterPlatforms(wa.records, wanted), types), plans).filter((r) => rowInTeams(teams, String(r.marketing_team || '')));
+    return { rows, label: wa.label, teamOf: arpuTeamOf, source: 'arpu' };
+  };
+
+  // several teams named -> side-by-side team comparison
+  const teamsNamed = teamsWanted(t).filter((tm) => tm.isRow);
+  if (teamsNamed.length >= 2) {
+    const { rows: rowsA, label: waLabel, teamOf } = teamRows(teamsNamed);
+    const wa = { label: waLabel };
+    const rows = subBy(rowsA, teamOf);
+    if (rows.length < 2) return NO_DATA(`rows for ${teamsNamed.map((tm) => tm.label).join(' and ')} in ${wa.label}${scope}`);
+    const [lead, ...rest] = rows;
+    const trail = rows[rows.length - 1];
+    const tot = subAgg(rowsA);
+    return {
+      domain: 'SUBSCRIPTION',
+      insights: 'custom',
+      text: `For ${wa.label}, **${lead.name}** leads with **${inr(lead.revenue)}** GTV (${num(lead.conversions)} conversions, ARPU ${inr(lead.arpu)}) against **${inr(trail.revenue)}** for **${trail.name}** (${num(trail.conversions)} conversions, ARPU ${inr(trail.arpu)}), a gap of **${inr(lead.revenue - trail.revenue)}** (${sgn(rate(lead.revenue - trail.revenue, trail.revenue))}%).\n\n` +
+        rows.map((r) => `• **${r.name}**: **${inr(r.revenue)}** (${pct(r.share)} of the ${rows.length} teams' GTV, ${num(r.conversions)} conversions, ARPU ${inr(r.arpu)})`).join('\n'),
+      kpis: rows.slice(0, 2).map((r) => ({ label: `${r.name} GTV`, value: inr(r.revenue), sub: `${num(r.conversions)} conversions · ARPU ${inr(r.arpu)}` })).concat([{ label: 'Gap', value: inr(lead.revenue - trail.revenue), sub: `${lead.name} ahead by ${sgn(rate(lead.revenue - trail.revenue, trail.revenue))}%` }]),
+      chart: { type: 'grouped_bar', title: `GTV and conversions by team — ${wa.label}`, labels: rows.map((r) => r.name), series: [{ name: 'GTV (₹)', values: rows.map((r) => Math.round(r.revenue)), type: 'bar' }, { name: 'Conversions', values: rows.map((r) => r.conversions), type: 'bar' }] },
+      table: { headers: ['Marketing team', 'GTV', 'Share of compared teams', 'Conversions', 'ARPU'], rows: rows.map((r) => [r.name, inr(r.revenue), pct(r.share), num(r.conversions), inr(r.arpu)]) },
+      suggestedFollowups: [`${lead.name} funnel for the last 7 days, day-wise`, 'GTV by marketing team for the last 30 days', 'Which marketing team has the highest ARPU?'],
+    };
+  }
 
   // two periods compared
   if (/compare|\bvs\b|versus|growth|change|difference|week on week|month on month|\bwow\b|\bmom\b/.test(t) && !/day[\s-]?wise|daily/.test(t)) {
@@ -546,15 +587,20 @@ export function answerSubscription(q, ctx = {}) {
     suggestedFollowups: extraFollowups || followups,
   });
 
-  // marketing team split — the team lives on the ARPU sheet, not the ledger
-  if (/marketing team|team[\s-]?wise|by team|per team|teams?\b.*(gtv|revenue|sales|conversion)|(gtv|revenue|sales|conversion).*\bteams?\b|telecall|product marketing|paid marketing/.test(t)) {
-    if (!arpuRows.length) return NO_DATA('the ARPU sheet (which carries the marketing team per transaction)');
-    const wa = resolveWindow(q, arpuRows, 'dateStr', { defaultDays: 30 });
+  // marketing team split — one named team, or all teams side by side
+  if (/marketing team|team[\s-]?wise|by team|per team|teams?\b.*(gtv|revenue|sales|conversion)|(gtv|revenue|sales|conversion).*\bteams?\b|telecall|product marketing|paid marketing|marketing campaign/.test(t)) {
     const team = teamWanted(t);
-    let rowsA = filterPlans(filterTxnTypes(filterPlatforms(wa.records, wanted), types), plans);
-    if (team && team.isRow) rowsA = rowsA.filter((r) => team.isRow(String(r.marketing_team || '')));
+    let rowsA, wa, teamOf;
+    if (team && team.isRow) ({ rows: rowsA, label: wa, teamOf } = teamRows([team]));
+    else if (ledgerHasTeams) ({ rows: rowsA, label: wa, teamOf } = { rows: records, label: w.label, teamOf: ledgerTeamOf });
+    else {
+      if (!arpuRows.length) return NO_DATA('team labels (the ledger has no channel column and the ARPU sheet is not loaded)');
+      const wr = resolveWindow(q, arpuRows, 'dateStr', { defaultDays: 30 });
+      rowsA = filterPlans(filterTxnTypes(filterPlatforms(wr.records, wanted), types), plans); wa = wr.label; teamOf = arpuTeamOf;
+    }
+    wa = { label: wa };
     const tot = subAgg(rowsA);
-    if (!rowsA.length) return NO_DATA(`team-level rows for ${wa.label}${team ? ` (${team.label})` : ''}`);
+    if (!rowsA.length) return NO_DATA(`${team ? `${team.label} ` : ''}transactions for ${wa.label}${scope}`);
     if (team && team.isRow) {
       const byP = subByPlatform(rowsA);
       return {
@@ -567,7 +613,7 @@ export function answerSubscription(q, ctx = {}) {
         suggestedFollowups: ['GTV by marketing team for the last 30 days', `${team.label} funnel for the last 7 days, day-wise`, 'Which platform leads sales in the last 30 days?'],
       };
     }
-    const rows = subBy(rowsA, arpuTeamOf);
+    const rows = subBy(rowsA, teamOf);
     return {
       domain: 'SUBSCRIPTION',
       text: `GTV by marketing team for ${wa.label}${scope} — **${inr(tot.revenue)}** from **${num(tot.conversions)}** conversions:\n\n` + rows.map((r) => `• **${r.name}**: **${inr(r.revenue)}** (${pct(r.share)} of GTV, ${num(r.conversions)} conversions, ARPU ${inr(r.arpu)})`).join('\n'),
@@ -660,9 +706,11 @@ export function answerArpu(q, ctx = {}) {
   const w = resolveWindow(q, rowsAll, 'dateStr', { defaultDays: 30 });
   const wanted = platformsWanted(t);
   const plans = plansWanted(t);
-  const team = teamWanted(t);
+  const teamsNamed = teamsWanted(t).filter((tm) => tm.isRow);
+  const team = teamsNamed.length === 1 ? teamsNamed[0] : null;
   let records = arpuBase(filterPlans(filterPlatforms(w.records, wanted), plans), includeAuto);
-  if (team && team.isRow) records = records.filter((r) => team.isRow(String(r.marketing_team || '')));
+  if (team) records = records.filter((r) => team.isRow(String(r.marketing_team || '')));
+  else if (teamsNamed.length >= 2) records = records.filter((r) => rowInTeams(teamsNamed, String(r.marketing_team || '')));
   const scopeBits = [wanted.length ? wanted.map((k) => platformLabel(k)).join(' + ') : null, plans.length ? `${plans.map(nicePlan).join(' + ')} plans` : null, team && team.isRow ? `${team.label} team` : null].filter(Boolean);
   const scope = scopeBits.length ? ` on ${scopeBits.join(', ')}` : '';
   const basis = includeAuto ? 'all transactions' : 'auto-renewals excluded';
@@ -674,7 +722,7 @@ export function answerArpu(q, ctx = {}) {
   if (/theme|campaign/.test(t)) { dim = 'campaign theme'; keyFn = arpuThemeOf; }
   else if (/\boffer/.test(t)) { dim = 'offer'; keyFn = arpuOfferOf; }
   else if (/sale status|status/.test(t)) { dim = 'sale status'; keyFn = arpuStatusOf; }
-  else if (/team/.test(t) && !(team && team.isRow)) { dim = 'marketing team'; keyFn = arpuTeamOf; }
+  else if ((/team/.test(t) || teamsNamed.length >= 2) && !team) { dim = 'marketing team'; keyFn = arpuTeamOf; }
   else if (/\bplan/.test(t) && !plans.length) { dim = 'plan'; keyFn = (r) => nicePlan(planKeyOf(r) || 'UNKNOWN'); }
   else if (/user[\s-]?type|txn[\s-]?type/.test(t)) { dim = 'user type'; keyFn = txnTypeOfArpu; }
   else if (/platform/.test(t) || !/trend|daily|day[\s-]?wise/.test(t)) { dim = 'platform'; keyFn = (r) => platformLabel(r.platform); }

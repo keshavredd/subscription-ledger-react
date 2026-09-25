@@ -1,7 +1,6 @@
 import { queryGeminiBI, getStoredApiKey } from '../services/geminiService.js';
 import { withInsightLines } from './insightLines.js';
 import { answerDataOverview, answerRealtime, answerFunnel, answerRenewals, answerSubscription, answerArpu, generalQAFacts } from './engineAnswers.js';
-import { resolveWindow, comparisonMonths, renewalsAgg, renewalsByPlatform, renewalsByPlan, renewalsByMonth, renewalsDaily, platformsWanted, filterPlatforms, pct as fmtPct } from './engineData.js';
 import { queryLlamaBI, getStoredLlamaConfig } from '../services/llamaService.js';
 
 /**
@@ -436,6 +435,8 @@ export function routeQueryDomain(q, activeDomain = null) {
   if (mentionsFunnel) return 'FUNNEL';
   if (mentionsRenewals) return 'RENEWALS';
   if (mentionsSubscription || q.includes('plan') || q.includes('1 year') || q.includes('1 month') || q.includes('ios') || q.includes('android')) return 'SUBSCRIPTION';
+  // marketing teams named without a metric ("compare product marketing vs telecalling") -> team GTV
+  if (/tele[\s-]?call|product[\s-]?marketing|paid[\s-]?marketing|marketing[\s_-]?campaign|marketing team/.test(q)) return 'SUBSCRIPTION';
 
   return 'UNKNOWN';
 }
@@ -777,647 +778,77 @@ function matchPlanName(rowPlan, targetPlan) {
   return r === t || r.includes(t) || t.includes(r);
 }
 
-export function executeRenewalsTool(args = {}, contextData = {}) {
-  const { renewalsData = [] } = contextData;
-  if (!renewalsData || renewalsData.length === 0) {
-    return { status: "data_unavailable", message: "Renewals dataset is not loaded yet. Please wait for the dashboard to finish loading and try again." };
-  }
-  const period = String(args.period || '').trim();
-  const platform = String(args.platform || 'All').trim();
-  const planCategory = String(args.planCategory || 'All').trim();
-  const granularity = String(args.granularity || '').trim().toLowerCase();
-  const lower = period.toLowerCase();
-  const wanted = /^(all|overall|combined)?$/i.test(platform) ? [] : platformsWanted(platform);
-  const applyFilters = (recs) => filterPlatforms(recs, wanted).filter(r => matchPlanName(r.plan_category, planCategory));
-  const shape = (recs) => {
-    const a = renewalsAgg(recs);
-    return {
-      due: a.due, renewed: a.renewed, rate: fmtPct(a.rate),
-      platforms: renewalsByPlatform(recs).map(x => ({ platform: x.name, due: x.due, renewed: x.renewed, rate: fmtPct(x.rate) })),
-      plans: renewalsByPlan(recs).map(x => ({ planCategory: x.name, due: x.due, renewed: x.renewed, rate: fmtPct(x.rate) })),
-    };
+// ===========================================================================
+// Gemini / Llama tools — thin wrappers over the deterministic answer builders.
+// The model passes the user's question verbatim (plus any scope arguments it
+// extracted); the builders parse timeframes, platforms, plans, teams and
+// geographies exactly as they do for the local engine, and the tool returns
+// the finished answer as data for the model to narrate.
+// ===========================================================================
+const isAllish = (v) => !v || /^(all|overall|combined|any|none)$/i.test(String(v).trim());
+
+function toolQuestion(args = {}, extras = []) {
+  const parts = [args.question, args.query, args.prompt, ...extras]
+    .map((v) => (v === undefined || v === null ? '' : String(v).trim()))
+    .filter(Boolean);
+  return parts.join(' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function scopeWords(args = {}) {
+  const out = [];
+  if (args.datePreset) out.push(args.datePreset);
+  if (args.period) out.push(args.period);
+  if (!isAllish(args.platform)) out.push(/breakdown|split|wise/i.test(args.platform) ? 'platform wise split' : args.platform);
+  if (!isAllish(args.planCategory)) out.push(`${args.planCategory} plan`);
+  if (!isAllish(args.marketingTeam)) out.push(/wise|split|all teams|breakdown/i.test(args.marketingTeam) ? 'team wise' : `${args.marketingTeam} team`);
+  if (!isAllish(args.country)) out.push(args.country);
+  if (args.metric) out.push(args.metric);
+  if (args.granularity && !/^(monthly|default|none)$/i.test(args.granularity)) out.push(args.granularity.replace(/_/g, ' '));
+  return out;
+}
+
+function toolPayload(question, r) {
+  const strip = (v) => String(v || '').replace(/<[^>]+>/g, '').replace(/\*\*/g, '').replace(/_/g, '');
+  const chart = r && r.chart ? { type: r.chart.type, title: r.chart.title, labels: r.chart.labels, values: r.chart.values, series: r.chart.series } : null;
+  return {
+    question,
+    status: r && (r.domain === 'CLARIFICATION' || /^I (don't|do not) have/.test(String(r.text || ''))) ? 'data_unavailable' : 'ok',
+    summary: strip(r && r.text),
+    kpis: (r && r.kpis) || null,
+    table: (r && r.table) || null,
+    chart,
+    suggestedFollowups: (r && r.suggestedFollowups) || [],
+    note: 'All figures are computed from the dashboard datasets; narrate them, do not recompute or invent numbers.',
   };
+}
 
-  // Month-by-month across everything loaded
-  if (granularity === 'monthly_trend' || (/trend|all months|month[\s-]?wise|monthly|range|since|till now/.test(lower) && !/\bvs\b|compare|versus/.test(lower))) {
-    const months = renewalsByMonth(applyFilters(renewalsData)).map(m => ({ period: m.label, due: m.due, renewed: m.renewed, rate: fmtPct(m.rate) }));
-    return { query_period: period, type: "monthly_trend", platform, planCategory, months };
-  }
+/**
+ * The question decides the answer, not the tool the model picked: the verbatim
+ * question goes through the engine's own router. The tool's domain is only a
+ * hint, appended when the question carries no domain words of its own (e.g. the
+ * model sent scope arguments without the question).
+ */
+function answerViaRouter(args, contextData, hint, extras = []) {
+  let q = toolQuestion(args, [...scopeWords(args), ...extras]);
+  const history = Array.isArray(contextData.conversationHistory) ? contextData.conversationHistory : [];
+  if (routeQueryDomain(q, getActiveDomainFromHistory(history)) === 'UNKNOWN') q = `${q} ${hint}`.trim();
+  return toolPayload(q, processConversationalQuery(q, contextData));
+}
 
-  // Two months compared: the ones named, else the latest two
-  if (granularity === 'comparison' || /\bvs\b|compare|versus/.test(lower)) {
-    const [a, b] = comparisonMonths(period, renewalsData, 'renew_date');
-    if (!a || !b) return { status: "data_unavailable", message: "Not enough months loaded to compare." };
-    return {
-      query_period: period, type: "comparison", platform, planCategory,
-      periods: [
-        { period: a.label, ...shape(applyFilters(a.records)) },
-        { period: b.label, ...shape(applyFilters(b.records)) },
-      ],
-    };
-  }
-
-  // A single window: a named month, "last 30 days", yesterday... (default: last 30 days)
-  const w = resolveWindow(period || 'last 30 days', renewalsData, 'renew_date', { defaultDays: 30 });
-  const recs = applyFilters(w.records);
-  if (!recs.length) return { status: "data_unavailable", message: `No renewal rows for ${w.label}${wanted.length ? ' on the requested platform' : ''}.` };
-  const base = { query_period: period, period: w.label, window: { start: w.start, end: w.end }, platform, planCategory };
-
-  if (granularity === 'daily' || /day[\s-]?wise|daily/.test(lower)) {
-    const daily = renewalsDaily(recs).map(d => ({ date: d.date, due: d.due, renewed: d.renewed, rate: fmtPct(d.rate) }));
-    const a = shape(recs);
-    return { ...base, type: "daily_trend", metrics: { period: w.label, due: a.due, renewed: a.renewed, rate: a.rate }, dailyBreakdown: daily, platformBreakdown: a.platforms, planBreakdown: a.plans };
-  }
-  const a = shape(recs);
-  const type = granularity === 'plan_breakdown' || /plan[\s-]?wise|plan category|1 month vs 1 year|1 year vs 1 month/.test(lower) ? "plan_breakdown" : "platform_breakdown";
-  return { ...base, type, metrics: { period: w.label, due: a.due, renewed: a.renewed, rate: a.rate }, platformBreakdown: a.platforms, planBreakdown: a.plans };
+export function executeRenewalsTool(args = {}, contextData = {}) {
+  return answerViaRouter(args, contextData, 'renewals');
 }
 
 export function executeFunnelTool(args = {}, contextData = {}) {
-  const { funnelData = [] } = contextData;
-
-  if (!funnelData || funnelData.length === 0) {
-    return { status: "data_unavailable", message: "Funnel dataset is not loaded yet. Please wait for the dashboard to finish loading and try again." };
-  }
-
-  const platformArg = (args.platform || 'Combined').trim();
-  const datePreset = (args.datePreset || args.dateRange || 'Last 30 days').trim();
-  const marketingTeam = (args.marketingTeam || 'Overall').trim();
-  const countryArg = (args.country || 'Overall').trim();
-  const granularity = (args.granularity || 'aggregate').trim().toLowerCase();
-
-  // Date filtering logic — use universal date parser
-  const allDates = Array.from(new Set(funnelData.map(r => r.dateStr || '').filter(Boolean))).sort();
-  const dateInfo = parseSpecificDateOrRange(datePreset, allDates);
-  const allowedDates = new Set(dateInfo.dates.length > 0 ? dateInfo.dates : allDates);
-
-  // ─── CRITICAL DIMENSION FILTERING RULES ───
-  // The funnel sheet has MULTIPLE rows per date for every combination of:
-  //   view_type × ET_Platform × Country × Marketing_team
-  //
-  // The SINGLE true aggregate row per date is:
-  //   view_type="Overall", ET_Platform="Combined", Country="Overall", Marketing_team="Overall"
-  //
-  // Unless the user explicitly asks for a specific platform, country, or marketing team,
-  // we MUST filter to these defaults to avoid double/quadruple counting.
-
-  const isOverall = platformArg.toLowerCase() === 'combined' || platformArg.toLowerCase() === 'overall';
-  const isPlatformBreakdown = platformArg.toLowerCase() === 'breakdown' || 
-                              platformArg.toLowerCase().includes('all platform') || 
-                              platformArg.toLowerCase().includes('platform-wise') ||
-                              platformArg.toLowerCase().includes('platform wise') ||
-                              granularity === 'platform_breakdown';
-  const isSpecificPlatform = !isOverall && !isPlatformBreakdown;
-
-  // Determine marketing team filter
-  const mTeamLower = marketingTeam.toLowerCase();
-  const isSpecificMktTeam = mTeamLower !== 'all' && mTeamLower !== 'overall';
-
-  // Determine country filter
-  const countryLower = countryArg.toLowerCase();
-  const isSpecificCountry = countryLower !== 'all' && countryLower !== 'overall';
-
-  // Helper: check if a dimension value matches "Overall" (aggregate)
-  function isOverallValue(val) {
-    const v = String(val || '').trim().toLowerCase();
-    return v === 'overall' || v === '' || v === 'all';
-  }
-
-  // ─── STEP 1: Apply date filter ───
-  let dateFiltered = funnelData.filter(r => {
-    const dKey = r.dateStr || '';
-    return allowedDates.size === 0 || allowedDates.has(dKey);
-  });
-
-  // ─── STEP 2: Apply dimension filters ───
-  // For OVERALL / COMBINED queries (no specific platform, no specific team, no specific country):
-  //   → Use the single aggregate row: view_type=Overall, ET_Platform=Combined, Country=Overall, Marketing_team=Overall
-  //
-  // For SPECIFIC PLATFORM queries (e.g. "MWeb funnel"):
-  //   → Use view_type="By Platform", ET_Platform=<requested>, Country=Overall (or India), Marketing_team=Overall
-  //
-  // For PLATFORM BREAKDOWN queries:
-  //   → Use view_type="By Platform", ET_Platform=<each individual>, Country=Overall, Marketing_team=Overall
-  //
-  // For SPECIFIC MARKETING TEAM queries:
-  //   → Use view_type=Overall, ET_Platform=Combined, Country=Overall/India, Marketing_team=<requested>
-
-  function filterRows(rows, { viewType, etPlatform, country, mktTeam }) {
-    return rows.filter(r => {
-      const rViewType = String(r.viewType || r.view_type || '').trim().toLowerCase();
-      const rPlatform = String(r.ET_Platform || r.platform || '').trim();
-      const rCountry = String(r.country || r.Country || '').trim().toLowerCase();
-      const rMktTeam = String(r.marketingTeam || r.Marketing_team || '').trim().toLowerCase();
-
-      // View type filter
-      if (viewType === 'overall' && rViewType !== 'overall') return false;
-      if (viewType === 'by platform' && !rViewType.includes('platform')) return false;
-
-      // Platform filter
-      if (etPlatform === 'Combined') {
-        if (rPlatform !== 'Combined') return false;
-      } else if (etPlatform === '__exclude_combined__') {
-        if (rPlatform === 'Combined') return false;
-      } else if (etPlatform) {
-        if (!isPlatformMatch(rPlatform, etPlatform)) return false;
-      }
-
-      // Country filter
-      if (country === 'overall') {
-        if (!isOverallValue(rCountry)) return false;
-      } else if (country) {
-        if (!rCountry.includes(country.toLowerCase())) return false;
-      }
-
-      // Marketing team filter
-      if (mktTeam === 'overall') {
-        if (!isOverallValue(rMktTeam)) return false;
-      } else if (mktTeam) {
-        if (!rMktTeam.includes(mktTeam.toLowerCase())) return false;
-      }
-
-      return true;
-    });
-  }
-
-  // Determine the correct dimension filters for this query
-  let overallRows, platformRows;
-
-  if (isSpecificMktTeam) {
-    // Marketing team split → view_type=Overall, ET_Platform=Combined, Country=Overall, Marketing_team=<specific>
-    overallRows = filterRows(dateFiltered, { viewType: 'overall', etPlatform: 'Combined', country: isSpecificCountry ? countryLower : 'overall', mktTeam: mTeamLower });
-    platformRows = []; // Not applicable for marketing team queries
-  } else if (isSpecificPlatform) {
-    // Specific platform → view_type="By Platform", ET_Platform=<specific>, Country=Overall, Marketing_team=Overall
-    overallRows = filterRows(dateFiltered, { viewType: 'by platform', etPlatform: platformArg, country: isSpecificCountry ? countryLower : 'overall', mktTeam: 'overall' });
-    platformRows = overallRows; // Same set
-  } else if (isPlatformBreakdown) {
-    // Platform breakdown → each individual platform, view_type="By Platform", Country=Overall, Marketing_team=Overall
-    overallRows = filterRows(dateFiltered, { viewType: 'overall', etPlatform: 'Combined', country: isSpecificCountry ? countryLower : 'overall', mktTeam: 'overall' });
-    platformRows = filterRows(dateFiltered, { viewType: 'by platform', etPlatform: '__exclude_combined__', country: isSpecificCountry ? countryLower : 'overall', mktTeam: 'overall' });
-  } else {
-    // Default overall → view_type=Overall, ET_Platform=Combined, Country=Overall, Marketing_team=Overall
-    overallRows = filterRows(dateFiltered, { viewType: 'overall', etPlatform: 'Combined', country: isSpecificCountry ? countryLower : 'overall', mktTeam: 'overall' });
-    platformRows = filterRows(dateFiltered, { viewType: 'by platform', etPlatform: '__exclude_combined__', country: isSpecificCountry ? countryLower : 'overall', mktTeam: 'overall' });
-  }
-
-  // Helper to extract clean funnel metrics from any row
-  function extractFunnelRow(r) {
-    return {
-      dau: parseInt(r.DAU || r.dau || 0, 10) || 0,
-      paywallHits: parseInt(r.paywalling_hits || r.paywall_hits || r.paywall_hit || 0, 10) || 0,
-      planPageLoads: parseInt(r.Plan_Page_Loaded || r.Plan_Page_Load || r.plan_page_loads || 0, 10) || 0,
-      planSelected: parseInt(r.Plan_Selected || 0, 10) || 0,
-      payInitiated: parseInt(r.Pay_Initiated || 0, 10) || 0,
-      purchased: parseInt(r.Purchased || r.purchased || r.purchases || 0, 10) || 0
-    };
-  }
-
-  // Helper to aggregate rows
-  function sumFunnelRows(rows) {
-    let dau = 0, hits = 0, loads = 0, selected = 0, initiated = 0, purchased = 0;
-    const dates = new Set();
-    rows.forEach(r => {
-      const m = extractFunnelRow(r);
-      dau += m.dau;
-      hits += m.paywallHits;
-      loads += m.planPageLoads;
-      selected += m.planSelected;
-      initiated += m.payInitiated;
-      purchased += m.purchased;
-      if (r.dateStr) dates.add(r.dateStr);
-    });
-    const days = dates.size || 1;
-    const dailyAvgDAU = Math.round(dau / days);
-    const paywallHitRate = dau > 0 ? ((hits / dau) * 100).toFixed(2) + '%' : '0.00%';
-    const pageLoadToPurchaseConv = loads > 0 ? ((purchased / loads) * 100).toFixed(2) + '%' : '0.00%';
-    const dauToPurchaseConv = dau > 0 ? ((purchased / dau) * 100).toFixed(4) + '%' : '0.0000%';
-
-    return {
-      totalDAU: dau,
-      totalPaywallHits: hits,
-      totalPlanPageLoads: loads,
-      totalPlanSelected: selected,
-      totalPayInitiated: initiated,
-      totalPurchases: purchased,
-      dailyAvgDAU: dailyAvgDAU >= 1000000 ? (dailyAvgDAU / 1000000).toFixed(2) + 'M users/day' : dailyAvgDAU.toLocaleString() + ' users/day',
-      paywallHitRate: paywallHitRate + ' of DAU (~' + Math.round(hits / days).toLocaleString() + ' hits/day)',
-      pageLoadToPurchaseConv,
-      dauToPurchaseConv,
-      totalDays: days
-    };
-  }
-
-  // 1. Daily breakdown (only when not specifically requesting a platform-wise breakdown)
-  const isDaily = !isPlatformBreakdown && (granularity === 'daily' || datePreset.toLowerCase().includes('day wise') || datePreset.toLowerCase().includes('daily'));
-  if (isDaily) {
-    const targetRows = isSpecificPlatform ? overallRows : overallRows;
-    const dateMap = {};
-
-    targetRows.forEach(r => {
-      const d = r.dateStr || 'Unknown';
-      if (!dateMap[d]) dateMap[d] = { date: d, dau: 0, hits: 0, loads: 0, selected: 0, initiated: 0, purchased: 0 };
-      const m = extractFunnelRow(r);
-      dateMap[d].dau += m.dau;
-      dateMap[d].hits += m.paywallHits;
-      dateMap[d].loads += m.planPageLoads;
-      dateMap[d].selected += m.planSelected;
-      dateMap[d].initiated += m.payInitiated;
-      dateMap[d].purchased += m.purchased;
-    });
-
-    const dailyBreakdown = Object.keys(dateMap).sort().map(d => {
-      const entry = dateMap[d];
-      return {
-        date: d,
-        dau: entry.dau,
-        paywallHits: entry.hits,
-        paywallingHits: entry.hits, // synonym support
-        planPageLoads: entry.loads,
-        planSelected: entry.selected,
-        payInitiated: entry.initiated,
-        purchased: entry.purchased,
-        paywallHitRate: entry.dau > 0 ? ((entry.hits / entry.dau) * 100).toFixed(2) + '%' : '0.00%',
-        conversionRate: entry.loads > 0 ? ((entry.purchased / entry.loads) * 100).toFixed(2) + '%' : '0.00%'
-      };
-    });
-
-    const agg = sumFunnelRows(targetRows);
-
-    return {
-      timeframe: datePreset,
-      platform: isSpecificPlatform ? platformArg : 'Combined (Overall)',
-      granularity: "daily",
-      totals: agg,
-      dailyBreakdown
-    };
-  }
-
-  // 2. Specific Platform or Platform Breakdown
-  let chosenRows = overallRows;
-  let chosenPlatformLabel = isSpecificPlatform ? platformArg : 'Combined (Overall)';
-
-  const agg = sumFunnelRows(chosenRows.length > 0 ? chosenRows : dateFiltered);
-
-  // Compute per-platform breakdown from individual platform rows (avoiding Combined duplicate)
-  const platMap = {};
-  platformRows.forEach(r => {
-    const p = r.platform || r.ET_Platform || 'Other';
-    if (!platMap[p]) platMap[p] = { dau: 0, hits: 0, loads: 0, selected: 0, initiated: 0, purchases: 0 };
-    const m = extractFunnelRow(r);
-    platMap[p].dau += m.dau;
-    platMap[p].hits += m.paywallHits;
-    platMap[p].loads += m.planPageLoads;
-    platMap[p].selected += m.planSelected;
-    platMap[p].initiated += m.payInitiated;
-    platMap[p].purchases += m.purchased;
-  });
-
-  const platformBreakdown = Object.keys(platMap).map(p => ({
-    platform: p,
-    dau: platMap[p].dau,
-    hits: platMap[p].hits,
-    paywallHits: platMap[p].hits,
-    pageLoads: platMap[p].loads,
-    planPageLoads: platMap[p].loads,
-    purchases: platMap[p].purchases,
-    convRate: platMap[p].loads > 0 ? ((platMap[p].purchases / platMap[p].loads) * 100).toFixed(2) + '%' : '0.00%'
-  }));
-
-  return {
-    timeframe: datePreset,
-    platform: chosenPlatformLabel,
-    dailyAvgDAU: agg.dailyAvgDAU,
-    paywallHitRate: agg.paywallHitRate,
-    pageLoadToPurchaseConv: agg.pageLoadToPurchaseConv,
-    dauToPurchaseConv: agg.dauToPurchaseConv,
-    totalDAU: agg.totalDAU,
-    totalPaywallHits: agg.totalPaywallHits,
-    totalPageLoads: agg.totalPlanPageLoads,
-    totalPlanSelected: agg.totalPlanSelected,
-    totalPayInitiated: agg.totalPayInitiated,
-    totalPurchases: agg.totalPurchases,
-    totalDays: agg.totalDays,
-    platformBreakdown
-  };
+  return answerViaRouter(args, contextData, 'funnel');
 }
 
 export function executeSubscriptionTool(args = {}, contextData = {}) {
-  const { subscriptionData = [] } = contextData;
-
-  if (!subscriptionData || subscriptionData.length === 0) {
-    return { status: "data_unavailable", message: "Subscription dataset is not loaded yet. Please wait for the dashboard to finish loading and try again." };
-  }
-
-  const platformArg = (args.platform || 'All').trim();
-  const datePreset = (args.datePreset || args.dateRange || 'Last 30 days').trim();
-  const userTxnType = (args.userTxnType || 'All').trim().toLowerCase();
-  const planCategory = (args.planCategory || 'All').trim();
-  const granularity = (args.granularity || 'aggregate').trim().toLowerCase();
-
-  // Date filtering — use universal date parser
-  const allDates = Array.from(new Set(subscriptionData.map(r => r.dateStr || '').filter(Boolean))).sort();
-  const dateInfo = parseSpecificDateOrRange(datePreset, allDates);
-  const allowedDates = new Set(dateInfo.dates.length > 0 ? dateInfo.dates : allDates);
-
-  const filtered = subscriptionData.filter(r => {
-    if (allowedDates.size > 0 && !allowedDates.has(r.dateStr)) return false;
-    if (!isPlatformMatch(r.platform || r.rawPlatform, platformArg)) return false;
-    if (!matchPlanName(r.plan_category, planCategory)) return false;
-
-    // Txn Type filter
-    if (userTxnType !== 'all') {
-      const txn = String(r.user_txn_type || '').toLowerCase();
-      if (userTxnType === 'new' && txn !== 'new') return false;
-      if (userTxnType.includes('renew') && !txn.includes('renewal')) return false;
-      if (userTxnType === 'manual_renewal' && txn !== 'manual_renewal') return false;
-      if (userTxnType === 'auto_renewal' && txn !== 'auto_renewal') return false;
-    }
-    return true;
-  });
-
-  // Aggregate metrics
-  let totalRevenue = 0, totalConversions = 0;
-  const platformMap = {};
-  const txnTypeMap = {};
-  const planMap = {};
-  const dateMap = {};
-
-  filtered.forEach(r => {
-    const rev = parseFloat(r.revenue) || parseFloat(r.net_amount) || 0;
-    const conv = parseInt(r.conversions, 10) || parseInt(r.purchase_count, 10) || 1;
-    const dateKey = r.dateStr || r.rawDate || '';
-    const platName = r.platform || r.rawPlatform || 'Other';
-    const txnType = r.user_txn_type || 'other';
-    const plan = r.plan_category || 'Unknown';
-
-    totalRevenue += rev;
-    totalConversions += conv;
-
-    if (!platformMap[platName]) platformMap[platName] = { revenue: 0, conversions: 0 };
-    platformMap[platName].revenue += rev;
-    platformMap[platName].conversions += conv;
-
-    if (!txnTypeMap[txnType]) txnTypeMap[txnType] = { revenue: 0, conversions: 0 };
-    txnTypeMap[txnType].revenue += rev;
-    txnTypeMap[txnType].conversions += conv;
-
-    if (!planMap[plan]) planMap[plan] = { revenue: 0, conversions: 0 };
-    planMap[plan].revenue += rev;
-    planMap[plan].conversions += conv;
-
-    if (dateKey) {
-      if (!dateMap[dateKey]) dateMap[dateKey] = { date: dateKey, revenue: 0, conversions: 0 };
-      dateMap[dateKey].revenue += rev;
-      dateMap[dateKey].conversions += conv;
-    }
-  });
-
-  const days = Object.keys(dateMap).length || 1;
-  const dailyAvg = totalRevenue / days;
-  const avgPerTxn = totalConversions > 0 ? totalRevenue / totalConversions : 0;
-
-  // Find top platform
-  let topPlatform = 'N/A';
-  let topRev = 0;
-  for (const [p, v] of Object.entries(platformMap)) {
-    if (v.revenue > topRev) { topRev = v.revenue; topPlatform = p; }
-  }
-  const topPct = totalRevenue > 0 ? ((topRev / totalRevenue) * 100).toFixed(0) : '0';
-
-  // Format currency helpers
-  const fmtCr = val => val >= 10000000 ? '₹' + (val / 10000000).toFixed(2) + ' Cr' : '₹' + (val / 100000).toFixed(2) + ' L';
-
-  // 0. SINGLE DATE RETURN (yesterday, specific date, today)
-  if (dateInfo.isSingleDate && dateInfo.dates.length > 0) {
-    const targetDate = dateInfo.dates[0];
-    const dailyBreakdown = Object.keys(dateMap).sort().map(d => ({
-      date: d,
-      revenue: dateMap[d].revenue,
-      revenueFormatted: fmtCr(dateMap[d].revenue),
-      conversions: dateMap[d].conversions,
-      avgRevPerTxn: dateMap[d].conversions > 0 ? '₹' + Math.round(dateMap[d].revenue / dateMap[d].conversions).toLocaleString() : '₹0'
-    }));
-
-    // Platform breakdown for this single day
-    const platformBreakdown = Object.keys(platformMap).map(p => ({
-      platform: p,
-      revenue: platformMap[p].revenue,
-      revenueFormatted: fmtCr(platformMap[p].revenue),
-      conversions: platformMap[p].conversions,
-      share: totalRevenue > 0 ? ((platformMap[p].revenue / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-    }));
-
-    // Txn type breakdown for this day
-    const userTxnTypeBreakdown = Object.keys(txnTypeMap).map(t => ({
-      userTxnType: t,
-      revenue: txnTypeMap[t].revenue,
-      revenueFormatted: fmtCr(txnTypeMap[t].revenue),
-      conversions: txnTypeMap[t].conversions,
-      share: totalRevenue > 0 ? ((txnTypeMap[t].revenue / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-    }));
-
-    // Plan breakdown for this day
-    const planBreakdown = Object.keys(planMap).map(p => ({
-      planCategory: p,
-      revenue: planMap[p].revenue,
-      revenueFormatted: fmtCr(planMap[p].revenue),
-      conversions: planMap[p].conversions,
-      share: totalRevenue > 0 ? ((planMap[p].revenue / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-    }));
-
-    return {
-      isSingleDate: true,
-      targetDate: targetDate,
-      timeframe: dateInfo.label,
-      platform: platformArg,
-      userTxnType,
-      planCategory,
-      totalRevenue: fmtCr(totalRevenue),
-      totalRevenueRaw: totalRevenue,
-      totalConversions: totalConversions.toLocaleString(),
-      avgRevPerTxn: totalConversions > 0 ? '₹' + (avgPerTxn / 1000).toFixed(2) + 'K' : '₹0',
-      topSalesPlatform: topPlatform + ' (' + topPct + '% total volume)',
-      platformBreakdown,
-      userTxnTypeBreakdown,
-      planBreakdown,
-      dailyBreakdown
-    };
-  }
-
-  // 1. Daily Breakdown
-  const isDaily = granularity === 'daily' || datePreset.toLowerCase().includes('day wise') || datePreset.toLowerCase().includes('daily');
-  if (isDaily) {
-    const dailyBreakdown = Object.keys(dateMap).sort().map(d => ({
-      date: d,
-      revenue: dateMap[d].revenue,
-      revenueFormatted: fmtCr(dateMap[d].revenue),
-      conversions: dateMap[d].conversions,
-      avgRevPerTxn: dateMap[d].conversions > 0 ? '₹' + Math.round(dateMap[d].revenue / dateMap[d].conversions).toLocaleString() : '₹0'
-    }));
-
-    return {
-      timeframe: datePreset,
-      platform: platformArg,
-      userTxnType,
-      planCategory,
-      granularity: "daily",
-      totals: {
-        totalRevenue: fmtCr(totalRevenue),
-        dailyAvgRevenue: '₹' + (dailyAvg / 100000).toFixed(2) + ' L/day',
-        totalConversions: totalConversions.toLocaleString(),
-        totalDays: days
-      },
-      dailyBreakdown
-    };
-  }
-
-  // 2. Txn Type Breakdown (New User vs Renewal Split)
-  const userTxnTypeBreakdown = Object.keys(txnTypeMap).map(t => ({
-    userTxnType: t,
-    revenue: txnTypeMap[t].revenue,
-    revenueFormatted: fmtCr(txnTypeMap[t].revenue),
-    conversions: txnTypeMap[t].conversions,
-    share: totalRevenue > 0 ? ((txnTypeMap[t].revenue / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-  }));
-
-  // 3. Plan Breakdown
-  const planBreakdown = Object.keys(planMap).map(p => ({
-    planCategory: p,
-    revenue: planMap[p].revenue,
-    revenueFormatted: fmtCr(planMap[p].revenue),
-    conversions: planMap[p].conversions,
-    share: totalRevenue > 0 ? ((planMap[p].revenue / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-  }));
-
-  // 4. Platform Breakdown
-  const platformBreakdown = Object.keys(platformMap).map(p => ({
-    platform: p,
-    revenue: platformMap[p].revenue,
-    revenueFormatted: fmtCr(platformMap[p].revenue),
-    conversions: platformMap[p].conversions,
-    share: totalRevenue > 0 ? ((platformMap[p].revenue / totalRevenue) * 100).toFixed(1) + '%' : '0.0%'
-  }));
-
-  return {
-    timeframe: datePreset,
-    platform: platformArg,
-    userTxnType,
-    planCategory,
-    totalRevenue: fmtCr(totalRevenue),
-    totalRevenueRaw: totalRevenue,
-    dailyAvgRevenue: '₹' + (dailyAvg / 100000).toFixed(2) + ' L/day',
-    totalConversions: totalConversions.toLocaleString(),
-    avgRevPerTxn: '₹' + (avgPerTxn / 1000).toFixed(2) + 'K',
-    topSalesPlatform: topPlatform + ' (' + topPct + '% total volume)',
-    platformBreakdown,
-    userTxnTypeBreakdown,
-    planBreakdown
-  };
+  return answerViaRouter(args, contextData, 'gtv');
 }
 
 export function executeRealtimeTool(args = {}, contextData = {}) {
-  const { realtimeData } = contextData;
-  const platformArg = (args.platform || 'Combined').trim();
-
-  // If realtimeData is an array of raw sheet records
-  if (Array.isArray(realtimeData) && realtimeData.length > 0) {
-    const isCombined = platformArg.toLowerCase() === 'combined' || platformArg.toLowerCase() === 'all' || platformArg.toLowerCase() === 'overall';
-
-    // 1. Identify the latest date in the dataset (i.e. "Today")
-    let maxDateObj = new Date(0);
-    let todayDateStr = "";
-
-    realtimeData.forEach(r => {
-      const rawDate = r.event_date || r.dateStr || r.date || '';
-      if (!rawDate) return;
-      const d = new Date(rawDate);
-      if (!isNaN(d.getTime()) && d > maxDateObj) {
-        maxDateObj = d;
-        todayDateStr = String(rawDate).trim();
-      }
-    });
-
-    // 2. Filter to records for today and matching platform
-    const todayRows = realtimeData.filter(r => {
-      const rawDate = String(r.event_date || r.dateStr || r.date || '').trim();
-      if (todayDateStr && rawDate !== todayDateStr) return false;
-      const p = String(r.ET_Platform || r.platform || '').trim();
-      if (isCombined) return p === 'Combined';
-      return isPlatformMatch(p, platformArg);
-    });
-
-    let currentHour = -1;
-    let todayPurchases = 0;
-    let todayPageLoads = 0;
-    let todayPayInitiated = 0;
-    const hourMap = {};
-
-    todayRows.forEach(r => {
-      const evt = String(r.event_name || r.event || '').toLowerCase();
-      const count = parseInt(r.event_count ?? r.count ?? 0, 10) || 0;
-      const hr = parseInt(r.event_hour ?? r.hour ?? 0, 10);
-
-      if (!isNaN(hr) && hr > currentHour) {
-        currentHour = hr;
-      }
-
-      if (evt.includes('purchase')) {
-        todayPurchases += count;
-        if (!hourMap[hr]) hourMap[hr] = 0;
-        hourMap[hr] += count;
-      } else if (evt.includes('page load') || evt.includes('page_load')) {
-        todayPageLoads += count;
-      } else if (evt.includes('pay init') || evt.includes('pay_init')) {
-        todayPayInitiated += count;
-      }
-    });
-
-    // Run-rate projection based on hours elapsed today
-    const hoursElapsed = currentHour >= 0 ? currentHour + 1 : 17;
-    const projectedEOD = hoursElapsed > 0 ? Math.round(todayPurchases * (24 / hoursElapsed)) : todayPurchases;
-
-    // Fill hourly breakdown up to currentHour
-    const hourlyBreakdown = [];
-    const maxHourToDisplay = currentHour >= 0 ? currentHour : 23;
-    for (let h = 0; h <= maxHourToDisplay; h++) {
-      hourlyBreakdown.push({
-        hour: `${String(h).padStart(2, '0')}:00`,
-        purchases: hourMap[h] || 0,
-        count: hourMap[h] || 0
-      });
-    }
-
-    const displayHour = currentHour >= 0 ? `${String(currentHour).padStart(2, '0')}:00` : 'Live';
-
-    return {
-      timeframe: todayDateStr ? `Today (${todayDateStr} as of ${displayHour})` : 'Today',
-      todayDate: todayDateStr,
-      currentHour: displayHour,
-      platform: isCombined ? 'Combined (Overall)' : platformArg,
-      todayPurchases: todayPurchases.toLocaleString(),
-      todayPurchasesNum: todayPurchases,
-      projectedEOD: projectedEOD.toLocaleString(),
-      totalPlanPageLoads: todayPageLoads.toLocaleString(),
-      totalPayInitiated: todayPayInitiated.toLocaleString(),
-      conversionRate: todayPageLoads > 0 ? ((todayPurchases / todayPageLoads) * 100).toFixed(2) + '%' : '0.00%',
-      hourlyBreakdown
-    };
-  }
-
-  // Precomputed realtime stats fallback
-  if (realtimeData && typeof realtimeData === 'object' && !Array.isArray(realtimeData)) {
-    return {
-      platform: platformArg,
-      todayPurchases: (realtimeData.todayPurchases ?? 'N/A').toLocaleString(),
-      projectedEOD: (Math.round(realtimeData.projectedTotal ?? 0) || 'N/A').toLocaleString(),
-      benchmarkTitle: realtimeData.benchmarkTitle || '4-Week Benchmark',
-      benchmarkTotal: (Math.round(realtimeData.benchmarkTotal ?? 0) || 'N/A').toLocaleString(),
-      currentHour: realtimeData.currentHour !== undefined ? `${String(realtimeData.currentHour).padStart(2, '0')}:00` : 'Live'
-    };
-  }
-
-  return { status: "data_unavailable", message: "Realtime pacing data is not loaded yet. Please wait for the dashboard to finish loading and try again." };
+  return answerViaRouter(args, contextData, "today's pacing", [isAllish(args.marketingTeam) ? '' : `${args.marketingTeam} team`, args.benchmark || '']);
 }
 
 export function executeGeneralQATool(args = {}, contextData = {}) {

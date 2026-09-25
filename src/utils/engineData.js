@@ -301,16 +301,27 @@ export const funnelTeamRows = (rows) => (rows || []).filter((r) => canonPlatform
 /** Marketing teams as the funnel feed names them; the query may use the raw tags too. */
 const TEAM_MATCHERS = [
   { label: 'Telecalling', query: /tele[\s-]?call|wa[\s_-]?link|whatsapp/, row: /tele[\s-]?call|wa[\s_-]?link/ },
-  { label: 'Product Marketing', query: /product[\s-]?marketing|clevertap|\bcrm\b|push notif/, row: /product|clevertap/ },
+  // the ARPU sheet labels this team "Marketing Campaign"; the ledger's acq_source says "marketing_campaign"
+  { label: 'Product Marketing', query: /product[\s-]?marketing|marketing[\s_-]?campaign|clevertap|\bcrm\b|push notif/, row: /product|clevertap|marketing[\s_-]?campaign/ },
   { label: 'Paid Marketing', query: /paid[\s-]?marketing|performance[\s-]?marketing|google[\s_-]?paid|\bpaid\b|\bads?\b/, row: /paid/ },
   { label: 'Organic / unattributed', query: /\borganic\b|unattributed/, row: null },
 ];
-/** The team a question asks about: { label, isRow(teamName) } (isRow null = organic remainder), or null. */
-export function teamWanted(q) {
+/** Every team a question names, in order of appearance: [{ label, isRow(teamName) }] (isRow null = organic remainder). */
+export function teamsWanted(q) {
   const t = String(q || '').toLowerCase();
-  for (const m of TEAM_MATCHERS) if (m.query.test(t)) return { label: m.label, isRow: m.row ? (name) => m.row.test(String(name || '').toLowerCase()) : null };
-  return null;
+  const found = [];
+  TEAM_MATCHERS.forEach((m) => {
+    const idx = t.search(m.query);
+    if (idx >= 0) found.push({ idx, label: m.label, isRow: m.row ? (name) => m.row.test(String(name || '').toLowerCase()) : null });
+  });
+  return found.sort((a, b) => a.idx - b.idx).map(({ idx, ...rest }) => rest);
 }
+/** The (single) team a question asks about, or null. */
+export function teamWanted(q) {
+  return teamsWanted(q)[0] || null;
+}
+/** Does any of the named teams claim this row's team name? */
+export const rowInTeams = (teams, name) => teams.some((tm) => tm.isRow && tm.isRow(name));
 export const teamLabelOf = (name) => { const n = String(name || '').toLowerCase(); const m = TEAM_MATCHERS.find((x) => x.row && x.row.test(n)); return m ? m.label : String(name).trim(); };
 /** Combined-platform rows of one team (site-wide DAU / hits repeat on these rows; use the steps from plan page loads). */
 export const funnelTeamRowsFor = (rows, team) => (rows || []).filter((r) => canonPlatform(fPlat(r)) === 'combined' && fCountry(r) === 'overall' && fTeam(r) !== 'overall' && team.isRow(fTeam(r)));
@@ -381,6 +392,10 @@ export const channelOf = (r) => {
   const c = String(r.channel || r.acq_source || '').trim();
   return c ? c.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()) : 'Others';
 };
+/** The marketing team of a ledger row: the `channel` column carries it (Others / Product Marketing / Telecalling / Paid Marketing). */
+export const ledgerTeamOf = (r) => teamLabelOf(channelOf(r));
+/** Does a ledger row belong to this team (matched on channel, then acquisition source)? */
+export const ledgerRowInTeam = (r, team) => team.isRow(String(r.channel || '')) || team.isRow(String(r.acq_source || ''));
 export const planOf = (r) => String(r.plan_category || 'Unknown').toUpperCase().replace(/\s+/g, ' ').trim() || 'UNKNOWN';
 export const txnTypeOf = (r) => String(r.user_txn_type || 'unknown').trim().toLowerCase().replace(/_/g, ' ');
 

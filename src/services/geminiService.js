@@ -4,7 +4,9 @@
  * Executes multi-turn tool calling, multi-period comparative analytics, and response synthesis.
  */
 
-import { executeToolByName } from '../utils/aiDataEngine.js';
+import { executeToolByName, routeQueryDomain } from '../utils/aiDataEngine.js';
+
+const CLAIMS_NO_DATA = /unavailable|not available|no data|couldn'?t find|cannot find|can'?t find|not (?:currently )?(?:tracked|loaded)|check back/i;
 
 // Single place to bump the model when Google retires one
 // (gemini-2.0-flash was shut down ~Sep 2026 with an HTTP 404 pointing here).
@@ -64,6 +66,7 @@ const GEMINI_TOOLS_DECLARATION = [
         parameters: {
           type: "OBJECT",
           properties: {
+            question: { type: "STRING", description: "The user\'s question, verbatim (the tool parses timeframes, platforms, plans, teams and geographies from it)" },
             period: { type: "STRING", description: "Target period or month e.g. 'July 2026', 'August 2026', 'Jan 2026'" },
             platform: { type: "STRING", description: "Platform filter e.g. 'All', 'Main iOS', 'MWeb', 'Main Android'" },
             planCategory: { type: "STRING", description: "Plan category filter e.g. 'All', '1 YEAR', '1 MONTH'" }
@@ -77,6 +80,7 @@ const GEMINI_TOOLS_DECLARATION = [
         parameters: {
           type: "OBJECT",
           properties: {
+            question: { type: "STRING", description: "The user\'s question, verbatim (the tool parses timeframes, platforms, plans, teams and geographies from it)" },
             datePreset: { type: "STRING", description: "Time period e.g. 'Last 7 days', 'Last 30 days', 'Yesterday'" },
             platform: { type: "STRING", description: "Platform filter" },
             marketingTeam: { type: "STRING", description: "Marketing team filter" }
@@ -89,6 +93,7 @@ const GEMINI_TOOLS_DECLARATION = [
         parameters: {
           type: "OBJECT",
           properties: {
+            question: { type: "STRING", description: "The user\'s question, verbatim (the tool parses timeframes, platforms, plans, teams and geographies from it)" },
             datePreset: { type: "STRING", description: "Time period e.g. 'Last 30 days', 'Last 7 days', 'Yesterday'" },
             metric: { type: "STRING", description: "Metric to analyze e.g. 'Revenue', 'Conversions', 'ARPU', 'Recurring'" },
             platform: { type: "STRING", description: "Platform filter" }
@@ -101,6 +106,7 @@ const GEMINI_TOOLS_DECLARATION = [
         parameters: {
           type: "OBJECT",
           properties: {
+            question: { type: "STRING", description: "The user\'s question, verbatim (the tool parses timeframes, platforms, plans, teams and geographies from it)" },
             platform: { type: "STRING", description: "Platform filter" }
           }
         }
@@ -111,6 +117,7 @@ const GEMINI_TOOLS_DECLARATION = [
         parameters: {
           type: "OBJECT",
           properties: {
+            question: { type: "STRING", description: "The user\'s question, verbatim (the tool parses timeframes, platforms, plans, teams and geographies from it)" },
             topic: { type: "STRING", description: "The general topic or query intent" }
           }
         }
@@ -159,7 +166,9 @@ CONTEXT & MULTI-TURN RULES:
 - Maintain active topic & domain (Renewals, Funnel, Subscription, Realtime) from conversation history. If user is exploring the Subscription Report tab (e.g. sales, platforms, revenue, plans), follow-up questions (such as "Compare 1 Year vs 1 Month plan revenue" or "which plan leads") MUST be answered using query_subscription only, NEVER query_funnel!
 - If user asks "can you split the above into weekly" after asking about August renewals, query renewals for August with weekly granularity!
 - If prompt requires comparing multiple periods (e.g. "August vs July renewals"), call query_renewals for both periods.
-- If prompt is general or vague, call query_general_qa.`;
+- If prompt is general or vague, call query_general_qa.
+- GTV / revenue / sales / conversions / ARPU questions go to query_subscription — including when they are about a marketing team (telecalling, product marketing, paid marketing) or compare teams. query_funnel is only for DAU, paywall hits, plan page loads, plan selected, pay initiated and purchase counts.
+- ALWAYS pass the user's full question verbatim in the "question" argument of every tool call. The tools understand "this month", "last month", "last 7 days", month names, "yesterday", platforms, plans, marketing teams (telecalling, product marketing, paid marketing) and India / international.`;
 
   // Format last 6 messages (3 turns) into Gemini contents array
   const rawHistory = contextData.conversationHistory || [];
@@ -260,7 +269,8 @@ Guidelines & Verification:
   • Maintain topic & domain context from conversation history (e.g. keep Renewals domain if previous question was about renewals).
 - For COMPLEX COMPARATIVE queries, format a clear side-by-side comparative table with columns for both periods/dimensions and variance/lift.
 - Keep KPIs concise (2-3 cards max).
-- Include 3-4 contextually relevant follow-up questions.`;
+- Include 3-4 contextually relevant follow-up questions.
+- The tool results are finished answers: "summary", "kpis", "table" and "chart" are already computed from the dashboard data. Reuse those numbers, tables and charts as they are; never recompute, extrapolate or invent figures. If a result has status "data_unavailable", say so plainly.`;
 
     const pass2Body = {
       contents: [
@@ -288,18 +298,26 @@ Guidelines & Verification:
       const cand2 = dataPass2?.candidates?.[0];
       const rawTextPass2 = (cand2?.content?.parts || []).map(p => p.text || '').join('\n');
       const parsed = parseModelJson(rawTextPass2);
-      if (parsed) {
+      // The tools return finished answers computed from the data. When one of
+      // them answered, the model may only narrate it: a claim that the data is
+      // unavailable, or a reply that dropped the numbers, is replaced by the
+      // tool's own summary, KPIs, table and chart.
+      const okTool = functionResponses.map(f => f.functionResponse?.response?.result).find(r => r && r.status === 'ok' && r.summary);
+      if (parsed || okTool) {
+        const base = parsed || {};
+        const modelDeniesData = !base.text || CLAIMS_NO_DATA.test(String(base.text));
         const result = {
           domain: 'GEMINI_AI',
-          text: parsed.text || '',
-          kpis: parsed.kpis || null,
-          chart: parsed.chart || null,
-          table: parsed.table || null,
-          suggestedFollowups: parsed.suggestedFollowups || [
+          text: okTool && modelDeniesData ? okTool.summary : (base.text || (okTool ? okTool.summary : '')),
+          kpis: base.kpis || (okTool ? okTool.kpis : null) || null,
+          chart: base.chart || (okTool ? okTool.chart : null) || null,
+          table: base.table || (okTool ? okTool.table : null) || null,
+          suggestedFollowups: base.suggestedFollowups || (okTool && okTool.suggestedFollowups) || [
             "Which platform has the highest conversion?",
             "Compare Q1 vs Q2 performance"
           ]
         };
+        if (okTool && modelDeniesData) console.warn('[Gemini Agent] Model claimed no data although a tool answered; using the tool result.');
         if (hasRenderableContent(result)) return result;
       }
       console.warn("[Gemini Agent] Pass 2 returned nothing renderable (finishReason:", cand2?.finishReason, ") — using the local engine.", rawTextPass2.slice(0, 200));
@@ -309,9 +327,16 @@ Guidelines & Verification:
     return null;
   }
 
-  // Direct reply (no function call): structured JSON if the model sent it,
-  // plain prose otherwise. Nothing at all -> null, and the local engine answers.
+  // Direct reply (no function call). For a data question that is never
+  // acceptable — the model would be answering from chat history instead of the
+  // datasets — so the local engine answers instead. Greetings and general
+  // questions may be answered directly.
   const rawTextPass1 = messagePartsPass1.map(p => p.text || '').join('\n').trim();
+  const isDataQuestion = routeQueryDomain(String(rawQuery || '').toLowerCase()) !== 'UNKNOWN';
+  if (isDataQuestion) {
+    console.warn('[Gemini Agent] No tool call for a data question — using the local engine.');
+    return null;
+  }
   const defaultFollowups = ["Compare August vs July renewals, platform-wise", "Show the funnel breakdown"];
   const parsed1 = parseModelJson(rawTextPass1);
   if (parsed1 && typeof parsed1 === 'object') {
