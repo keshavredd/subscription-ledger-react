@@ -482,7 +482,7 @@ export function SubscriptionReport({ isDark }) {
   const [error, setError] = useState(null);
   const [tableMetricMode, setTableMetricMode] = useState("Revenue (₹)");
   const [trendDataCut, setTrendDataCut] = useState("Overall");
-  const [revenueTrendViewMode, setRevenueTrendViewMode] = useState("Daily"); // "Daily" | "Weekly"
+  const [revenueTrendViewMode, setRevenueTrendViewMode] = useState("Daily"); // "Daily" | "Weekly" | "Monthly"
 
   const [datePreset, setDatePreset] = useState("Last 7 days");
   const [startDate, setStartDate] = useState("");
@@ -932,7 +932,8 @@ export function SubscriptionReport({ isDark }) {
   const trendChartTraces = useMemo(() => {
     if (!filteredData.length) return [];
 
-    if (revenueTrendViewMode === "Weekly") {
+    if (revenueTrendViewMode === "Weekly" || revenueTrendViewMode === "Monthly") {
+      // one bucket per ISO week (Monday-keyed) or per calendar month
       const getWeekInfo = (dateStr) => {
         if (!dateStr) return { key: '', label: '' };
         const parts = dateStr.includes('-') ? dateStr.split('-') : dateStr.split('/');
@@ -945,6 +946,10 @@ export function SubscriptionReport({ isDark }) {
           d = new Date(dateStr);
         }
         if (isNaN(d.getTime())) return { key: dateStr, label: dateStr };
+        if (revenueTrendViewMode === "Monthly") {
+          const mn = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: `${mn[d.getMonth()]} ${String(d.getFullYear()).slice(2)}` };
+        }
         const day = d.getDay();
         const diff = d.getDate() - day + (day === 0 ? -6 : 1);
         const monday = new Date(d.getFullYear(), d.getMonth(), diff);
@@ -982,7 +987,7 @@ export function SubscriptionReport({ isDark }) {
           y: revValues,
           type: 'scatter',
           mode: 'lines+text',
-          name: 'Overall Weekly GTV',
+          name: `Overall ${revenueTrendViewMode} GTV`,
           text: revValues.map(v => formatIndianCurrency1Dec(v)),
           textposition: revValues.map((v, idx) => {
             if (idx === 0) return 'top right';
@@ -994,7 +999,7 @@ export function SubscriptionReport({ isDark }) {
           line: { color: isDark ? '#60a5fa' : '#f59e0b', width: 2.5, shape: 'spline' },
           fill: 'tozeroy',
           fillcolor: isDark ? 'rgba(96, 165, 250, 0.1)' : 'rgba(217, 119, 6, 0.06)',
-          hovertemplate: "<b>%{x}</b><br>Overall Weekly GTV: ₹%{y:,.2f}<extra></extra>"
+          hovertemplate: `<b>%{x}</b><br>Overall ${revenueTrendViewMode} GTV: ₹%{y:,.2f}<extra></extra>`
         }];
       }
 
@@ -1368,17 +1373,17 @@ export function SubscriptionReport({ isDark }) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-bold text-warm-text dark:text-dark-text px-1">
-              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} GTV Trend {trendDataCut !== 'Overall' ? `(${trendDataCut} Split)` : ''}
+              {revenueTrendViewMode} GTV Trend {trendDataCut !== 'Overall' ? `(${trendDataCut} Split)` : ''}
             </h3>
             <p className="text-xs text-warm-muted dark:text-dark-muted px-1 mt-0.5">
-              {revenueTrendViewMode === 'Weekly' ? 'Weekly' : 'Daily'} GTV trajectory for selected date range
+              {revenueTrendViewMode} GTV trajectory for selected date range
             </p>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
-            {/* Daily / Weekly View Mode Switch */}
+            {/* Daily / Weekly / Monthly View Mode Switch */}
             <div className="flex items-center bg-warm-tableBg dark:bg-zinc-800 p-1 rounded-full border border-warm-border dark:border-zinc-700 shadow-sm">
-              {['Daily', 'Weekly'].map(mode => (
+              {['Daily', 'Weekly', 'Monthly'].map(mode => (
                 <button
                   key={mode}
                   onClick={() => setRevenueTrendViewMode(mode)}
@@ -4608,7 +4613,7 @@ function UserProfileMenu({ currentUser, isAdmin, onLogout, onSelectAdminPanel, o
 }
 
 export default function App() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [activeTab, setActiveTab] = useState('Realtime');
   const isDark = theme === 'dark';
 
