@@ -58,7 +58,7 @@ TOUR_COPY[ASK_INSIGHTS_STEP] = {
 const POPOVER_W = 320;
 const GAP = 12;
 
-export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSelectTab, onClose }) {
+export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSelectTab, onClose, onStart }) {
   const [phase, setPhase] = useState(mode);
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState(null);
@@ -76,6 +76,12 @@ export default function GuidedTour({ open, mode = 'ask', tabs, activeTab, onSele
     returnTabRef.current = activeTab;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode]);
+
+  // The walkthrough has begun (from the prompt or a replay): let the app clear
+  // anything floating above the page, such as the Ask Insights window.
+  useEffect(() => {
+    if (open && phase === 'tour') onStart?.();
+  }, [open, phase, onStart]);
 
   const finish = useCallback((outcome) => {
     if (returnTabRef.current && onSelectTab) onSelectTab(returnTabRef.current);

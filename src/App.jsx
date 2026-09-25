@@ -4886,6 +4886,7 @@ export default function App() {
           tabs={navTabs}
           activeTab={activeTab}
           onSelectTab={setActiveTab}
+          onStart={() => setInsightsOpen(false)}
           onClose={(outcome) => {
             setTourState(null);
             markTourSeen(tourEmail, outcome);
